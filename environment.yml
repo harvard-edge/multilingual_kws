@@ -1,0 +1,16 @@
+name: deepspeech
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - pandas
+  - ipython
+  - sox
+  - jupyterlab
+  - black
+  - pip
+  - pip:
+    - deepspeech-gpu==0.7.0
+    - pydub
+    - simpleaudio
+    - sox
