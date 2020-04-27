@@ -3,6 +3,14 @@
 
 Download the english dataset (38GB) from https://voice.mozilla.org/en/datasets
 
+### DeepSpeech
+
+Download the pretrained english model from https://github.com/mozilla/DeepSpeech
+
+```bash
+curl -LO https://github.com/mozilla/DeepSpeech/releases/download/v0.7.0/deepspeech-0.7.0-models.pbmm
+```
+
 ### Running the demo for word-splitting
 
 If you do not have `conda` installed for python dependency management, first install [`miniconda`](https://docs.conda.io/en/latest/miniconda.html). After cloning this repository, run the following commands:
