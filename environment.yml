@@ -8,6 +8,8 @@ dependencies:
   - sox
   - jupyterlab
   - black
+  - nltk
+  - seaborn
   - pip
   - pip:
     - deepspeech-gpu==0.7.0
