@@ -1,0 +1,48 @@
+FROM ubuntu:20.04
+# docker build -t cmusphinx -f cmusphinx . 
+# docker run --rm -it cmusphinx /bin/bash
+
+# https://github.com/JoshData/cmusphinx-alignment-example
+# http://jrmeyer.github.io/asr/2016/01/09/Installing-CMU-Sphinx-on-Ubuntu.html
+# https://github.com/pettarin/forced-alignment-tools
+
+ENV DEBIAN_FRONTEND noninteractive
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        fontconfig \
+        unzip \
+        wget \
+        software-properties-common \
+        \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://github.com/cmusphinx/sphinx4.git 
+
+RUN apt update && apt install -y openjdk-8-jdk
+
+# https://github.com/keeganwitt/docker-gradle/blob/master/jdk14/Dockerfile
+ENV GRADLE_HOME /opt/gradle
+ENV GRADLE_VERSION 6.6.1
+RUN set -o errexit -o nounset \
+    && echo "Downloading Gradle" \
+    && wget --no-verbose --output-document=gradle.zip "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
+    \
+    && echo "Installing Gradle" \
+    && unzip gradle.zip \
+    && rm gradle.zip \
+    && mv "gradle-${GRADLE_VERSION}" "${GRADLE_HOME}/" \
+    && ln --symbolic "${GRADLE_HOME}/bin/gradle" /usr/bin/gradle \
+    \
+    && echo "Testing Gradle installation" \
+    && gradle --version
+
+
+WORKDIR sphinx4
+
+RUN gradle build -x test # skip tests
+
+RUN apt install -y sox
+
+# to run the alignment demo:
+# java -cp ./sphinx4-samples/build/libs/sphinx4-samples-5prealpha-SNAPSHOT.jar edu.cmu.sphinx.demo.aligner.AlignerDemo
