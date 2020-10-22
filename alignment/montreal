@@ -31,6 +31,7 @@ RUN addgroup --gid 1000 mark
 RUN adduser --disabled-password --gecos '' --uid 1000 --gid 1000 mark
 USER mark
 WORKDIR /home/mark/
+ENV PATH /home/mark/.local/bin:$PATH
 
 RUN wget --output-document montreal.tar.gz https://github.com/MontrealCorpusTools/Montreal-Forced-Aligner/releases/download/v1.0.1/montreal-forced-aligner_linux.tar.gz && \
     tar xzf montreal.tar.gz && \
