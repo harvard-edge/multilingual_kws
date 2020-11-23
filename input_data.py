@@ -17,6 +17,7 @@ SILENCE_INDEX = 0
 UNKNOWN_WORD_LABEL = "_unknown_"
 UNKNOWN_WORD_INDEX = 1
 
+
 def _next_power_of_two(x):
     """Calculates the smallest enclosing power of two for an input.
     source: https://git.io/JkuvF
@@ -109,13 +110,12 @@ class AudioDataset:
         model_settings,
         commands,
         background_data_dir,
+        unknown_words,
         time_shift_ms=100,
         background_frequency=0.8,
         background_volume_range=0.1,
-        enable_silence=True,
         silence_percentage=10.0,
-        enable_unknown=False,
-        unknown_percentage=0,
+        unknown_percentage=10.0,
         seed=None,
     ) -> None:
         self.get_background_data(background_data_dir)
@@ -126,14 +126,13 @@ class AudioDataset:
         self.background_frequency = background_frequency  # freq. between 0-1
         self.background_volume_range = background_volume_range
 
-        self.enable_silence = enable_silence
-        if self.enable_silence:
-            commands = [SILENCE_LABEL] + commands
-        self.silence_percentage = silence_percentage  # pct between 0-100
-        self.enable_unknown = enable_unknown
-        if self.enable_unknown or unknown_percentage > 0:
+        self.unknown_percentage = unknown_percentage
+        self.unknown_words = unknown_words
+        if len(self.unknown_words) > 0 and self.unknown_percentage > 0:
             commands = [UNKNOWN_WORD_LABEL] + commands
-            raise NotImplementedError
+        self.silence_percentage = silence_percentage  # pct between 0-100
+        if self.silence_percentage > 0:
+            commands = [SILENCE_LABEL] + commands
         self.commands = tf.convert_to_tensor(commands)
 
         if seed:
@@ -168,7 +167,7 @@ class AudioDataset:
             background_offset : (background_offset + desired_samples)
         ]
         background_clipped = tf.multiply(background_clipped, background_volume)
-        #TODO(mmaz) why is this reshape necessary?
+        # TODO(mmaz) why is this reshape necessary?
         return tf.reshape(background_clipped, (desired_samples,))
 
     def random_timeshift(self, audio):
@@ -196,6 +195,13 @@ class AudioDataset:
         sliced = tf.slice(pad, [offset], [desired_samples])
         return sliced
 
+    def get_unknown(self):
+        unknown_index = self.gen.uniform([], 0, len(self.unknown_words), dtype=tf.int32)
+        file_path = tf.gather(self.unknown_words, unknown_index)
+        audio_binary = tf.io.read_file(file_path)
+        waveform = self.decode_audio(audio_binary)
+        return waveform
+
     def augment(self, audio, label):
         # see discussion on random:
         # https://github.com/tensorflow/tensorflow/issues/35682#issuecomment-574092770
@@ -203,23 +209,25 @@ class AudioDataset:
         audio = (
             self.random_timeshift(audio) if self.max_time_shift_samples > 0 else audio
         )
-        if (
-            self.enable_silence
-            and self.gen.uniform([], 0, 1) < self.silence_percentage / 100
-        ):
+        if self.gen.uniform([], 0, 1) < (self.silence_percentage / 100):
             background_volume = self.gen.uniform([], 0, 1)
             label = SILENCE_LABEL
             audio = self.random_background_sample(background_volume)
             return audio, label
+        elif len(self.unknown_words) > 0 and self.gen.uniform([], 0, 1) < (
+            self.unknown_percentage / 100
+        ):
+            audio = self.get_unknown()
+            label = UNKNOWN_WORD_LABEL
+            return audio, label
+        # mix in background?
         elif self.gen.uniform([], 0, 1) < self.background_frequency:
             background_volume = self.gen.uniform([], 0, self.background_volume_range)
             background_audio = self.random_background_sample()
             audio = add_background(audio, background_audio, background_volume)
-        # # elif self.enable_unknown and self.gen.uniform(0,1) < self.unknown_percentage/100:
-        # #     audio = get_unknown()
-        # #     label=UNKNOWN_WORD_LABEL
-        # #     raise NotImplementedError
-        return audio, label
+            return audio, label
+        else:  # redundant from above but TF seems to require it
+            return audio, label
 
     #####
     ## -----end augmentations
@@ -294,6 +302,8 @@ class AudioDataset:
 
     def init(self, AUTOTUNE, files, is_training):
         files_ds = tf.data.Dataset.from_tensor_slices(files)
+        # TODO(mmaz) should we rebalance here?
+
         # buffer size with shuffle: https://stackoverflow.com/a/48096625
         waveform_ds = files_ds.map(
             self.get_waveform_and_label, num_parallel_calls=AUTOTUNE
@@ -346,26 +356,30 @@ def test():
         "/home/mark/tinyspeech_harvard/frequent_words/en/clips/_background_noise_/"
     )
 
-    a = AudioDataset(model_settings, commands, bg_datadir)
+    wdir = "/home/mark/tinyspeech_harvard/frequent_words/en/clips/"
+    unknown_words = []
+    for w in ["group", "green", "great"]:
+        wavs = glob.glob(wdir + w + "/*.wav")
+        unknown_words += wavs
+    a = AudioDataset(model_settings, commands, bg_datadir, unknown_words=unknown_words)
 
     # x = a.random_timeshift(x)
     # write(f"tmp/bg.wav", model_settings["sample_rate"], x.numpy())
 
-    AUTOTUNE = tf.data.experimental.AUTOTUNE
-    files_ds = tf.data.Dataset.from_tensor_slices([f])
-    waveform_ds = files_ds.map(a.get_waveform_and_label, num_parallel_calls=AUTOTUNE)
-    waveform_ds = waveform_ds.map(a.augment, num_parallel_calls=AUTOTUNE)
-    rs = waveform_ds.repeat().take(10)
-    for ix, (audio, label) in enumerate(rs):
-        print(ix, label)
-        write(f"tmp/example{ix}.wav", model_settings["sample_rate"], audio.numpy())
-    
+    # AUTOTUNE = tf.data.experimental.AUTOTUNE
+    # files_ds = tf.data.Dataset.from_tensor_slices([f])
+    # waveform_ds = files_ds.map(a.get_waveform_and_label, num_parallel_calls=AUTOTUNE)
+    # waveform_ds = waveform_ds.map(a.augment, num_parallel_calls=AUTOTUNE)
+    # rs = waveform_ds.repeat().take(10)
+    # for ix, (audio, label) in enumerate(rs):
+    #     print(ix, label)
+    #     write(f"tmp/example{ix}.wav", model_settings["sample_rate"], audio.numpy())
+
     AUTOTUNE = tf.data.experimental.AUTOTUNE
     f_ds = a.init(AUTOTUNE, [f], is_training=True)
     for ix, (audio, label) in enumerate(f_ds.repeat().take(10)):
         print(label)
         print(audio.dtype, audio.shape)
-
 
     """
     f = tf.io.read_file(f)
