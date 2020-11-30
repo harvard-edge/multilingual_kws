@@ -213,21 +213,17 @@ class AudioDataset:
             background_volume = self.gen.uniform([], 0, 1)
             label = SILENCE_LABEL
             audio = self.random_background_sample(background_volume)
-            return audio, label
         elif len(self.unknown_words) > 0 and self.gen.uniform([], 0, 1) < (
             self.unknown_percentage / 100
         ):
             audio = self.get_unknown()
             label = UNKNOWN_WORD_LABEL
-            return audio, label
         # mix in background?
         elif self.gen.uniform([], 0, 1) < self.background_frequency:
             background_volume = self.gen.uniform([], 0, self.background_volume_range)
             background_audio = self.random_background_sample()
             audio = add_background(audio, background_audio, background_volume)
-            return audio, label
-        else:  # redundant from above but TF seems to require it
-            return audio, label
+        return audio, label
 
     #####
     ## -----end augmentations
