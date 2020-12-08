@@ -296,9 +296,32 @@ class AudioDataset:
         label_id = tf.argmax(lc)
         return micro_spec, label_id
 
+    def get_label_id_from_filename(self, filepath):
+        # only for rebalancer
+        label = self.get_label(filepath)
+        lc = label == self.commands
+        label_id = tf.argmax(lc)
+        return label_id
+    
+    def file2spec(self, filepath):
+        audio_binary = tf.io.read_file(filepath)
+        waveform = self.decode_audio(audio_binary)
+        return self.to_micro_spectrogram(waveform)
+
     def init(self, AUTOTUNE, files, is_training):
         files_ds = tf.data.Dataset.from_tensor_slices(files)
         # TODO(mmaz) should we rebalance here?
+        # if rebalance: 
+            # we havent generated any unknowns or silence here
+            # so we should probably just rebalance naively
+            # 1/len(commands without silence/unknown) 
+            # non_word_pct = self.silence_percentage, self.unknown_percentage
+            # word_pct = (1-non_word_pct) / (len(self.commands))
+            # target_dist = [non_word_pct] + [ for c in self.commands]
+            # resampler = tf.data.experimental.rejection_resample(
+            #     self.get_label_id_from_filename, target_dist=target_dist
+            # )
+            # train_ds = files_ds.apply(resampler)
 
         # buffer size with shuffle: https://stackoverflow.com/a/48096625
         waveform_ds = files_ds.map(
