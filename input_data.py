@@ -8,7 +8,9 @@ import numpy as np  # TODO(mmaz) tf2.4 np from tf.experimental
 import os
 import glob
 import math
+from dataclasses import dataclass
 from scipy.io.wavfile import write
+from tensorflow.python.types.core import Value
 
 # from tensorflow.python.ops import gen_audio_ops as audio_ops
 
@@ -104,6 +106,19 @@ def add_background(foreground_audio, background_audio, background_volume):
     return tf.clip_by_value(bg_add, -1.0, 1.0)
 
 
+@dataclass(frozen=True)
+class SpecAugParams:
+    percentage: float = 0.5
+    # 1-how many augmentations to include, inclusive
+    frequency_n_range: int = 2
+    # how large each mask should be (pixels)
+    frequency_max_px: int = 2
+    # 1-how many augmentations to include, inclusive
+    time_n_range: int = 2
+    # how large each mask should be (pixels)
+    time_max_px: int = 2
+
+
 class AudioDataset:
     def __init__(
         self,
@@ -116,6 +131,7 @@ class AudioDataset:
         background_volume_range=0.1,
         silence_percentage=10.0,
         unknown_percentage=10.0,
+        spec_aug_params=SpecAugParams(),
         seed=None,
     ) -> None:
         self.get_background_data(background_data_dir)
@@ -126,6 +142,9 @@ class AudioDataset:
         self.background_frequency = background_frequency  # freq. between 0-1
         self.background_volume_range = background_volume_range
 
+        # below list prepending is order-sensitive (unknown, then silence)
+        # so that with both, final list is always:
+        # [silence, unknown, word1, word2,...]
         self.unknown_percentage = unknown_percentage
         self.unknown_words = unknown_words
         if len(self.unknown_words) > 0 and self.unknown_percentage > 0:
@@ -134,6 +153,8 @@ class AudioDataset:
         if self.silence_percentage > 0:
             commands = [SILENCE_LABEL] + commands
         self.commands = tf.convert_to_tensor(commands)
+
+        self.spec_aug_params = spec_aug_params
 
         if seed:
             self.gen = tf.random.Generator.from_seed(seed)
@@ -225,6 +246,66 @@ class AudioDataset:
             audio = add_background(audio, background_audio, background_volume)
         return audio, label
 
+    def spec_augment(self, spectrogram):
+        # https://git.io/JLvGB
+        # https://arxiv.org/pdf/1904.08779.pdf
+
+        s = tf.shape(spectrogram)
+        # e.g., 49x40
+        # cannot unpack in one line (OperatorNotAllowedInGraphError: 
+        #   iterating over `tf.Tensor` is not allowed in Graph execution)
+        time_max = s[0]
+        freq_max = s[1]
+
+        freq_n = self.gen.uniform(
+            [], 0, self.spec_aug_params.frequency_n_range + 1, dtype=tf.int32
+        )
+        time_n = self.gen.uniform(
+            [], 0, self.spec_aug_params.time_n_range + 1, dtype=tf.int32
+        )
+
+        @tf.function
+        def freq_body(ix, spectrogram_aug):
+            size = self.gen.uniform(
+                [], 1, self.spec_aug_params.frequency_max_px + 1, dtype=tf.int32
+            )
+            start = self.gen.uniform([], 0, freq_max - size, dtype=tf.int32)
+            mask = tf.concat(
+                [
+                    tf.ones([time_max, start], dtype=tf.float32),
+                    tf.zeros([time_max, size], dtype=tf.float32),
+                    tf.ones([time_max, freq_max - start - size], dtype=tf.float32),
+                ],
+                axis=1
+            )
+            return ix + 1, tf.multiply(spectrogram_aug, mask)
+
+        spectrogram = tf.while_loop(
+            lambda ix, augmented: ix < freq_n, freq_body, (0, spectrogram)
+        )[1]
+
+        @tf.function
+        def time_body(ix, spectrogram_aug):
+            size = self.gen.uniform(
+                [], 1, self.spec_aug_params.time_max_px + 1, dtype=tf.int32
+            )
+            start = self.gen.uniform([], 0, time_max - size, dtype=tf.int32)
+            mask = tf.concat(
+                [
+                    tf.ones([start, freq_max], dtype=tf.float32),
+                    tf.zeros([size, freq_max], dtype=tf.float32),
+                    tf.ones([time_max - start - size, freq_max], dtype=tf.float32),
+                ],
+                axis=0,
+            )
+            return ix + 1, tf.multiply(spectrogram_aug, mask)
+
+        spectrogram = tf.while_loop(
+            lambda ix, augmented: ix < time_n, time_body, (0, spectrogram)
+        )[1]
+
+        return spectrogram
+
     #####
     ## -----end augmentations
     #####
@@ -291,6 +372,9 @@ class AudioDataset:
 
     def get_spectrogram_and_label_id(self, audio, label):
         micro_spec = self.to_micro_spectrogram(audio)
+        # apply spec aug
+        if self.gen.uniform([], 0, 1) < (self.spec_aug_params.percentage / 100):
+            micro_spec = self.spec_augment(micro_spec)
         micro_spec = tf.expand_dims(micro_spec, -1)
         lc = label == self.commands
         label_id = tf.argmax(lc)
@@ -302,26 +386,33 @@ class AudioDataset:
         lc = label == self.commands
         label_id = tf.argmax(lc)
         return label_id
-    
-    def file2spec(self, filepath):
+
+    def file2spec(self, filepath, add_bg=False):
         audio_binary = tf.io.read_file(filepath)
         waveform = self.decode_audio(audio_binary)
+        if add_bg:
+            waveform = self._add_bg(waveform)
         return self.to_micro_spectrogram(waveform)
+
+    def _add_bg(self, audio):
+        background_volume = self.gen.uniform([], 0, self.background_volume_range)
+        background_audio = self.random_background_sample()
+        return add_background(audio, background_audio, background_volume)
 
     def init(self, AUTOTUNE, files, is_training):
         files_ds = tf.data.Dataset.from_tensor_slices(files)
         # TODO(mmaz) should we rebalance here?
-        # if rebalance: 
-            # we havent generated any unknowns or silence here
-            # so we should probably just rebalance naively
-            # 1/len(commands without silence/unknown) 
-            # non_word_pct = self.silence_percentage, self.unknown_percentage
-            # word_pct = (1-non_word_pct) / (len(self.commands))
-            # target_dist = [non_word_pct] + [ for c in self.commands]
-            # resampler = tf.data.experimental.rejection_resample(
-            #     self.get_label_id_from_filename, target_dist=target_dist
-            # )
-            # train_ds = files_ds.apply(resampler)
+        # if rebalance:
+        # we havent generated any unknowns or silence here
+        # so we should probably just rebalance naively
+        # 1/len(commands without silence/unknown)
+        # non_word_pct = self.silence_percentage, self.unknown_percentage
+        # word_pct = (1-non_word_pct) / (len(self.commands))
+        # target_dist = [non_word_pct] + [ for c in self.commands]
+        # resampler = tf.data.experimental.rejection_resample(
+        #     self.get_label_id_from_filename, target_dist=target_dist
+        # )
+        # train_ds = files_ds.apply(resampler)
 
         # buffer size with shuffle: https://stackoverflow.com/a/48096625
         waveform_ds = files_ds.map(
