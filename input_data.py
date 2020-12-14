@@ -252,7 +252,7 @@ class AudioDataset:
 
         s = tf.shape(spectrogram)
         # e.g., 49x40
-        # cannot unpack in one line (OperatorNotAllowedInGraphError: 
+        # cannot unpack in one line (OperatorNotAllowedInGraphError:
         #   iterating over `tf.Tensor` is not allowed in Graph execution)
         time_max = s[0]
         freq_max = s[1]
@@ -276,7 +276,7 @@ class AudioDataset:
                     tf.zeros([time_max, size], dtype=tf.float32),
                     tf.ones([time_max, freq_max - start - size], dtype=tf.float32),
                 ],
-                axis=1
+                axis=1,
             )
             return ix + 1, tf.multiply(spectrogram_aug, mask)
 
@@ -305,6 +305,11 @@ class AudioDataset:
         )[1]
 
         return spectrogram
+
+    def map_spec_aug(self, spectrogram, label_id):
+        if self.gen.uniform([], 0, 1) < (self.spec_aug_params.percentage / 100):
+            spectrogram = self.spec_augment(spectrogram)
+        return spectrogram, label_id
 
     #####
     ## -----end augmentations
@@ -372,10 +377,6 @@ class AudioDataset:
 
     def get_spectrogram_and_label_id(self, audio, label):
         micro_spec = self.to_micro_spectrogram(audio)
-        # apply spec aug
-        if self.gen.uniform([], 0, 1) < (self.spec_aug_params.percentage / 100):
-            micro_spec = self.spec_augment(micro_spec)
-        micro_spec = tf.expand_dims(micro_spec, -1)
         lc = label == self.commands
         label_id = tf.argmax(lc)
         return micro_spec, label_id
@@ -386,6 +387,9 @@ class AudioDataset:
         lc = label == self.commands
         label_id = tf.argmax(lc)
         return label_id
+
+    def add_channel(self, spectrogram, label_id):
+        return tf.expand_dims(spectrogram, -1), label_id
 
     def file2spec(self, filepath, add_bg=False):
         audio_binary = tf.io.read_file(filepath)
@@ -427,7 +431,13 @@ class AudioDataset:
         spectrogram_ds = waveform_ds.map(
             self.get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE
         )
-        return spectrogram_ds
+        spectrogram_ds = (
+            spectrogram_ds.map(self.map_spec_aug, num_parallel_calls=AUTOTUNE)
+            if is_training
+            else spectrogram_ds
+        )
+
+        return spectrogram_ds.map(self.add_channel, num_parallel_calls=AUTOTUNE)
 
 
 def test_timeshift():
