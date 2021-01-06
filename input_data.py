@@ -108,12 +108,12 @@ def add_background(foreground_audio, background_audio, background_volume):
 
 @dataclass(frozen=True)
 class SpecAugParams:
-    percentage: float = 0.5
-    # 1-how many augmentations to include, inclusive
+    percentage: float = 50.0
+    # how many augmentations to include, inclusive
     frequency_n_range: int = 2
     # how large each mask should be (pixels)
     frequency_max_px: int = 2
-    # 1-how many augmentations to include, inclusive
+    # how many augmentations to include, inclusive
     time_n_range: int = 2
     # how large each mask should be (pixels)
     time_max_px: int = 2
@@ -125,7 +125,7 @@ class AudioDataset:
         model_settings,
         commands,
         background_data_dir,
-        unknown_words,
+        unknown_files,
         time_shift_ms=100,
         background_frequency=0.8,
         background_volume_range=0.1,
@@ -143,11 +143,11 @@ class AudioDataset:
         self.background_volume_range = background_volume_range
 
         # below list prepending is order-sensitive (unknown, then silence)
-        # so that with both, final list is always:
+        # so that with both, labels are always ordered:
         # [silence, unknown, word1, word2,...]
         self.unknown_percentage = unknown_percentage
-        self.unknown_words = unknown_words
-        if len(self.unknown_words) > 0 and self.unknown_percentage > 0:
+        self.unknown_files = unknown_files
+        if len(self.unknown_files) > 0 and self.unknown_percentage > 0:
             commands = [UNKNOWN_WORD_LABEL] + commands
         self.silence_percentage = silence_percentage  # pct between 0-100
         if self.silence_percentage > 0:
@@ -217,8 +217,8 @@ class AudioDataset:
         return sliced
 
     def get_unknown(self):
-        unknown_index = self.gen.uniform([], 0, len(self.unknown_words), dtype=tf.int32)
-        file_path = tf.gather(self.unknown_words, unknown_index)
+        unknown_index = self.gen.uniform([], 0, len(self.unknown_files), dtype=tf.int32)
+        file_path = tf.gather(self.unknown_files, unknown_index)
         audio_binary = tf.io.read_file(file_path)
         waveform = self.decode_audio(audio_binary)
         return waveform
@@ -234,10 +234,16 @@ class AudioDataset:
             background_volume = self.gen.uniform([], 0, 1)
             label = SILENCE_LABEL
             audio = self.random_background_sample(background_volume)
-        elif len(self.unknown_words) > 0 and self.gen.uniform([], 0, 1) < (
+        elif len(self.unknown_files) > 0 and self.gen.uniform([], 0, 1) < (
             self.unknown_percentage / 100
         ):
             audio = self.get_unknown()
+            audio = (
+                self.random_timeshift(audio)
+                if self.max_time_shift_samples > 0
+                else audio
+            )
+            # TODO(mmaz): add in background noise?
             label = UNKNOWN_WORD_LABEL
         # mix in background?
         elif self.gen.uniform([], 0, 1) < self.background_frequency:
