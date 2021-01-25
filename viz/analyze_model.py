@@ -23,6 +23,106 @@ sns.set()
 sns.set_palette("bright")
 # sns.set(font_scale=1)
 
+#%% training
+
+
+def transfer_learn(
+    NUM_MODELS,
+    N_SHOTS,
+    VAL_UTTERANCES,
+    oov_words,
+    dest_dir,
+    unknown_files,
+    EPOCHS,
+    base_model_path: os.PathLike,
+    base_model_output="dense_2",
+    UNKNOWN_PERCENTAGE=50.0,
+    NUM_BATCHES=1,
+    data_dir="/home/mark/tinyspeech_harvard/frequent_words/en/clips/",
+    bg_datadir="/home/mark/tinyspeech_harvard/frequent_words/en/clips/_background_noise_/",
+):
+    assert (os.path.isdir(dest_dir), f"dest dir {dest_dir} not found")
+    models = np.random.choice(oov_words, NUM_MODELS, replace=False)
+
+    for target in models:
+        tf.get_logger().setLevel(logging.ERROR)
+        base_model = tf.keras.models.load_model(base_model_path)
+        tf.get_logger().setLevel(logging.INFO)
+        xfer = tf.keras.models.Model(
+            name="TransferLearnedModel",
+            inputs=base_model.inputs,
+            outputs=base_model.get_layer(name=base_model_output).output,
+        )
+        xfer.trainable = False
+
+        # dont use softmax unless losses from_logits=False
+        CATEGORIES = 3  # silence + unknown + target_keyword
+        xfer = tf.keras.models.Sequential(
+            [xfer, tf.keras.layers.Dense(units=CATEGORIES, activation="softmax")]
+        )
+
+        xfer.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            metrics=["accuracy"],
+        )
+
+
+        wavs = glob.glob(data_dir + target + "/*.wav")
+        selected = np.random.choice(wavs, N_SHOTS + VAL_UTTERANCES, replace=False)
+
+        train_files = selected[:N_SHOTS]
+        np.random.shuffle(train_files)
+        val_files = selected[N_SHOTS:]
+
+        model_settings = input_data.prepare_model_settings(
+            label_count=100,
+            sample_rate=16000,
+            clip_duration_ms=1000,
+            window_size_ms=30,
+            window_stride_ms=20,
+            feature_bin_count=40,
+            preprocess="micro",
+        )
+
+        a = input_data.AudioDataset(
+            model_settings,
+            n_word_xfer.tolist(),
+            bg_datadir,
+            unknown_files=unknown_files,
+            unknown_percentage=UNKNOWN_PERCENTAGE,
+            spec_aug_params=input_data.SpecAugParams(percentage=80),
+        )
+
+        AUTOTUNE = tf.data.experimental.AUTOTUNE
+        train_ds = a.init(AUTOTUNE, train_files, is_training=True)
+        val_ds = a.init(AUTOTUNE, val_files, is_training=False)
+        # test_ds = a.init(AUTOTUNE, test_files, is_training=False)
+        batch_size = 64
+        train_ds = train_ds.shuffle(buffer_size=1000).repeat().batch(batch_size)
+        val_ds = val_ds.batch(batch_size)
+
+        history = xfer.fit(
+            train_ds,
+            validation_data=val_ds,
+            steps_per_epoch=64 * NUM_BATCHES,
+            epochs=EPOCHS,
+        )
+
+        va = history.history["val_accuracy"][-1]
+        name = f"xfer_{N_SHOTS}_shot_{EPOCHS}_epochs_{target}_val_acc_{va:0.2f}"
+        print(name)
+        xfer.save(dest_dir + name)
+
+        utterances_fn = target + "_utterances.txt"
+        utterances = dest_dir + utterances_fn
+        print("saving", utterances)
+        with open(utterances, "w") as fh:
+            fh.write("\n".join(train_files))
+
+
+#%% analysis
+
 
 def evaluate(
     words_to_evaluate: List[str],
@@ -147,6 +247,7 @@ def analyze_model(
     }
     return results
 
+
 # def make_roc(results: List[Dict], nrows: int, ncols: int):
 #     assert nrows * ncols == len(results), "fewer results than requested plots"
 #     fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
@@ -211,6 +312,7 @@ def analyze_model(
 #         ax.legend(loc="lower right")
 #     return fig, axes
 
+
 def calc_roc(res):
     # _TARGET_ is class 1, _UNKNOWN_ is class 0
 
@@ -236,7 +338,9 @@ def calc_roc(res):
     total_negatives = oov_total + unknown_total + original_total
 
     # false positives: _UNKNOWN_ keywords incorrectly classified as _TARGET_
-    false_positives = np.concatenate([oov_incorrect, unknown_incorrect, original_incorrect])
+    false_positives = np.concatenate(
+        [oov_incorrect, unknown_incorrect, original_incorrect]
+    )
 
     # target_tprs, target_fprs = [], []
     # oov_tprs, oov_fprs = [],[]
@@ -250,7 +354,8 @@ def calc_roc(res):
         tprs.append(tpr)
         fpr = false_positives[false_positives > threshold].shape[0] / total_negatives
         fprs.append(fpr)
-    return tprs,fprs
+    return tprs, fprs
+
 
 def make_roc_plotly(results: List[Dict]):
     fig = go.Figure()
@@ -260,13 +365,14 @@ def make_roc_plotly(results: List[Dict]):
         v = res["val_acc"]
         title = ", ".join(res["words"]) + f" (val acc {v})"
 
-        labels=np.arange(0, 1, 0.01)
+        labels = np.arange(0, 1, 0.01)
         fig.add_trace(go.Scatter(x=fprs, y=tprs, text=labels, name=title))
 
     fig.update_layout(xaxis_title="FPR", yaxis_title="TPR")
-    fig.update_xaxes(range=[0,1])
-    fig.update_yaxes(range=[0,1])
+    fig.update_xaxes(range=[0, 1])
+    fig.update_yaxes(range=[0, 1])
     return fig
+
 
 def make_roc(results: List[Dict], nrows: int, ncols: int):
     assert nrows * ncols == len(results), "fewer results than requested plots"
@@ -283,7 +389,7 @@ def make_roc(results: List[Dict], nrows: int, ncols: int):
         ax.set_title(wl)
         ax.set_xlabel("fpr")
         ax.set_ylabel("tpr")
-        #ax.legend(loc="lower right")
+        # ax.legend(loc="lower right")
     return fig, axes
 
 
@@ -413,7 +519,7 @@ print(np.concatenate([owcs, utcs, oecs]).shape[0])
 ms = os.listdir("/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/")
 ms = list(filter(lambda f: not f.endswith(".pkl"), ms))
 
-#%%
+#%% LOAD DATA
 data_dir = "/home/mark/tinyspeech_harvard/frequent_words/en/clips/"
 model_dir = "/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/"
 with open(model_dir + "unknown_words.pkl", "rb") as fh:
@@ -428,6 +534,24 @@ with open(
 ) as fh:
     commands = fh.read().splitlines()
 
+print(
+    len(commands), len(unknown_words), len(oov_words),
+)
+
+#%%  TRAINING
+destdir = "/home/mark/tinyspeech_harvard/xfer_efnet_5/"
+basemodelpath = "/home/mark/tinyspeech_harvard/train_100_augment/hundredword_efficientnet_1600_selu_specaug80.0146-0.8736"
+transfer_learn(
+    NUM_MODELS=9,
+    N_SHOTS=5,
+    VAL_UTTERANCES=400,
+    oov_words=oov_words,
+    dest_dir=destdir,
+    unknown_files=unknown_files,
+    base_model_path=basemodelpath,
+    EPOCHS=6,
+)
+
 #%%
 other_words = [
     w for w in os.listdir(data_dir) if w != "_background_noise_" and w not in commands
@@ -435,6 +559,7 @@ other_words = [
 other_words.sort()
 print(len(other_words))
 assert len(set(other_words).intersection(commands)) == 0
+
 
 #%%
 model_settings = input_data.prepare_model_settings(
@@ -455,11 +580,16 @@ audio_dataset = input_data.AudioDataset(
     unknown_percentage=0,
     spec_aug_params=input_data.SpecAugParams(percentage=0),
 )
+
+#%%
+items = os.listdir(destdir)
+models = list(filter(lambda m: os.path.isdir(destdir + m), items))
+print(len(models))
+print("\n".join(models))
 #%%
 
 rc = {}
-print(len(ms))
-for m in ms:
+for m in models:
     epochs = "_epochs_"
     start = m.find(epochs) + len(epochs)
     valacc_str = "_val_acc_"
@@ -470,7 +600,7 @@ for m in ms:
     valacc = float(m[valacc_idx:])
     print(valacc)
 
-    mp = "/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/" + m
+    mp = destdir + m
     print(mp)
 
     rc[m] = analyze_model(
@@ -484,23 +614,45 @@ for m in ms:
         commands,
     )
 #%%
-# with open("/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/results.pkl", 'wb') as fh:
+# destpkl= destdir + "results.pkl"
+# print(destpkl)
+# with open(destpkl, 'wb') as fh:
 #    pickle.dump(rc, fh)
-with open(
-    "/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/results.pkl", "rb"
-) as fh:
-    rc = pickle.load(fh)
+#%% 
+# with open(destdir + "results.pkl", "rb") as fh:
+#     rc = pickle.load(fh)
 
 #%%
-fig, axes = make_viz(rc.values(), threshold=0.5, nrows=3, ncols=3)
+fig, axes = make_viz(rc.values(), threshold=0.55, nrows=3, ncols=3)
 fig.set_size_inches(25, 25)
+
+#%%
+fig.savefig(destdir + "5shot.png", dpi=200, tight_layout=True)
 
 #%%
 fig, axes = make_roc(rc.values(), nrows=3, ncols=3)
 fig.set_size_inches(25, 25)
 
 #%%
-fig=make_roc_plotly(rc.values())
+fig = make_roc_plotly(rc.values())
 fig
 #%%
-fig.write_html("/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/roc.html")
+fig.write_html(destdir + "roc.html")
+
+
+#%% LISTEN
+import pydub
+from pydub.playback import play 
+import time
+
+audiofiles = glob.glob(destdir + "*.txt")
+for ix,f in enumerate(audiofiles):
+    print(ix,f)
+ix=0
+with open(audiofiles[ix],'rb') as fh:
+    utterances = fh.read().decode('utf8').splitlines()
+
+for u in utterances:
+    print(u)
+    play(pydub.AudioSegment.from_wav(u))
+    time.sleep(0.5)
