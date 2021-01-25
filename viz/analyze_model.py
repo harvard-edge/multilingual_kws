@@ -147,6 +147,145 @@ def analyze_model(
     }
     return results
 
+# def make_roc(results: List[Dict], nrows: int, ncols: int):
+#     assert nrows * ncols == len(results), "fewer results than requested plots"
+#     fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
+#     for ix, (res, ax) in enumerate(zip(results, axes.flatten())):
+#         ccs = np.array(res["target_keywords"]["correct"])
+#         ics = np.array(res["target_keywords"]["incorrect"])
+#         num_samples = ccs.shape[0] + ics.shape[0]
+
+#         # TODO(mmaz): there are like four different styles of expressing the same calculations here, which one is clearest?
+
+#         # total false positives
+#         tkcs = np.array(res["target_keywords"]["incorrect"])
+#         owcs = np.array(res["oov"]["incorrect"])
+#         utcs = np.array(res["unknown_training"]["incorrect"])
+#         oecs = np.array(res["original_embedding"]["incorrect"])
+#         all_incorrect = np.concatenate([tkcs, owcs, utcs, oecs])
+#         all_correct = np.array(
+#             res["target_keywords"]["correct"]
+#             + res["oov"]["correct"]
+#             + res["unknown_training"]["correct"]
+#             + res["original_embedding"]["correct"]
+#         )
+#         total_predictions = all_incorrect.shape[0] + all_correct.shape[0]
+
+#         # total_unknown = len(correct_unknown_confidences + incorrect_unknown_confidences + original_words_correct_unknown_confidences + original_words_incorrect_unknown_confidences)
+#         total_unknown = sum(
+#             [
+#                 len(res[k]["correct"]) + len(res[k]["incorrect"])
+#                 for k in ["oov", "unknown_training", "original_embedding"]
+#             ]
+#         )
+
+#         total_tprs, total_fprs = [], []
+#         target_tprs, unknown_fprs = [], []
+#         threshs = np.arange(0, 1, 0.01)
+#         for threshold in threshs:
+#             total_tpr = all_correct[all_correct > threshold].shape[0] / total_predictions
+#             total_tprs.append(total_tpr)
+
+#             target_tpr = ccs[ccs > threshold].shape[0] / num_samples
+#             target_tprs.append(target_tpr)
+#             total_fpr = (
+#                 all_incorrect[all_incorrect > threshold].shape[0] / total_predictions
+#             )
+#             total_fprs.append(total_fpr)
+#             fpr_unknown = (
+#                 np.where(np.concatenate([owcs, utcs, oecs]) > threshold)[0].shape[0]
+#                 / total_unknown
+#             )
+#             unknown_fprs.append(fpr_unknown)
+
+#         ax.plot(total_fprs, total_tprs, label="total accuracy")
+#         ax.plot(unknown_fprs, target_tprs,label="target TPR vs unknown FPR")
+#         ax.set_xlim(-0.01, 1)
+#         ax.set_ylim(-0.01, 1)
+
+#         v = res["val_acc"]
+#         wl = ", ".join(res["words"]) + f" (val acc {v})"
+#         ax.set_title(wl)
+#         ax.set_xlabel("fpr")
+#         ax.set_ylabel("tpr")
+#         ax.legend(loc="lower right")
+#     return fig, axes
+
+def calc_roc(res):
+    # _TARGET_ is class 1, _UNKNOWN_ is class 0
+
+    # positive label: target keywords classified as _TARGET_
+    target_correct = np.array(res["target_keywords"]["correct"])
+    # false negatives - target kws incorrectly classified as _UNKNOWN_:
+    target_incorrect = np.array(res["target_keywords"]["incorrect"])
+    total_positives = target_correct.shape[0] + target_incorrect.shape[0]
+
+    # negative labels
+    oov_correct = np.array(res["oov"]["correct"])
+    oov_incorrect = np.array(res["oov"]["incorrect"])
+    oov_total = oov_correct.shape[0] + oov_incorrect.shape[0]
+
+    unknown_correct = np.array(res["unknown_training"]["correct"])
+    unknown_incorrect = np.array(res["unknown_training"]["incorrect"])
+    unknown_total = unknown_correct.shape[0] + unknown_incorrect.shape[0]
+
+    original_correct = np.array(res["original_embedding"]["correct"])
+    original_incorrect = np.array(res["original_embedding"]["incorrect"])
+    original_total = original_correct.shape[0] + original_incorrect.shape[0]
+
+    total_negatives = oov_total + unknown_total + original_total
+
+    # false positives: _UNKNOWN_ keywords incorrectly classified as _TARGET_
+    false_positives = np.concatenate([oov_incorrect, unknown_incorrect, original_incorrect])
+
+    # target_tprs, target_fprs = [], []
+    # oov_tprs, oov_fprs = [],[]
+    # unknown_tprs, unknown_fprs = [],[]
+    # original_tprs, original_fprs = [], []
+    tprs, fprs = [], []
+
+    threshs = np.arange(0, 1, 0.01)
+    for threshold in threshs:
+        tpr = target_correct[target_correct > threshold].shape[0] / total_positives
+        tprs.append(tpr)
+        fpr = false_positives[false_positives > threshold].shape[0] / total_negatives
+        fprs.append(fpr)
+    return tprs,fprs
+
+def make_roc_plotly(results: List[Dict]):
+    fig = go.Figure()
+    for ix, res in enumerate(results):
+        tprs, fprs = calc_roc(res)
+
+        v = res["val_acc"]
+        title = ", ".join(res["words"]) + f" (val acc {v})"
+
+        labels=np.arange(0, 1, 0.01)
+        fig.add_trace(go.Scatter(x=fprs, y=tprs, text=labels, name=title))
+
+    fig.update_layout(xaxis_title="FPR", yaxis_title="TPR")
+    fig.update_xaxes(range=[0,1])
+    fig.update_yaxes(range=[0,1])
+    return fig
+
+def make_roc(results: List[Dict], nrows: int, ncols: int):
+    assert nrows * ncols == len(results), "fewer results than requested plots"
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
+    for ix, (res, ax) in enumerate(zip(results, axes.flatten())):
+        tprs, fprs = calc_roc(res)
+
+        ax.plot(fprs, tprs)
+        ax.set_xlim(-0.01, 1)
+        ax.set_ylim(-0.01, 1)
+
+        v = res["val_acc"]
+        wl = ", ".join(res["words"]) + f" (val acc {v})"
+        ax.set_title(wl)
+        ax.set_xlabel("fpr")
+        ax.set_ylabel("tpr")
+        #ax.legend(loc="lower right")
+    return fig, axes
+
 
 def make_viz(results: List[Dict], threshold: float, nrows: int, ncols: int):
     assert nrows * ncols == len(results), "fewer results than requested plots"
@@ -233,8 +372,8 @@ def make_viz(results: List[Dict], threshold: float, nrows: int, ncols: int):
 
 
 #%%
-res=list(rc.values())[0]
-threshold=0.5
+res = list(rc.values())[0]
+threshold = 0.5
 ccs = np.array(res["target_keywords"]["correct"])
 ics = np.array(res["target_keywords"]["incorrect"])
 # correct_share_above_thresh = ccs[ccs>threshold].shape[0]/ccs.shape[0]
@@ -256,9 +395,7 @@ all_correct = np.array(
 total_predictions = all_incorrect.shape[0] + all_correct.shape[0]
 
 # total_unknown = len(correct_unknown_confidences + incorrect_unknown_confidences + original_words_correct_unknown_confidences + original_words_incorrect_unknown_confidences)
-total_fpr = (
-    all_incorrect[all_incorrect > threshold].shape[0] / total_predictions
-)
+total_fpr = all_incorrect[all_incorrect > threshold].shape[0] / total_predictions
 total_unknown = sum(
     [
         len(res[k]["correct"]) + len(res[k]["incorrect"])
@@ -266,26 +403,15 @@ total_unknown = sum(
     ]
 )
 fpr_unknown = (
-    np.where(np.concatenate([owcs, utcs, oecs]) > threshold)[0].shape[0]
-    / total_unknown
+    np.where(np.concatenate([owcs, utcs, oecs]) > threshold)[0].shape[0] / total_unknown
 )
 print(total_fpr, fpr_unknown)
 print(np.concatenate([owcs, utcs, oecs]).shape[0])
 
 
 #%%
-os.listdir("/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/")
-
-#%%
-ms = [
-    "xfer_fiveword_1_epochs_asked_val_acc_0.94",
-    "xfer_fiveword_1_epochs_money_val_acc_0.90",
-    "xfer_fiveword_1_epochs_work_val_acc_0.91",
-    "xfer_fiveword_1_epochs_own_val_acc_0.88",
-    "xfer_fiveword_1_epochs_just_val_acc_0.87",
-    "xfer_fiveword_1_epochs_think_val_acc_0.87",
-    "xfer_fiveword_1_epochs_most_val_acc_0.96",
-]
+ms = os.listdir("/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/")
+ms = list(filter(lambda f: not f.endswith(".pkl"), ms))
 
 #%%
 data_dir = "/home/mark/tinyspeech_harvard/frequent_words/en/clips/"
@@ -332,7 +458,7 @@ audio_dataset = input_data.AudioDataset(
 #%%
 
 rc = {}
-
+print(len(ms))
 for m in ms:
     epochs = "_epochs_"
     start = m.find(epochs) + len(epochs)
@@ -357,8 +483,24 @@ for m in ms:
         oov_words,
         commands,
     )
+#%%
+# with open("/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/results.pkl", 'wb') as fh:
+#    pickle.dump(rc, fh)
+with open(
+    "/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/results.pkl", "rb"
+) as fh:
+    rc = pickle.load(fh)
 
 #%%
-fig, axes = make_viz(list(rc.values())[:6], threshold=0.5, nrows=3, ncols=2)
-fig.set_size_inches(15, 25)
+fig, axes = make_viz(rc.values(), threshold=0.5, nrows=3, ncols=3)
+fig.set_size_inches(25, 25)
 
+#%%
+fig, axes = make_roc(rc.values(), nrows=3, ncols=3)
+fig.set_size_inches(25, 25)
+
+#%%
+fig=make_roc_plotly(rc.values())
+fig
+#%%
+fig.write_html("/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/roc.html")
