@@ -158,7 +158,11 @@ class StreamingAccuracyStats(object):
           self._how_many_c += 1
           self._which_matched[found_label] += 1
         else:
+          # this also captures when the model finds words in 
+          # noise (not present at all in GT) e.g., if threshold is low
           self._how_many_w += 1
+          #if ground_truth_label == found_label:
+          #  print(ground_truth_label, ground_truth_time, found_label, found_time, np.abs(found_time - ground_truth_time),  np.abs(found_time - ground_truth_time)> time_tolerance_ms)
           if ((ground_truth_label == "_unknown_" or ground_truth_label == "_silence_") 
                and found_label == self.target_keyword):
             self._which_wrong[ground_truth_label] += 1
