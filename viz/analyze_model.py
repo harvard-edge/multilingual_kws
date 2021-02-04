@@ -1,6 +1,7 @@
 #%%
 import os
 import logging
+import re
 from typing import Dict, List
 
 import glob
@@ -67,7 +68,6 @@ def transfer_learn(
             metrics=["accuracy"],
         )
 
-
         wavs = glob.glob(data_dir + target + "/*.wav")
         selected = np.random.choice(wavs, N_SHOTS + VAL_UTTERANCES, replace=False)
 
@@ -75,6 +75,7 @@ def transfer_learn(
         np.random.shuffle(train_files)
         val_files = selected[N_SHOTS:]
 
+        print(len(train_files), "shot:", target)
         model_settings = input_data.prepare_model_settings(
             label_count=100,
             sample_rate=16000,
@@ -86,9 +87,9 @@ def transfer_learn(
         )
 
         a = input_data.AudioDataset(
-            model_settings,
-            n_word_xfer.tolist(),
-            bg_datadir,
+            model_settings=model_settings,
+            commands=[target],
+            background_data_dir=bg_datadir,
             unknown_files=unknown_files,
             unknown_percentage=UNKNOWN_PERCENTAGE,
             spec_aug_params=input_data.SpecAugParams(percentage=80),
@@ -348,7 +349,7 @@ def calc_roc(res):
     # original_tprs, original_fprs = [], []
     tprs, fprs = [], []
 
-    threshs = np.arange(0, 1, 0.01)
+    threshs = np.arange(0, 1.01, 0.01)
     for threshold in threshs:
         tpr = target_correct[target_correct > threshold].shape[0] / total_positives
         tprs.append(tpr)
@@ -618,7 +619,7 @@ for m in models:
 # print(destpkl)
 # with open(destpkl, 'wb') as fh:
 #    pickle.dump(rc, fh)
-#%% 
+#%%
 # with open(destdir + "results.pkl", "rb") as fh:
 #     rc = pickle.load(fh)
 
@@ -641,18 +642,194 @@ fig.write_html(destdir + "roc.html")
 
 
 #%% LISTEN
+###############################################
+##               LISTEN
+###############################################
 import pydub
-from pydub.playback import play 
+from pydub.playback import play
 import time
 
 audiofiles = glob.glob(destdir + "*.txt")
-for ix,f in enumerate(audiofiles):
-    print(ix,f)
-ix=0
-with open(audiofiles[ix],'rb') as fh:
-    utterances = fh.read().decode('utf8').splitlines()
+#audiofiles = glob.glob(scmodeldir + "*.txt")
+for ix, f in enumerate(audiofiles):
+    print(ix, f)
+ix = 3
+with open(audiofiles[ix], "rb") as fh:
+    utterances = fh.read().decode("utf8").splitlines()
 
 for u in utterances:
     print(u)
     play(pydub.AudioSegment.from_wav(u))
     time.sleep(0.5)
+
+
+#%%
+###############################################
+##               SPEECH COMMANDS
+###############################################
+
+speech_commands = "/home/mark/tinyspeech_harvard/speech_commands/"
+dnames = os.listdir(speech_commands)
+speech_commands_words = [
+    w
+    for w in dnames
+    if os.path.isdir(speech_commands + w) and w != "_background_noise_"
+]
+# print(speech_commands_words)
+# words which have been sampled as part of unknown_files and should not be used in the OOV SC set
+unknown_words_in_speech_commands = set(unknown_words).intersection(
+    set(speech_commands_words)
+)
+# speech commands words that are oov for the embedding model (they do not show up in the 100 word commands list)
+non_embedding_speech_commands = list(
+    set(speech_commands_words).difference(set(commands))
+    - unknown_words_in_speech_commands
+)
+print(non_embedding_speech_commands)
+
+#%%
+
+#%%  TRAINING AGAINST SPEECH COMMANDS
+destdir = "/home/mark/tinyspeech_harvard/xfer_speechcommands_5/"
+basemodelpath = "/home/mark/tinyspeech_harvard/train_100_augment/hundredword_efficientnet_1600_selu_specaug80.0146-0.8736"
+transfer_learn(
+    NUM_MODELS=9,
+    N_SHOTS=5,
+    VAL_UTTERANCES=400,
+    oov_words=non_embedding_speech_commands,
+    dest_dir=destdir,
+    unknown_files=unknown_files,
+    base_model_path=basemodelpath,
+    EPOCHS=6,
+    data_dir=speech_commands,
+)
+
+#%% eval speech commands
+
+scmodeldir = "/home/mark/tinyspeech_harvard/xfer_speechcommands_5/"
+scmodels = [
+    ("xfer_5_shot_6_epochs_marvin_val_acc_0.95", "marvin"),
+    ("xfer_5_shot_6_epochs_left_val_acc_0.87", "left"),
+    ("xfer_5_shot_6_epochs_nine_val_acc_0.94", "nine"),
+    ("xfer_5_shot_6_epochs_zero_val_acc_0.94", "zero"),
+    ("xfer_5_shot_6_epochs_tree_val_acc_0.93", "tree"),
+    ("xfer_5_shot_6_epochs_two_val_acc_0.81", "two"),
+    ("xfer_5_shot_6_epochs_bird_val_acc_0.89", "bird"),
+    ("xfer_5_shot_6_epochs_wow_val_acc_0.90", "wow"),
+    ("xfer_5_shot_6_epochs_six_val_acc_0.95", "six"),
+]
+
+modelname, target = scmodels[4]
+print(target)
+
+tf.get_logger().setLevel(logging.ERROR)
+scmodel = tf.keras.models.load_model(scmodeldir + modelname)
+tf.get_logger().setLevel(logging.INFO)
+
+target_results = evaluate([target], 2, speech_commands, 1500, scmodel, audio_dataset)
+
+non_target_words = list(set(non_embedding_speech_commands) - {target})
+unknown_sample = np.random.choice(non_target_words, 10, replace=False).tolist()
+
+unknown_results = evaluate(
+    unknown_sample, 1, speech_commands, 1500, scmodel, audio_dataset
+)
+
+#%%
+
+
+#%%
+for results in [target_results, unknown_results]:
+    c = len(results["correct"])
+    w = len(results["incorrect"])
+
+    print(c, w, c / (c + w))
+
+#%%
+
+
+def roc_sc(target_resuts, unknown_results):
+    # _TARGET_ is class 1, _UNKNOWN_ is class 0
+
+    # positive label: target keywords classified as _TARGET_
+    # true positives
+    target_correct = np.array(target_resuts["correct"])
+    # false negatives -> target kws incorrectly classified as _UNKNOWN_:
+    target_incorrect = np.array(target_resuts["incorrect"])
+    total_positives = target_correct.shape[0] + target_incorrect.shape[0]
+
+    # negative labels
+
+    # true negatives -> unknown classified as unknown
+    unknown_correct = np.array(unknown_results["correct"])
+    # false positives: _UNKNOWN_ keywords incorrectly (falsely) classified as _TARGET_ (positive)
+    unknown_incorrect = np.array(unknown_results["incorrect"])
+    unknown_total = unknown_correct.shape[0] + unknown_incorrect.shape[0]
+
+    # TPR = TP / (TP + FN)
+    # FPR = FP / (FP + TN)
+
+    tprs, fprs = [], []
+
+    threshs = np.arange(0, 1.01, 0.01)
+    for threshold in threshs:
+        tpr = target_correct[target_correct > threshold].shape[0] / total_positives
+        tprs.append(tpr)
+        fpr = unknown_incorrect[unknown_incorrect > threshold].shape[0] / unknown_total
+        fprs.append(fpr)
+    return tprs, fprs, threshs
+
+
+fig = go.Figure()
+tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=target))
+
+fig.update_layout(xaxis_title="FPR", yaxis_title="TPR")
+fig.update_xaxes(range=[0, 1])
+fig.update_yaxes(range=[0, 1])
+fig
+
+#%%
+results = []
+for modelname, target in scmodels:
+    print(target)
+    tf.get_logger().setLevel(logging.ERROR)
+    scmodel = tf.keras.models.load_model(scmodeldir + modelname)
+    tf.get_logger().setLevel(logging.INFO)
+
+    target_results = evaluate(
+        [target], 2, speech_commands, 1500, scmodel, audio_dataset
+    )
+
+    non_target_words = list(set(non_embedding_speech_commands) - {target})
+    unknown_sample = np.random.choice(non_target_words, 10, replace=False).tolist()
+
+    unknown_results = evaluate(
+        unknown_sample, 1, speech_commands, 1500, scmodel, audio_dataset
+    )
+    results.append(
+        {
+            "target_results": target_results,
+            "unknown_results": unknown_results,
+            "target": target,
+        }
+    )
+
+#%%
+
+def sc_roc_plotly(results: List[Dict]):
+    fig = go.Figure()
+    for ix, res in enumerate(results):
+        target_results = res["target_results"]
+        unknown_results = res["unknown_results"]
+        target = res["target"]
+        tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+        fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=target))
+
+    fig.update_layout(xaxis_title="FPR", yaxis_title="TPR", title="speech commands classification accuracy")
+    fig.update_xaxes(range=[0, 1])
+    fig.update_yaxes(range=[0, 1])
+    return fig
+fig = sc_roc_plotly(results)
+fig.write_html(scmodeldir + "5shot_classification_roc_vs_10_unknown_sampled_from_SC.html")
+fig
