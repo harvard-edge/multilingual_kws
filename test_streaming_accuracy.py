@@ -9,11 +9,11 @@ import os
 import sys
 import pprint
 import pickle
+import subprocess
 from typing import List
 
 import numpy as np
 import tensorflow as tf
-from tensorflow._api.v2 import audio
 
 import matplotlib.pyplot as plt
 import plotly.express as px
@@ -32,6 +32,10 @@ sys.path.insert(
 )
 from recognize_commands import RecognizeCommands, RecognizeResult
 
+
+#%%
+
+tf.config.list_physical_devices('GPU')
 
 #%%
 @dataclass(frozen=True)
@@ -61,14 +65,21 @@ def calculate_streaming_accuracy(model, audio_dataset, FLAGS):
     audio = audio.numpy().flatten()
 
     # Init instance of StreamingAccuracyStats and load ground truth.
+    # number of samples in the entire audio file
     data_samples = audio.shape[0]
+    # number of samples in one utterance (e.g., a 1 second clip)
     clip_duration_samples = int(FLAGS.clip_duration_ms * sample_rate / 1000)
+    # number of samples in one stride
     clip_stride_samples = int(FLAGS.clip_stride_ms * sample_rate / 1000)
+    # leave space for one full clip at end
     audio_data_end = data_samples - clip_duration_samples
 
+    # num spectrograms: in the range expression below, if there is a remainder
+    # in audio_data_end/clip_stride_samples, we need one additional slot
+    # for a spectrogram
     spectrograms = np.zeros(
         (
-            audio_data_end // clip_stride_samples,
+            int(np.ceil(audio_data_end / clip_stride_samples)),
             model_settings["spectrogram_length"],
             model_settings["fingerprint_width"],
         )
@@ -133,21 +144,9 @@ def calculate_streaming_accuracy(model, audio_dataset, FLAGS):
         # calculate final stats for full wav file:
         stats.calculate_accuracy_stats(all_found_words, -1, FLAGS.time_tolerance_ms)
         stats.print_accuracy_stats()
-        results[threshold] = stats
+        results[threshold] = (stats, all_found_words)
     return results
 
-
-#%%  MODEL
-
-# xfer_5_shot_6_epochs_also_val_acc_0.89/
-# xfer_5_shot_6_epochs_always_val_acc_0.98/
-# xfer_5_shot_6_epochs_area_val_acc_0.91/
-# xfer_5_shot_6_epochs_between_val_acc_0.91/
-# xfer_5_shot_6_epochs_between_val_acc_0.94/
-# xfer_5_shot_6_epochs_last_val_acc_0.97/
-# xfer_5_shot_6_epochs_long_val_acc_0.95/
-# xfer_5_shot_6_epochs_thing_val_acc_0.88/
-# xfer_5_shot_6_epochs_will_val_acc_0.87/
 
 #%%  AUDIO_DATASET
 model_settings = input_data.prepare_model_settings(
@@ -169,16 +168,187 @@ audio_dataset = input_data.AudioDataset(
     spec_aug_params=input_data.SpecAugParams(percentage=0),
 )
 
-#%%  print results
-# msg, statdict = stats.print_accuracy_stats().values()[0]
-# print("matched", statdict["matched"])
-# print("wrong", statdict["wrong"])
-# print(statdict)
+#%%
 
 
+#%%
 ############################################################################
+#    Speech Commands
+############################################################################
+scanalysisdir = "/home/mark/tinyspeech_harvard/xfer_speechcommands_5/"
+scmodeldir = scanalysisdir + "models/"
+DESTINATION = scanalysisdir + "streaming_results_w_words.pkl"
+
+scmodels = os.listdir(scmodeldir)
+results = {}
+for modelname in scmodels:
+    tf.get_logger().setLevel(logging.ERROR)
+    model = tf.keras.models.load_model(scmodeldir + modelname)
+    tf.get_logger().setLevel(logging.INFO)
+
+    # xfer_5_shot_6_epochs_marvin_val_acc_0.95
+    prefix = "xfer_5_shot_6_epochs_"
+    target = modelname[len(prefix):].split("_")[0]
+    print(target)
+
+    flags = FlagTest(
+        wav=f"{scanalysisdir}/streaming/{target}/streaming_test.wav",
+        ground_truth=f"{scanalysisdir}/streaming/{target}/streaming_labels.txt",
+        target_keyword=target,
+        detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
+    )
+    results[target] = calculate_streaming_accuracy(model, audio_dataset, FLAGS=flags)
+with open(DESTINATION, "wb") as fh:
+    pickle.dump(results, fh)
+
+#%%
+scanalysisdir="/home/mark/tinyspeech_harvard/xfer_speechcommands_5/"
+with open(scanalysisdir + "streaming_results.pkl", 'rb') as fh:
+    results = pickle.load(fh)
+
+#%%
+os.listdir(scmodeldir)
+
+#%% analyze short tree
+tf.get_logger().setLevel(logging.ERROR)
+model = tf.keras.models.load_model(scmodeldir + 'xfer_5_shot_6_epochs_tree_val_acc_0.93')
+tf.get_logger().setLevel(logging.INFO)
+
+target="tree"
+flags = FlagTest(
+    wav=f"{scanalysisdir}/small_streaming/small_{target}/small.wav",
+    ground_truth=f"{scanalysisdir}/small_streaming/small_{target}/small.txt",
+    target_keyword=target,
+    detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
+)
+results={}
+results[target] = calculate_streaming_accuracy(model, audio_dataset, FLAGS=flags)
+
+#%%
+print("---")
+# with open("/home/mark/tinyspeech_harvard/tmp/marvin.pkl", "wb") as fh:
+#     pickle.dump(results, fh)
+
+#%%
+
+
+#%%
+fig = go.Figure()
+for target, results_per_threshold in results.items():
+    print(target)
+    target_match_over_gt_positives = []
+    false_positives_over_silence_or_unknown = []
+    thresh_labels = []
+    for thresh, (stats, found_words) in results_per_threshold.items():
+        infomsg, statdict = stats.print_accuracy_stats()
+        n_targets = statdict["num_groundtruth_target"]
+        n_silence_unknown = statdict["num_groundtruth_unknown_or_silence"]
+        n_correct = statdict["matched"][target]
+        n_false_positives = (
+            statdict["wrong"][input_data.SILENCE_LABEL]
+            + statdict["wrong"][input_data.UNKNOWN_WORD_LABEL]
+        )
+        target_match_over_gt_positives.append(n_correct / n_targets)
+        false_positives_over_silence_or_unknown.append(
+            n_false_positives / n_silence_unknown
+        )
+        thresh_labels.append(f"thresh: {thresh}")
+        print(":::", thresh, n_correct / n_targets, n_false_positives / n_silence_unknown)
+    fig.add_trace(
+        go.Scatter(
+            x=false_positives_over_silence_or_unknown,
+            y=target_match_over_gt_positives,
+            text=thresh_labels,
+            name=target,
+        )
+    )
+fig.update_layout(
+    xaxis_title="(false positive target matches)/(# GT silence, unknown)",
+    yaxis_title="(target matches)/(# GT targets)",
+)
+fig.update_xaxes(range=[0, 1])
+fig.update_yaxes(range=[0, 1])
+#fig.write_html(scanalysisdir + "speech_commands_streaming_roc.html")
+#fig.write_html(scanalysisdir + "short_tree.html")
+
+fig
+
+
+
+#%%
+def make_stream(groundtruth, found_words, target, threshold, time_tolerance_ms=1500):
+    fig,ax=plt.subplots()
+    gt_target_times = [t for g,t in groundtruth if g == target]
+    print("gt target occurences", len(gt_target_times))
+    found_target_times = [t for f,t in found_words if f == target]
+    print("num found targets", len(found_target_times))
+
+    false_negatives = 0
+    for word,time in groundtruth:
+        if word == target:
+            ax.axvline(x=time, linestyle="--", linewidth=2, color=(0,0.4,0,0.5))
+
+            latest_time = time + time_tolerance_ms
+            earliest_time = time - time_tolerance_ms
+            potential_match = False
+            for found_time in found_target_times:
+                if found_time > latest_time:
+                    break
+                if found_time < earliest_time:
+                    continue
+                potential_match = True
+            if not potential_match:
+                false_negatives += 1
+                ax.axvline(x=time, linestyle="-", linewidth=4, color=(0.8,0.3,0,0.5), ymax=0.9)
+
+    no_match = 0
+    for word,time in found_words:
+        if word == target:
+            #q = False
+            #if time == 189540:
+            #    q=True
+            #    ax.axvline(x=time, linestyle="-", linewidth=3, color=(1,0,1,0.4), ymax=0.5)
+            #else:
+            ax.axvline(x=time, linestyle="-", linewidth=3, color=(0,0,1,0.4), ymax=0.6)
+            # highlight spurious words
+            latest_time = time + time_tolerance_ms
+            earliest_time = time - time_tolerance_ms
+            potential_match = False
+            for gt_time in gt_target_times:
+                if gt_time > latest_time:
+                    break
+                if gt_time < earliest_time:
+                    continue
+                #if q:
+                #    print(gt_time, np.abs(gt_time - time))
+                #    print("b")    
+                potential_match = True
+            if not potential_match:
+                no_match += 1
+                ax.axvline(x=time, linestyle="-", linewidth=5, color=(1,0,0,0.4), ymax=0.4)
+    print("no match", no_match)
+
+    max_x = groundtruth[-1][1] + 1000
+    ax.set_xlim([0,max_x])
+    #ax.set_xlim([175000,200000])
+    fig.set_size_inches(30,3);
+    ax.set_title(f"{target} -> threshold: {threshold}, false positives: {no_match}, false_negatives: {false_negatives}")
+    #fig.savefig(f"/home/mark/tinyspeech_harvard/tmp/analysis/{target}/{target}_{threshold:0.2f}.png",dpi=300)
+    return fig,ax
+
+#%%
+with open("/home/mark/tinyspeech_harvard/xfer_speechcommands_5/streaming_results_w_words.pkl", 'rb') as fh:
+    results = pickle.load(fh)
+for target, per_word_results in results.items():
+    for threshold, (stats,found_words) in per_word_results.items():
+        fig,ax = make_stream(stats._gt_occurrence, found_words, target, threshold)
+        break
+    break
+fig
+
 
 #%%  long pauses between also
+############################################################################
 modelname = "xfer_5_shot_6_epochs_also_val_acc_0.89"
 model_path = f"/home/mark/tinyspeech_harvard/xfer_efnet_5/models/{modelname}"
 
@@ -190,50 +360,15 @@ flags = FlagTest(
     wav=f"/home/mark/tinyspeech_harvard/xfer_efnet_5/streaming/also2/streaming_test.wav",
     ground_truth=f"/home/mark/tinyspeech_harvard/xfer_efnet_5/streaming/also2/streaming_labels.txt",
     target_keyword="also",
-    # detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
-    detection_thresholds=[0.6],
+    detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
+    #detection_thresholds=[0.6],
 )
-results = calculate_streaming_accuracy(model, audio_dataset, FLAGS=flags)
+results={}
+results["also"] = calculate_streaming_accuracy(model, audio_dataset, FLAGS=flags)
 
 
 #%%
 
-#%%
-target_match_over_gt_positives = []
-false_positives_over_silence_or_unknown = []
-thresh_labels = []
-target = "also"
-
-fig = go.Figure()
-for threshold, stats in results.items():
-    msg, statdict = stats.print_accuracy_stats()
-    n_targets = statdict["num_groundtruth_target"]
-    n_silence_unknown = statdict["num_groundtruth_unknown_or_silence"]
-    n_correct = statdict["matched"][target]
-    n_false_positives = (
-        statdict["wrong"][input_data.SILENCE_LABEL]
-        + statdict["wrong"][input_data.UNKNOWN_WORD_LABEL]
-    )
-    target_match_over_gt_positives.append(n_correct / n_targets)
-    false_positives_over_silence_or_unknown.append(
-        n_false_positives / n_silence_unknown
-    )
-    thresh_labels.append(f"thresh: {threshold}")
-fig.add_trace(
-    go.Scatter(
-        x=false_positives_over_silence_or_unknown,
-        y=target_match_over_gt_positives,
-        text=thresh_labels,
-        name=target,
-    )
-)
-fig.update_layout(
-    xaxis_title="(false positive target matches)/(# GT silence, unknown)",
-    yaxis_title="(target matches)/(# GT targets)",
-)
-fig.update_xaxes(range=[0, 1])
-fig.update_yaxes(range=[0, 1])
-fig
 
 ##############################################################################
 
@@ -377,12 +512,27 @@ model = tf.keras.models.load_model(model_path)
 tf.get_logger().setLevel(logging.INFO)
 
 FLAGS = FlagTest(
-    wav=f"/home/mark/tinyspeech_harvard/xfer_efnet_5/streaming/also2/streaming_test.wav",
-    ground_truth=f"/home/mark/tinyspeech_harvard/xfer_efnet_5/streaming/also2/streaming_labels.txt",
+    wav=f"/home/mark/tinyspeech_harvard/xfer_efnet_5/streaming/also3/streaming_test.wav",
+    ground_truth=f"/home/mark/tinyspeech_harvard/xfer_efnet_5/streaming/also3/streaming_labels.txt",
     target_keyword="also",
     # detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
     detection_thresholds=[0.6],
 )
+
+# scanalysisdir="/home/mark/tinyspeech_harvard/xfer_speechcommands_5/"
+# scmodeldir = scanalysisdir + "models/"
+# tf.get_logger().setLevel(logging.ERROR)
+# model = tf.keras.models.load_model(scmodeldir + 'xfer_5_shot_6_epochs_tree_val_acc_0.93')
+# tf.get_logger().setLevel(logging.INFO)
+
+# target="tree"
+# FLAGS = FlagTest(
+#     wav=f"{scanalysisdir}/small_streaming/small_{target}/small.wav",
+#     ground_truth=f"{scanalysisdir}/small_streaming/small_{target}/small.txt",
+#     target_keyword=target,
+#     detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
+# )
+
 wav_loader = tf.io.read_file(FLAGS.wav)
 (audio, sample_rate) = tf.audio.decode_wav(wav_loader, desired_channels=1)
 sample_rate = sample_rate.numpy()
@@ -396,7 +546,7 @@ audio_data_end = data_samples - clip_duration_samples
 
 spectrograms = np.zeros(
     (
-        audio_data_end // clip_stride_samples,
+        int(np.ceil(audio_data_end / clip_stride_samples)),
         model_settings["spectrogram_length"],
         model_settings["fingerprint_width"],
     )
@@ -415,10 +565,6 @@ for ix, audio_data_offset in enumerate(
 inferences = model.predict(spectrograms[:, :, :, np.newaxis])
 print("inferences complete")
 
-#prs = [[24480, np.array([0.97381717, 0.01749072, 0.00869214], dtype=np.float32)], [24500, np.array([0.9653848 , 0.0225329 , 0.01208234], dtype=np.float32)], [24520, np.array([0.9693769 , 0.02020488, 0.01041819], dtype=np.float32)], [24540, np.array([0.90422493, 0.05676545, 0.03900962], dtype=np.float32)], [24560, np.array([0.8826283 , 0.06856677, 0.04880488], dtype=np.float32)], [24580, np.array([0.9340749 , 0.04020728, 0.02571781], dtype=np.float32)], [24600, np.array([0.9071234 , 0.05524103, 0.03763561], dtype=np.float32)], [24620, np.array([0.7386729 , 0.14834712, 0.11297993], dtype=np.float32)], [24640, np.array([0.70328534, 0.15754056, 0.13917409], dtype=np.float32)], [24660, np.array([0.47098544, 0.2969344 , 0.23208016], dtype=np.float32)], [24680, np.array([0.2131788 , 0.39437377, 0.39244738], dtype=np.float32)], [24700, np.array([0.15790263, 0.5700083 , 0.27208915], dtype=np.float32)], [24720, np.array([0.11816145, 0.66927344, 0.21256515], dtype=np.float32)], [24740, np.array([0.13384889, 0.6829233 , 0.18322779], dtype=np.float32)], [24760, np.array([0.11229166, 0.7446161 , 0.14309229], dtype=np.float32)], [24780, np.array([0.10971147, 0.7581488 , 0.13213971], dtype=np.float32)], [24800, np.array([0.11647787, 0.68431634, 0.19920574], dtype=np.float32)], [24820, np.array([0.11367017, 0.73021716, 0.15611266], dtype=np.float32)], [24840, np.array([0.11607315, 0.6881232 , 0.1958036 ], dtype=np.float32)], [24860, np.array([0.12394444, 0.6511759 , 0.2248797 ], dtype=np.float32)], [24880, np.array([0.10275374, 0.6805507 , 0.21669555], dtype=np.float32)], [24900, np.array([0.10832468, 0.6424134 , 0.24926198], dtype=np.float32)], [24920, np.array([0.08836265, 0.6254203 , 0.2862171 ], dtype=np.float32)], [24940, np.array([0.12270603, 0.4178935 , 0.45940053], dtype=np.float32)], [24960, np.array([0.11143086, 0.42042932, 0.4681398 ], dtype=np.float32)], [24980, np.array([0.12279104, 0.18111731, 0.69609165], dtype=np.float32)]]
-#
-#scores = np.array([p[1] for p in prs])
-#scores
 #%%
 
 sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
@@ -431,9 +577,17 @@ importlib.reload(mau)
 
 #%%
 
+# for q in stats._gt_occurrence:
+#     if q[1] > 1165640:
+#         print(q)
+
+FLAGS.time_tolerance_ms
+
+#%%
 
 
-threshold = 0.6
+threshold = 0.15
+target="also"
 stats = mau.StreamingAccuracyStats(target_keyword=FLAGS.target_keyword)
 stats.read_ground_truth_file(FLAGS.ground_truth)
 recognize_element = RecognizeResult()
@@ -458,7 +612,8 @@ for ix, audio_data_offset in enumerate(
         recognize_element.is_new_command
         and recognize_element.founded_command != "_silence_"
     ):
-        #print(output_softmax, recognize_element.founded_command, recognize_element.score)
+        # print(current_time_ms/1000, output_softmax, recognize_element.founded_command, recognize_element.score)
+        # print(current_time_ms/1000, recognize_element.founded_command)#, recognize_element.score)
         all_found_words.append(
             [recognize_element.founded_command, current_time_ms]
         )
@@ -476,11 +631,27 @@ for ix, audio_data_offset in enumerate(
         # )
         stats.print_accuracy_stats()
 print("DONE", threshold)
+print("LENGTH", len(all_found_words))
 # calculate final stats for full wav file:
 stats.calculate_accuracy_stats(all_found_words, -1, FLAGS.time_tolerance_ms)
 msg, info = stats.print_accuracy_stats()
-info
-
+statdict=info
+n_targets = statdict["num_groundtruth_target"]
+n_silence_unknown = statdict["num_groundtruth_unknown_or_silence"]
+n_correct = statdict["matched"][target]
+n_false_positives = (
+    statdict["wrong"][input_data.SILENCE_LABEL]
+    + statdict["wrong"][input_data.UNKNOWN_WORD_LABEL]
+)
+# target_match_over_gt_positives.append(n_correct / n_targets)
+tpr = n_correct/n_targets
+# false_positives_over_silence_or_unknown.append(
+#     n_false_positives / n_silence_unknown
+# )
+fpr = n_false_positives / n_silence_unknown
+# thresh_labels.append(f"thresh: {threshold}")
+print(info)
+print("threshold", threshold, "tpr", tpr, "fpr", fpr)
 #%%
 print(len(stats._gt_occurrence))
 print(len(all_found_words))
