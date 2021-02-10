@@ -3,6 +3,7 @@ import os
 import logging
 import re
 from typing import Dict, List
+import datetime
 
 import glob
 import numpy as np
@@ -43,6 +44,7 @@ def transfer_learn(
     UNKNOWN_PERCENTAGE=50.0,
     NUM_BATCHES=1,
     batch_size=64,
+    name_prefix="",
     bg_datadir="/home/mark/tinyspeech_harvard/frequent_words/en/clips/_background_noise_/",
 ):
     assert os.path.isdir(dest_dir), f"dest dir {dest_dir} not found"
@@ -103,7 +105,9 @@ def transfer_learn(
     )
 
     va = history.history["val_accuracy"][-1]
-    name = f"xfer_epochs_{EPOCHS}_bs_{batch_size}_nbs_{NUM_BATCHES}_val_acc_{va:0.2f}_target_{target}"
+    if name_prefix != "":
+        name_prefix = name_prefix + "_"
+    name = f"{name_prefix}xfer_epochs_{EPOCHS}_bs_{batch_size}_nbs_{NUM_BATCHES}_val_acc_{va:0.2f}_target_{target}"
     print("saving model", name)
     xfer.save(dest_dir + name)
     details = {
@@ -167,6 +171,40 @@ def random_sample_transfer_models(
 
 #%% analysis
 
+def evaluate_fast(
+    words_to_evaluate: List[str],
+    target_id: int,
+    data_dir: os.PathLike,
+    utterances_per_word: int,
+    model: tf.keras.Model,
+    audio_dataset: input_data.AudioDataset,
+):
+    correct_confidences = []
+    incorrect_confidences = []
+
+    specs = []
+    for word in words_to_evaluate:
+        fs = np.random.choice(
+            glob.glob(data_dir + word + "/*.wav"), utterances_per_word, replace=False
+        )
+        specs.extend([audio_dataset.file2spec(f) for f in fs])
+    specs = np.array(specs)
+    preds = model.predict(np.expand_dims(specs, -1))
+
+    # softmaxes = np.max(preds,axis=1)
+    # unknown_other_words_confidences.extend(softmaxes.tolist())
+    cols = np.argmax(preds, axis=1)
+    # figure out how to fancy-index this later
+    for row, col in enumerate(cols):
+        confidence = preds[row][col]
+        if col == target_id:
+            correct_confidences.append(confidence)
+        else:
+            incorrect_confidences.append(confidence)
+    return {
+        "correct": correct_confidences,
+        "incorrect": incorrect_confidences,
+    }
 
 def evaluate(
     words_to_evaluate: List[str],
@@ -908,14 +946,19 @@ print(len(val_twos))
 
 non_target_words = list(set(non_embedding_speech_commands) - {target})
 print(non_target_words)
-unknown_sample = np.random.choice(non_target_words, 10, replace=False).tolist()
+unknown_sample = np.random.choice(non_target_words, 24, replace=False).tolist()
+print("UNKNOWN_SAMPLE:")
 print(unknown_sample)
+
 
 #%% train
 speech_commands = "/home/mark/tinyspeech_harvard/speech_commands/"
 destdir = "/home/mark/tinyspeech_harvard/hyperparam_analysis/"
 modeldestdir = destdir + "models/"
 basemodelpath = "/home/mark/tinyspeech_harvard/train_100_augment/hundredword_efficientnet_1600_selu_specaug80.0146-0.8736"
+
+with open(destdir + "unknown_words.txt", 'w') as fh:
+    fh.write("\n".join(unknown_sample))
 
 train_files = two_utterances
 val_files = val_twos
@@ -924,7 +967,8 @@ n_models = 0
 for epochs in range(1, 10):
     for n_batches in range(1, 4):
         for batch_size in [32, 64]:
-            n_models += 1
+            for trial in range(1,4):
+                n_models += 1
 print("N MODELS", n_models)
 
 results = {}
@@ -932,52 +976,50 @@ ix = 0
 for epochs in range(1, 10):
     for n_batches in range(1, 4):
         for batch_size in [32, 64]:
-            ix += 1
-            print(
-                ":::::::",
-                ix,
-                ":",
-                "epochs",
-                epochs,
-                "n_batches",
-                n_batches,
-                "bs",
-                batch_size,
-            )
+            for trial in range(1,4):
+                ix += 1
+                print(f"::::: {ix}: epochs {epochs} nb {n_batches} bs {batch_size} t {trial}")
 
-            modelname, model, details = transfer_learn(
-                dest_dir=modeldestdir,
-                target=target,
-                train_files=train_files,
-                val_files=val_files,
-                unknown_files=unknown_files,
-                EPOCHS=epochs,
-                base_model_path=basemodelpath,
-                NUM_BATCHES=n_batches,
-                batch_size=batch_size,
-            )
+                start = datetime.datetime.now()
+                modelname, model, details = transfer_learn(
+                    dest_dir=modeldestdir,
+                    target=target,
+                    train_files=train_files,
+                    val_files=val_files,
+                    unknown_files=unknown_files,
+                    EPOCHS=epochs,
+                    base_model_path=basemodelpath,
+                    NUM_BATCHES=n_batches,
+                    batch_size=batch_size,
+                    name_prefix=f"trial{trial}"
+                )
 
-            target_results = evaluate(
-                [target], 2, speech_commands, 1500, model, audio_dataset
-            )
-            unknown_results = evaluate(
-                unknown_sample, 1, speech_commands, 1500, model, audio_dataset
-            )
+                target_results = evaluate_fast(
+                    [target], 2, speech_commands, 1500, model, audio_dataset
+                )
+                unknown_results = evaluate_fast(
+                    unknown_sample, 1, speech_commands, 600, model, audio_dataset
+                )
 
-            # tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
-            results[modelname] = {
-                "target": target,
-                "epochs": epochs,
-                "n_batches": n_batches,
-                "target_results": target_results,
-                "unknown_results": unknown_results,
-                "details": details,
-            }
-            with open(destdir + f"hyperparamsweepv2_{ix}.pkl", "wb") as fh:
-                pickle.dump(results, fh)
-            print(f":::::::::: DONE {ix}/{n_models}")
+                # tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+                results[modelname] = {
+                    "target": target,
+                    "epochs": epochs,
+                    "n_batches": n_batches,
+                    "trial": trial,
+                    "target_results": target_results,
+                    "unknown_results": unknown_results,
+                    "details": details,
+                }
+                with open(destdir + f"results/hpsweep_{ix:03d}.pkl", "wb") as fh:
+                    pickle.dump(results, fh)
+
+                end = datetime.datetime.now()
+                print(f":::::::::: DONE {ix}/{n_models} --- {end-start}")
 
 #%%
 
 # with open(destdir + "hyperparamsweep.pkl", "rb") as fh:
 #     results = pickle.load(fh)
+
+#%%
