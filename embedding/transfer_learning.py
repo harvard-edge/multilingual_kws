@@ -171,6 +171,7 @@ def random_sample_transfer_models(
 
 #%% analysis
 
+
 def evaluate_fast(
     words_to_evaluate: List[str],
     target_id: int,
@@ -206,7 +207,8 @@ def evaluate_fast(
         "incorrect": incorrect_confidences,
     }
 
-def evaluate(
+
+def evaluate_and_track(
     words_to_evaluate: List[str],
     target_id: int,
     data_dir: os.PathLike,
@@ -214,6 +216,8 @@ def evaluate(
     model: tf.keras.Model,
     audio_dataset: input_data.AudioDataset,
 ):
+    #TODO(mmaz) rewrite and combine with evaluate_fast
+
     correct_confidences = []
     incorrect_confidences = []
     track_correct = {}
@@ -602,83 +606,20 @@ assert len(set(other_words).intersection(commands)) == 0
 
 
 #%%
-model_settings = input_data.prepare_model_settings(
-    label_count=100,
-    sample_rate=16000,
-    clip_duration_ms=1000,
-    window_size_ms=30,
-    window_stride_ms=20,
-    feature_bin_count=40,
-    preprocess="micro",
-)
-bg_datadir = "/home/mark/tinyspeech_harvard/frequent_words/en/clips/_background_noise_/"
-audio_dataset = input_data.AudioDataset(
-    model_settings,
-    ["NONE"],
-    bg_datadir,
-    unknown_files=[],
-    unknown_percentage=0,
-    spec_aug_params=input_data.SpecAugParams(percentage=0),
-)
-
-#%%
-#  items = os.listdir(destdir)
-#  models = list(filter(lambda m: os.path.isdir(destdir + m), items))
-#  print(len(models))
-#  print("\n".join(models))
-#  #%%
 #
-#  rc = {}
-#  for m in models:
-#      epochs = "_epochs_"
-#      start = m.find(epochs) + len(epochs)
-#      valacc_str = "_val_acc_"
-#      last_word = m.find(valacc_str)
-#      n_word_xfer = m[start:last_word].split("_")
-#      print(n_word_xfer)
-#      valacc_idx = last_word + len(valacc_str)
-#      valacc = float(m[valacc_idx:])
-#      print(valacc)
+# epochs = "_epochs_"
+# start = m.find(epochs) + len(epochs)
+# valacc_str = "_val_acc_"
+# last_word = m.find(valacc_str)
+# n_word_xfer = m[start:last_word].split("_")
+# print(n_word_xfer)
+# valacc_idx = last_word + len(valacc_str)
+# valacc = float(m[valacc_idx:])
+# print(valacc)
 #
-#      mp = destdir + m
-#      print(mp)
-#
-#      rc[m] = analyze_model(
-#          mp,
-#          n_word_xfer,
-#          valacc,
-#          data_dir,
-#          audio_dataset,
-#          unknown_words,
-#          oov_words,
-#          commands,
-#      )
-
-#%%
-# destpkl= destdir + "results.pkl"
-# print(destpkl)
-# with open(destpkl, 'wb') as fh:
-#    pickle.dump(rc, fh)
-#%%
-# with open(destdir + "results.pkl", "rb") as fh:
-#     rc = pickle.load(fh)
-
-#%%
 # fig, axes = make_viz(rc.values(), threshold=0.55, nrows=3, ncols=3)
-# fig.set_size_inches(25, 25)
-#
-# #%%
 # fig.savefig(destdir + "5shot.png", dpi=200, tight_layout=True)
 #
-# #%%
-# fig, axes = make_roc(rc.values(), nrows=3, ncols=3)
-# fig.set_size_inches(25, 25)
-#
-# #%%
-# fig = make_roc_plotly(rc.values())
-# fig
-# #%%
-# fig.write_html(destdir + "roc.html")
 
 
 #%% LISTEN
@@ -909,24 +850,31 @@ def roc_sc(target_resuts, unknown_results):
 
 
 #%% audio dataset
-model_settings = input_data.prepare_model_settings(
-    label_count=100,
-    sample_rate=16000,
-    clip_duration_ms=1000,
-    window_size_ms=30,
-    window_stride_ms=20,
-    feature_bin_count=40,
-    preprocess="micro",
-)
-bg_datadir = "/home/mark/tinyspeech_harvard/frequent_words/en/clips/_background_noise_/"
-audio_dataset = input_data.AudioDataset(
-    model_settings,
-    ["NONE"],
-    bg_datadir,
-    unknown_files=[],
-    unknown_percentage=0,
-    spec_aug_params=input_data.SpecAugParams(percentage=0),
-)
+
+def create_empty_audio_dataset():
+    # TODO(mmaz): this is usually just used for file2spec, unnecessary codebloat
+    model_settings = input_data.prepare_model_settings(
+        label_count=100,
+        sample_rate=16000,
+        clip_duration_ms=1000,
+        window_size_ms=30,
+        window_stride_ms=20,
+        feature_bin_count=40,
+        preprocess="micro",
+    )
+    bg_datadir = (
+        "/home/mark/tinyspeech_harvard/frequent_words/en/clips/_background_noise_/"
+    )
+    audio_dataset = input_data.AudioDataset(
+        model_settings,
+        ["NONE"],
+        bg_datadir,
+        unknown_files=[],
+        unknown_percentage=0,
+        spec_aug_params=input_data.SpecAugParams(percentage=0),
+    )
+    return audio_dataset
+
 
 #%%
 target = "two"
@@ -957,7 +905,7 @@ destdir = "/home/mark/tinyspeech_harvard/hyperparam_analysis/"
 modeldestdir = destdir + "models/"
 basemodelpath = "/home/mark/tinyspeech_harvard/train_100_augment/hundredword_efficientnet_1600_selu_specaug80.0146-0.8736"
 
-with open(destdir + "unknown_words.txt", 'w') as fh:
+with open(destdir + "unknown_words.txt", "w") as fh:
     fh.write("\n".join(unknown_sample))
 
 train_files = two_utterances
@@ -967,7 +915,7 @@ n_models = 0
 for epochs in range(1, 10):
     for n_batches in range(1, 4):
         for batch_size in [32, 64]:
-            for trial in range(1,4):
+            for trial in range(1, 4):
                 n_models += 1
 print("N MODELS", n_models)
 
@@ -976,9 +924,17 @@ ix = 0
 for epochs in range(1, 10):
     for n_batches in range(1, 4):
         for batch_size in [32, 64]:
-            for trial in range(1,4):
+            for trial in range(1, 4):
                 ix += 1
-                print(f"::::: {ix}: epochs {epochs} nb {n_batches} bs {batch_size} t {trial}")
+                # TODO(mmaz): workaround for memory leak (yikes)
+                if ix <= 144:
+                    continue
+                print(
+                    f"::::: {ix}: epochs {epochs} nb {n_batches} bs {batch_size} t {trial}"
+                )
+
+                # https://keras.io/api/utils/backend_utils/
+                tf.keras.backend.clear_session()
 
                 start = datetime.datetime.now()
                 modelname, model, details = transfer_learn(
@@ -991,9 +947,10 @@ for epochs in range(1, 10):
                     base_model_path=basemodelpath,
                     NUM_BATCHES=n_batches,
                     batch_size=batch_size,
-                    name_prefix=f"trial{trial}"
+                    name_prefix=f"trial{trial}",
                 )
 
+                audio_dataset = create_empty_audio_dataset()
                 target_results = evaluate_fast(
                     [target], 2, speech_commands, 1500, model, audio_dataset
                 )
@@ -1003,6 +960,7 @@ for epochs in range(1, 10):
 
                 # tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
                 results[modelname] = {
+                    "ix": ix,
                     "target": target,
                     "epochs": epochs,
                     "n_batches": n_batches,
@@ -1015,7 +973,9 @@ for epochs in range(1, 10):
                     pickle.dump(results, fh)
 
                 end = datetime.datetime.now()
-                print(f":::::::::: DONE {ix}/{n_models} --- {end-start}")
+                nicedelta = str(end-start)[:-5]
+                print(f":::::::::: DONE {ix}/{n_models} --- {nicedelta}")
+
 
 #%%
 
