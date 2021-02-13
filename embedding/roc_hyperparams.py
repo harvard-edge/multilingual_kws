@@ -52,7 +52,7 @@ def roc_sc(target_resuts, unknown_results):
         tprs.append(tpr)
         fpr = unknown_incorrect[unknown_incorrect > threshold].shape[0] / unknown_total
         fprs.append(fpr)
-    # tprs = np.around(tprs, 2) 
+    # tprs = np.around(tprs, 2)
     # fprs = np.around(fprs, 2)
     return tprs, fprs, threshs
 
@@ -61,21 +61,23 @@ def roc_sc(target_resuts, unknown_results):
 
 # print(os.getcwd())
 #%%
-results_dir = os.listdir("./results/")
-results_dir.sort()
-latest = results_dir[-1]
+
+results_dir = "/home/mark/tinyspeech_harvard/hyperparam_analysis/results/"
+files = os.listdir(results_dir)
+files.sort()
+latest = files[-1]
 print(latest)
-with open(f"results/{latest}", "rb") as fh:
+with open(f"{results_dir}/{latest}", "rb") as fh:
     results = pickle.load(fh)
 
 # the sweep script crashed a few times
 crashes = [
-    "results/hpsweep_025.pkl",
-    "results/hpsweep_050.pkl",
-    "results/hpsweep_073.pkl",
-    "results/hpsweep_096.pkl",
-    "results/hpsweep_119.pkl",
-    "results/hpsweep_144.pkl",
+    f"{results_dir}/hpsweep_025.pkl",
+    f"{results_dir}/hpsweep_050.pkl",
+    f"{results_dir}/hpsweep_073.pkl",
+    f"{results_dir}/hpsweep_096.pkl",
+    f"{results_dir}/hpsweep_119.pkl",
+    f"{results_dir}/hpsweep_144.pkl",
 ]
 for crash in crashes:
     with open(crash, "rb") as fh:
@@ -86,18 +88,40 @@ for crash in crashes:
 
 print("number of results", len(results.keys()))
 
+
+def nice(ne, nb, bs, trial):
+    if ne == 8 and nb == 1 and bs == 64:
+        return True
+    if ne == 7 and nb == 2 and bs == 32:
+        return True
+    if ne == 9 and nb == 2 and bs == 32:
+        return True
+    if ne == 3 and nb == 3 and bs == 64:
+        return True
+    if ne == 4 and nb == 2 and bs == 64:
+        return True
+    return False
+
+#%%
+
+#%%
+
 fig = go.Figure()
-for model, rd in results.items():
+# for model, rd in results.items():
+for rd in results:
 
     tprs, fprs, thresh_labels = roc_sc(rd["target_results"], rd["unknown_results"])
-    legend = f"""ne: {rd['epochs']}, 
-nb: {rd['n_batches']}, 
-bs: {rd['details']['batch_size']}, 
-trial: {rd['trial']},
-va: {rd['details']['val accuracy']:0.2f}"""
-    # if rd['details']['batch_size'] != 64:
+    ne = rd["num_epochs"]
+    nb = rd["num_batches"]
+    bs = rd["details"]["batch_size"]
+    trial = rd["trial"]
+    va = rd["details"]["val_accuracy"]
+    legend = f"""ne: {ne}, nb: {nb}, bs: {bs}, trial: {trial}, va: {va:0.2f}"""
+    # if bs != 64:
     #     continue
-    #fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=legend))
+    # if not nice(ne, nb, bs, trial):
+    #     continue
+    # fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=legend))
     legend_w_threshs = [legend + f"<br>thresh: {t}" for t in thresh_labels]
     fig.add_trace(go.Scatter(x=fprs, y=tprs, text=legend_w_threshs, name=legend))
 
@@ -107,14 +131,61 @@ fig.update_layout(
     title="target: two [speech commands classification accuracy] <br> [ne: #epochs, nb: #batches, bs: batch size, va: val accuracy]",
     # hoverlabel=dict(font_size=8), # https://plotly.com/python/hover-text-and-formatting/
 )
-fig.update_xaxes(range=[0, 1])
-fig.update_yaxes(range=[0, 1])
-fig.write_html("hpsweep.html")
+fig.update_xaxes(range=[0,1])
+fig.update_yaxes(range=[0,1])
+# fig.update_xaxes(range=[0.075, 0.25])
+# fig.update_yaxes(range=[0.8, 0.92])
+#fig.write_html("hpsweep.html")
 fig
 
 # %%
-a = datetime.datetime.now()
-# %%
-b = datetime.datetime.now()
-d = b-a
-print(str(d)[:-5])
+rd = "/home/mark/tinyspeech_harvard/utterance_sweep/results/"
+rs = glob.glob(rd + "*.pkl")
+print(rs)
+
+td = "/home/mark/tinyspeech_harvard/utterance_sweep/trials/"
+ts = glob.glob(rd + "*.pkl")
+print(ts)
+
+results = []
+for r,t in zip(rs,ts):
+    with open(r, 'rb') as fh:
+        result = pickle.load(fh)
+    with open(t, 'rb') as fh:
+        trial_info = pickle.load(fh)
+    results.append((result,trial_info))
+print("NUM RESULTS", len(results))
+
+fig = go.Figure()
+# for model, rd in results.items():
+for rd, ti in results:
+
+    tprs, fprs, thresh_labels = roc_sc(rd["target_results"], rd["unknown_results"])
+    ne = rd["rtl"]["num_epochs"]
+    nb = rd["rtl"]["num_batches"]
+    bs = rd["rtl"]["batch_size"]
+    trial = rd["rtl"]["trial"]
+    target_set = rd["rtl"]["target_set"]
+    print(rd["rtl"]["details"].keys())
+    va = rd["rtl"]["details"]["val_accuracy"]
+    legend = f"""ne: {ne}, nb: {nb}, bs: {bs}, ts: {target_set} trial: {trial}, va: {va:0.2f}"""
+    # if bs != 64:
+    #     continue
+    # if not nice(ne, nb, bs, trial):
+    #     continue
+    # fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=legend))
+    legend_w_threshs = [legend + f"<br>thresh: {t}" for t in thresh_labels]
+    fig.add_trace(go.Scatter(x=fprs, y=tprs, text=legend_w_threshs, name=legend))
+
+fig.update_layout(
+    xaxis_title="FPR",
+    yaxis_title="TPR",
+    title="target: two [speech commands classification accuracy] <br> [ne: #epochs, nb: #batches, bs: batch size, va: val accuracy]",
+    # hoverlabel=dict(font_size=8), # https://plotly.com/python/hover-text-and-formatting/
+)
+fig.update_xaxes(range=[0,1])
+fig.update_yaxes(range=[0,1])
+# fig.update_xaxes(range=[0.075, 0.25])
+# fig.update_yaxes(range=[0.8, 0.92])
+#fig.write_html("hpsweep.html")
+fig

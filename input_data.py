@@ -20,6 +20,36 @@ UNKNOWN_WORD_LABEL = "_unknown_"
 UNKNOWN_WORD_INDEX = 1
 
 
+def to_micro_spectrogram(model_settings, audio):
+    sample_rate = model_settings["sample_rate"]
+    window_size_ms = (model_settings["window_size_samples"] * 1000) / sample_rate
+    window_step_ms = (model_settings["window_stride_samples"] * 1000) / sample_rate
+    int16_input = tf.cast(tf.multiply(audio, 32768), tf.int16)
+    # https://git.io/Jkuux
+    micro_frontend = frontend_op.audio_microfrontend(
+        int16_input,
+        sample_rate=sample_rate,
+        window_size=window_size_ms,
+        window_step=window_step_ms,
+        num_channels=model_settings["fingerprint_width"],
+        out_scale=1,
+        out_type=tf.float32,
+    )
+    output = tf.multiply(micro_frontend, (10.0 / 256.0))
+    return output
+
+
+def file2spec(model_settings, filepath):
+    """there's a version of this that adds bg noise in AudioDataset"""
+    audio_binary = tf.io.read_file(filepath)
+    audio, _ = tf.audio.decode_wav(
+        audio_binary,
+        desired_channels=1,
+        desired_samples=model_settings["desired_samples"],
+    )
+    audio = tf.squeeze(audio, axis=-1)
+    return to_micro_spectrogram(model_settings, audio)
+
 def _next_power_of_two(x):
     """Calculates the smallest enclosing power of two for an input.
     source: https://git.io/JkuvF
@@ -359,30 +389,30 @@ class AudioDataset:
         waveform = self.decode_audio(audio_binary)
         return waveform, label
 
-    def to_micro_spectrogram(self, audio):
-        sample_rate = self.model_settings["sample_rate"]
-        window_size_ms = (
-            self.model_settings["window_size_samples"] * 1000
-        ) / sample_rate
-        window_step_ms = (
-            self.model_settings["window_stride_samples"] * 1000
-        ) / sample_rate
-        int16_input = tf.cast(tf.multiply(audio, 32768), tf.int16)
-        # https://git.io/Jkuux
-        micro_frontend = frontend_op.audio_microfrontend(
-            int16_input,
-            sample_rate=sample_rate,
-            window_size=window_size_ms,
-            window_step=window_step_ms,
-            num_channels=self.model_settings["fingerprint_width"],
-            out_scale=1,
-            out_type=tf.float32,
-        )
-        output = tf.multiply(micro_frontend, (10.0 / 256.0))
-        return output
+    # def to_micro_spectrogram(self, audio):
+    #     sample_rate = self.model_settings["sample_rate"]
+    #     window_size_ms = (
+    #         self.model_settings["window_size_samples"] * 1000
+    #     ) / sample_rate
+    #     window_step_ms = (
+    #         self.model_settings["window_stride_samples"] * 1000
+    #     ) / sample_rate
+    #     int16_input = tf.cast(tf.multiply(audio, 32768), tf.int16)
+    #     # https://git.io/Jkuux
+    #     micro_frontend = frontend_op.audio_microfrontend(
+    #         int16_input,
+    #         sample_rate=sample_rate,
+    #         window_size=window_size_ms,
+    #         window_step=window_step_ms,
+    #         num_channels=self.model_settings["fingerprint_width"],
+    #         out_scale=1,
+    #         out_type=tf.float32,
+    #     )
+    #     output = tf.multiply(micro_frontend, (10.0 / 256.0))
+    #     return output
 
     def get_spectrogram_and_label_id(self, audio, label):
-        micro_spec = self.to_micro_spectrogram(audio)
+        micro_spec = to_micro_spectrogram(self.model_settings, audio)
         lc = label == self.commands
         label_id = tf.argmax(lc)
         return micro_spec, label_id
@@ -397,12 +427,11 @@ class AudioDataset:
     def add_channel(self, spectrogram, label_id):
         return tf.expand_dims(spectrogram, -1), label_id
 
-    def file2spec(self, filepath, add_bg=False):
+    def file2spec_w_bg(self, filepath):
         audio_binary = tf.io.read_file(filepath)
         waveform = self.decode_audio(audio_binary)
-        if add_bg:
-            waveform = self._add_bg(waveform)
-        return self.to_micro_spectrogram(waveform)
+        waveform = self._add_bg(waveform)
+        return to_micro_spectrogram(self.model_settings, waveform)
 
     def _add_bg(self, audio):
         background_volume = self.gen.uniform([], 0, self.background_volume_range)
