@@ -263,7 +263,7 @@ for sample_point in sample_points:
             p = multiprocessing.Process(target=run_transfer_learning, args=(rtl,))
             p.start()
             p.join()
-            p.close()
+            #p.close()
             end = datetime.datetime.now()
             print(":::::::::::::: TIME", str(end - start)[:-7])
 

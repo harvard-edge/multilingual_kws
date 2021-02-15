@@ -139,13 +139,13 @@ fig.update_yaxes(range=[0,1])
 fig
 
 # %%
-rd = "/home/mark/tinyspeech_harvard/utterance_sweep/results/"
+rd = "/home/mark/tinyspeech_harvard/utterance_sweep_2/results/"
 rs = glob.glob(rd + "*.pkl")
-print(rs)
+# print(rs)
 
-td = "/home/mark/tinyspeech_harvard/utterance_sweep/trials/"
+td = "/home/mark/tinyspeech_harvard/utterance_sweep_2/trials/"
 ts = glob.glob(rd + "*.pkl")
-print(ts)
+# print(ts)
 
 results = []
 for r,t in zip(rs,ts):
@@ -155,6 +155,12 @@ for r,t in zip(rs,ts):
         trial_info = pickle.load(fh)
     results.append((result,trial_info))
 print("NUM RESULTS", len(results))
+
+target_sets=set()
+for rd, ti in results:
+    target_sets.add(rd["rtl"]["target_set"])
+print(target_sets)
+
 
 fig = go.Figure()
 # for model, rd in results.items():
@@ -166,16 +172,16 @@ for rd, ti in results:
     bs = rd["rtl"]["batch_size"]
     trial = rd["rtl"]["trial"]
     target_set = rd["rtl"]["target_set"]
-    print(rd["rtl"]["details"].keys())
-    va = rd["rtl"]["details"]["val_accuracy"]
-    legend = f"""ne: {ne}, nb: {nb}, bs: {bs}, ts: {target_set} trial: {trial}, va: {va:0.2f}"""
+    va = rd["details"]["val_accuracy"]
+    legend = f"""ne: {ne}, nb: {nb}, bs: {bs}, tgset: {target_set} trial: {trial}, va: {va:0.2f}"""
     # if bs != 64:
     #     continue
     # if not nice(ne, nb, bs, trial):
     #     continue
     # fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=legend))
     legend_w_threshs = [legend + f"<br>thresh: {t}" for t in thresh_labels]
-    fig.add_trace(go.Scatter(x=fprs, y=tprs, text=legend_w_threshs, name=legend))
+    c = px.colors.qualitative.Dark24[target_set % 24]
+    fig.add_trace(go.Scatter(x=fprs, y=tprs, text=legend_w_threshs, name=legend, marker_color=c))
 
 fig.update_layout(
     xaxis_title="FPR",
@@ -189,3 +195,7 @@ fig.update_yaxes(range=[0,1])
 # fig.update_yaxes(range=[0.8, 0.92])
 #fig.write_html("hpsweep.html")
 fig
+
+
+#%%
+len(px.colors.qualitative.Dark24)
