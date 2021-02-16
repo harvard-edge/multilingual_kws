@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import subprocess
 import seaborn as sns
-from typing import Set, List, Dict
+from typing import Set, List, Dict, Set
 import functools
 from collections import Counter
 import csv
@@ -347,3 +347,44 @@ print((end_samples - start_samples) / sr)
 # https://github.com/jiaaro/pydub/blob/master/API.markdown
 play(pydub.AudioSegment(data=utterance, sample_width=2, frame_rate=sr, channels=1))
 
+
+#%%
+# Count the number of words in the stream.wav file to estimate word rate FPR
+# NOTE: skip the target words or else the FPR will be inaccurate!
+sse = pathlib.Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments/")
+stream_data = sse / "old_merchant_25_shot" / "streaming_test_data.pkl"
+ 
+with open(stream_data, 'rb') as fh:
+    mp3_to_textgrid, timings, shots, val, stream = pickle.load(fh)
+
+#%%
+def count_number_of_non_target_words_in_stream(
+    target_word: str,
+    mp3_files_noext_used_in_stream: Set[str],
+    lang_isocode="en",
+    alignment_basedir="/home/mark/tinyspeech_harvard/common-voice-forced-alignments/",
+):
+    word_count_without_targets = 0
+    # common voice csv from DeepSpeech/import_cv2.py
+    csvpath = pathlib.Path(alignment_basedir) / lang_isocode / "validated.csv"
+    with open(csvpath, "r") as fh:
+        reader = csv.reader(fh)
+        for ix, row in enumerate(reader):
+            if ix == 0:
+                continue  # skips header
+            if ix % 80_000 == 0:
+                print(ix)
+            # find words in common_words set from each row of csv
+            mp3name_no_extension = os.path.splitext(row[0])[0]
+            if mp3name_no_extension not in mp3_files_noext_used_in_stream:
+                continue
+            words = row[2].split()
+            if target_word not in words:
+                raise ValueError("one of the sentences doesnt contain the target")
+            # - 1 skips counting the target word:
+            word_count_without_targets += len(words) - 1
+    return word_count_without_targets
+
+files_no_ext = set([s[0] for s in stream])
+wcwt = count_number_of_non_target_words_in_stream("merchant", files_no_ext)
+print("# NON-TARGET WORDS IN STREAM:", wcwt)

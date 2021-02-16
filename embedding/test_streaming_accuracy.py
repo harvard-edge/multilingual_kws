@@ -288,7 +288,12 @@ with open(DESTINATION, "wb") as fh:
 
 
 def viz_stream_timeline(
-    groundtruth, found_words, target, threshold, time_tolerance_ms=1500
+    groundtruth,
+    found_words,
+    target,
+    threshold,
+    time_tolerance_ms=1500,
+    num_nontarget_words=None,
 ):
     fig, ax = plt.subplots()
     gt_target_times = [t for g, t in groundtruth if g == target]
@@ -356,34 +361,46 @@ def viz_stream_timeline(
                 true_positives += 1
     tpr = true_positives / len(gt_target_times)
     print("true positives ", true_positives, "TPR:", tpr)
-    # TODO(MMAZ) how to estimate true negative rate? there are a zillion non-target words
+    # TODO(MMAZ) is there a beter way to calculate false positive rate? 
     # fpr = false_positives / (false_positives + true_negatives)
+    # fpr = false_positives / negatives
     print(
         "false positives (model detection when no groundtruth target is present)",
         false_positives,
     )
+    if num_nontarget_words is not None:
+        fpr = false_positives / num_nontarget_words
+        print("FPR",  fpr)
+        fpr_s = f"{fpr:0.2f}"
+    else:
+        fpr_s = "[not enough info]"
 
     max_x = groundtruth[-1][1] + 1000
     ax.set_xlim([0, max_x])
     # ax.set_xlim([175000,200000])
-    fig.set_size_inches(30, 3)
+    fig.set_size_inches(40, 5)
     ax.set_title(
-        f"{target} -> threshold: {threshold:0.2f}, TPR: {tpr}, false positives: {false_positives}, false_negatives: {false_negatives}, groundtruth positives: {len(gt_target_times)}"
+        f"{target} -> threshold: {threshold:0.2f}, TPR: {tpr}, FPR: {fpr_s}, false positives: {false_positives}, false_negatives: {false_negatives}, groundtruth positives: {len(gt_target_times)}"
     )
     # fig.savefig(f"/home/mark/tinyspeech_harvard/tmp/analysis/{target}/{target}_{threshold:0.2f}.png",dpi=300)
     return fig, ax
 
 
 #%%
-# with open(base_dir / "results" / "stream_results_0.55.pkl", 'rb') as fh:
-#     results = pickle.load(fh)
+sse = "/home/mark/tinyspeech_harvard/streaming_sentence_experiments/"
+res = sse + "old_merchant_25_shot/stream_results.pkl"
+target = "merchant"
+with open(res, "rb") as fh:
+    results = pickle.load(fh)
 for ix, thresh in enumerate(results[target].keys()):
     print(ix, thresh)
 
-thresh_ix = 7
+thresh_ix = 6
 thresh, (stats, all_found_words) = list(results[target].items())[thresh_ix]
-print(thresh)
-fig, ax = viz_stream_timeline(stats._gt_occurrence, all_found_words, target, thresh)
+print("THRESH", thresh)
+fig, ax = viz_stream_timeline(
+    stats._gt_occurrence, all_found_words, target, thresh, num_nontarget_words=2335
+)
 
 
 #%%
