@@ -13,7 +13,6 @@ import input_data
 
 
 def transfer_learn(
-    dest_dir,
     target,
     train_files,
     val_files,
@@ -27,7 +26,7 @@ def transfer_learn(
     UNKNOWN_PERCENTAGE=50.0,
     bg_datadir="/home/mark/tinyspeech_harvard/frequent_words/en/clips/_background_noise_/",
 ):
-    assert os.path.isdir(dest_dir), f"dest dir {dest_dir} not found"
+    """this only words for single-target models: see audio_dataset and CATEGORIES"""
 
     tf.get_logger().setLevel(logging.ERROR)
     base_model = tf.keras.models.load_model(base_model_path)
@@ -61,8 +60,8 @@ def transfer_learn(
     )
 
     AUTOTUNE = tf.data.experimental.AUTOTUNE
-    train_ds = audio_dataset.init(AUTOTUNE, train_files, is_training=True)
-    val_ds = audio_dataset.init(AUTOTUNE, val_files, is_training=False)
+    train_ds = audio_dataset.init_single_target(AUTOTUNE, train_files, is_training=True)
+    val_ds = audio_dataset.init_single_target(AUTOTUNE, val_files, is_training=False)
     # test_ds = a.init(AUTOTUNE, test_files, is_training=False)
     train_ds = train_ds.shuffle(buffer_size=1000).repeat().batch(batch_size)
     val_ds = val_ds.batch(batch_size)

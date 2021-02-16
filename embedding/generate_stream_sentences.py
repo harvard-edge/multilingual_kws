@@ -36,9 +36,15 @@ def wordcounts(csvpath):
 counts = wordcounts(
     "/home/mark/tinyspeech_harvard/common-voice-forced-alignments/en/validated.csv"
 )
+#%%
 common = counts.most_common(600)
 print(common[455])
-# merchant: 2204
+# for ix, (w, _) in enumerate(common):
+#     if w == "merchant":
+#         print(ix)
+# saint (415)
+# dream (425): 2364
+# merchant (455): 2204
 
 #%%
 
@@ -102,56 +108,67 @@ def generate_wordtimings(
 
 
 # %%
+
+target = "merchant"
+
+# %%
+
 mp3_to_textgrid = generate_filemap()
 print(len(mp3_to_textgrid.keys()))
-timings, notfound = generate_wordtimings({"merchant"}, mp3_to_textgrid)
+timings, notfound = generate_wordtimings({target}, mp3_to_textgrid)
 print(len(notfound))
-print(len(timings["merchant"]))
-print(timings["merchant"][0])
+print(len(timings[target]))
+print(timings[target][0])
 
 # %%
 # how many mp3s have two or more utterances of the target
-target = "merchant"
 mp3s = [t[0] for t in timings[target]]
 n_samples = len(mp3s)
 n_mp3s = len(set(mp3s))
-print(n_samples, n_mp3s, n_mp3s - n_samples)
+print(n_samples, n_mp3s, n_samples - n_mp3s)
 
 # %%
 
 # %%
 #####################################################
-##    select 1k examples to string into a long wav
+##    select examples to string into a long wav
 ####################################################
-NUM_SAMPLES = 1000
-NUM_SHOTS = 5
+NUM_SAMPLES_FOR_STREAMING_WAV = 250
+NUM_SHOTS = 25
+NUM_VAL = 100
 # https://stackoverflow.com/questions/23445936/numpy-random-choice-of-tuples
 ix_samples = np.random.choice(
-    len(timings[target]), NUM_SAMPLES + NUM_SHOTS, replace=False
+    len(timings[target]),
+    NUM_SAMPLES_FOR_STREAMING_WAV + NUM_SHOTS + NUM_VAL,
+    replace=False,
 )
 samples = np.array(timings[target])[ix_samples]
 mp3s = set([t[0] for t in samples])
 assert (
-    len(mp3s) == NUM_SAMPLES + NUM_SHOTS
+    len(mp3s) == NUM_SAMPLES_FOR_STREAMING_WAV + NUM_SHOTS + NUM_VAL
 ), "an mp3 was selected with multiple targets in the same sentence"
 
 shots = samples[:NUM_SHOTS]
-stream = samples[NUM_SHOTS:]
+val = samples[NUM_SHOTS : NUM_SHOTS + NUM_VAL]
+stream = samples[NUM_SHOTS + NUM_VAL :]
+print(len(shots), len(val), len(stream))
 
 base_dir = pathlib.Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments")
 dest_dir = base_dir / target
 shot_targets = dest_dir / "n_shots"
+val_targets = dest_dir / "val"
+wav_intermediates = dest_dir / "wavs"
 streaming_test_data = dest_dir / "streaming_test_data.pkl"
 
 print("generating", [dest_dir, shot_targets])
-# os.makedirs(dest_dir, exist_ok=True)
-# os.makedirs(shot_targets, exist_ok=True)
-# with open(streaming_test_data, 'wb') as fh:
-#     pickle.dump((mp3_to_textgrid, timings, shots, stream), fh)
+os.makedirs(dest_dir, exist_ok=False)
+os.makedirs(shot_targets, exist_ok=False)
+os.makedirs(val_targets, exist_ok=False)
+os.makedirs(wav_intermediates, exist_ok=False)
+with open(streaming_test_data, "wb") as fh:
+    pickle.dump((mp3_to_textgrid, timings, shots, val, stream), fh)
 
 # %%
-
-
 def extract_one_second(duration_s: float, start_s: float, end_s: float):
     """
     return one second around the midpoint between start_s and end_s
@@ -209,7 +226,15 @@ def extract_shot_from_mp3(
 # GENERATE SHOTS
 for mp3name_no_ext, start_s, end_s in shots:
     print(mp3name_no_ext, start_s, end_s)
-    # extract_shot_from_mp3(mp3name_no_ext, float(start_s), float(end_s), dest_dir=shot_targets)
+    extract_shot_from_mp3(
+        mp3name_no_ext, float(start_s), float(end_s), dest_dir=shot_targets
+    )
+# GENERATE VAL
+for mp3name_no_ext, start_s, end_s in val:
+    print(mp3name_no_ext, start_s, end_s)
+    extract_shot_from_mp3(
+        mp3name_no_ext, float(start_s), float(end_s), dest_dir=val_targets
+    )
 
 # %%
 ###############################################
@@ -220,13 +245,16 @@ from pydub.playback import play
 import time
 
 audiofiles = glob.glob(str(shot_targets / "*.wav"))
+# audiofiles = glob.glob("/home/mark/tinyspeech_harvard/streaming_sentence_experiments/dream/n_shots/*.wav")
 for ix, f in enumerate(audiofiles):
     print(ix, f)
 
 for ix, f in enumerate(audiofiles):
-    print(f)
+    print(ix, f)
     play(pydub.AudioSegment.from_wav(f))
     time.sleep(0.5)
+    if ix > 5:
+        break
 
 #%%
 ###############################################
@@ -240,7 +268,7 @@ for ix, f in enumerate(audiofiles):
 cv_clipsdir = pathlib.Path(
     "/home/mark/tinyspeech_harvard/common_voice/cv-corpus-6.1-2020-12-11/en/clips"
 )
-wavs_dest = dest_dir / "wavs"
+assert os.path.isdir(wav_intermediates), "no destination dir available"
 
 wavs = []
 total_duration_mp3s_s = 0
@@ -254,7 +282,7 @@ for ix, (mp3name_no_ext, start_s, end_s) in enumerate(stream):
     duration_s = sox.file_info.duration(mp3path)
     total_duration_mp3s_s += duration_s
 
-    wav = str(wavs_dest / (mp3name_no_ext + ".wav"))
+    wav = str(wav_intermediates / (mp3name_no_ext + ".wav"))
     transformer = sox.Transformer()
     transformer.convert(samplerate=16000)  # from 48K mp3s
 
@@ -271,20 +299,16 @@ for w in wavs:
     total_duration_wavs_s += duration_s
 print(total_duration_wavs_s, "sec = ", total_duration_wavs_s / 60, "min")
 
-#%%
-
 # step 3: combine the wavs. godspeed.
 combiner = sox.Combiner()
 combiner.convert(samplerate=16000, n_channels=1)
 # https://github.com/rabitt/pysox/blob/master/sox/combine.py#L46
 combiner.build(wavs, str(dest_dir / "stream.wav"), "concatenate")
 
-#%%
 # step 4: how long is the total wavfile? should be the sum of the individual wavs
 duration_s = sox.file_info.duration(dest_dir / "stream.wav")
 print(duration_s, "sec = ", duration_s / 60, "min")
 
-#%%
 # step 5: generate labels using the wav file durations, not the sloppy mp3 file durations
 
 target_times_s = []
@@ -297,7 +321,6 @@ for ix, (mp3name_no_ext, start_s, end_s) in enumerate(stream):
     target_times_s.append((target_utterance_start_s, target_utterance_end_s))
     current_sentence_start_s += sentence_duration_s
 
-#%%
 # step 6: write labels out
 # the label timings should indicate the start of each target utterance in ms
 label_file = dest_dir / "labels.txt"
@@ -319,7 +342,8 @@ start_s, end_s = target_times_s[rand_ix]
 start_samples, end_samples = int(start_s * sr), int(end_s * sr)
 utterance = data[start_samples:end_samples]
 print(start_s, end_s)
+print((end_samples - start_samples) / sr)
 
-#https://github.com/jiaaro/pydub/blob/master/API.markdown
+# https://github.com/jiaaro/pydub/blob/master/API.markdown
 play(pydub.AudioSegment(data=utterance, sample_width=2, frame_rate=sr, channels=1))
 

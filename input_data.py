@@ -50,6 +50,7 @@ def file2spec(model_settings, filepath):
     audio = tf.squeeze(audio, axis=-1)
     return to_micro_spectrogram(model_settings, audio)
 
+
 def _next_power_of_two(x):
     """Calculates the smallest enclosing power of two for an input.
     source: https://git.io/JkuvF
@@ -127,6 +128,18 @@ def prepare_model_settings(
         "preprocess": preprocess,
         "average_window_width": average_window_width,
     }
+
+
+def standard_microspeech_model_settings(label_count: int):
+    return prepare_model_settings(
+        label_count=label_count,
+        sample_rate=16000,
+        clip_duration_ms=1000,
+        window_size_ms=30,
+        window_stride_ms=20,
+        feature_bin_count=40,
+        preprocess="micro",
+    )
 
 
 def add_background(foreground_audio, background_audio, background_volume):
@@ -389,6 +402,12 @@ class AudioDataset:
         waveform = self.decode_audio(audio_binary)
         return waveform, label
 
+    def get_single_target_waveforms(self, file_path):
+        label = self.commands[-1]
+        audio_binary = tf.io.read_file(file_path)
+        waveform = self.decode_audio(audio_binary)
+        return waveform, label
+
     # def to_micro_spectrogram(self, audio):
     #     sample_rate = self.model_settings["sample_rate"]
     #     window_size_ms = (
@@ -425,6 +444,7 @@ class AudioDataset:
         return label_id
 
     def add_channel(self, spectrogram, label_id):
+        """from width x height to width x height x channel"""
         return tf.expand_dims(spectrogram, -1), label_id
 
     def file2spec_w_bg(self, filepath):
@@ -438,7 +458,33 @@ class AudioDataset:
         background_audio = self.random_background_sample()
         return add_background(audio, background_audio, background_volume)
 
-    def init(self, AUTOTUNE, files, is_training):
+    def init_single_target(self, AUTOTUNE, files, is_training):
+        """assumes a single-target model, reads label from self.commands"""
+        files_ds = tf.data.Dataset.from_tensor_slices(files)
+
+        # buffer size with shuffle: https://stackoverflow.com/a/48096625
+        waveform_ds = files_ds.map(
+            self.get_single_target_waveforms, num_parallel_calls=AUTOTUNE
+        )
+        # https://www.tensorflow.org/tutorials/images/data_augmentation#apply_the_preprocessing_layers_to_the_datasets
+        waveform_ds = (
+            waveform_ds.map(self.augment, num_parallel_calls=AUTOTUNE)
+            if is_training
+            else waveform_ds
+        )
+        spectrogram_ds = waveform_ds.map(
+            self.get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE
+        )
+        spectrogram_ds = (
+            spectrogram_ds.map(self.map_spec_aug, num_parallel_calls=AUTOTUNE)
+            if is_training
+            else spectrogram_ds
+        )
+
+        return spectrogram_ds.map(self.add_channel, num_parallel_calls=AUTOTUNE)
+
+    def init_from_parent_dir(self, AUTOTUNE, files, is_training):
+        """uses the parent dir as the label name"""
         files_ds = tf.data.Dataset.from_tensor_slices(files)
         # TODO(mmaz) should we rebalance here?
         # if rebalance:

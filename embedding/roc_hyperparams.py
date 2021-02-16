@@ -59,7 +59,22 @@ def roc_sc(target_resuts, unknown_results):
 
 #%%
 
-# print(os.getcwd())
+
+def nice(ne, nb, bs, trial):
+    # if ne == 8 and nb == 1 and bs == 64:
+    #     return True
+    # if ne == 7 and nb == 2 and bs == 32:
+    #     return True
+    # if ne == 9 and nb == 2 and bs == 32:
+    #     return True
+    # if ne == 3 and nb == 3 and bs == 64:
+    #     return True
+    # if ne == 4 and nb == 2 and bs == 64:
+    #     return True
+    if ne in [8,9] and bs == 64:
+        return True
+    return False
+
 #%%
 
 results_dir = "/home/mark/tinyspeech_harvard/hyperparam_analysis/results/"
@@ -89,61 +104,49 @@ for crash in crashes:
 print("number of results", len(results.keys()))
 
 
-def nice(ne, nb, bs, trial):
-    if ne == 8 and nb == 1 and bs == 64:
-        return True
-    if ne == 7 and nb == 2 and bs == 32:
-        return True
-    if ne == 9 and nb == 2 and bs == 32:
-        return True
-    if ne == 3 and nb == 3 and bs == 64:
-        return True
-    if ne == 4 and nb == 2 and bs == 64:
-        return True
-    return False
-
 #%%
 
 #%%
 
-fig = go.Figure()
-# for model, rd in results.items():
-for rd in results:
-
-    tprs, fprs, thresh_labels = roc_sc(rd["target_results"], rd["unknown_results"])
-    ne = rd["num_epochs"]
-    nb = rd["num_batches"]
-    bs = rd["details"]["batch_size"]
-    trial = rd["trial"]
-    va = rd["details"]["val_accuracy"]
-    legend = f"""ne: {ne}, nb: {nb}, bs: {bs}, trial: {trial}, va: {va:0.2f}"""
-    # if bs != 64:
-    #     continue
-    # if not nice(ne, nb, bs, trial):
-    #     continue
-    # fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=legend))
-    legend_w_threshs = [legend + f"<br>thresh: {t}" for t in thresh_labels]
-    fig.add_trace(go.Scatter(x=fprs, y=tprs, text=legend_w_threshs, name=legend))
-
-fig.update_layout(
-    xaxis_title="FPR",
-    yaxis_title="TPR",
-    title="target: two [speech commands classification accuracy] <br> [ne: #epochs, nb: #batches, bs: batch size, va: val accuracy]",
-    # hoverlabel=dict(font_size=8), # https://plotly.com/python/hover-text-and-formatting/
-)
-fig.update_xaxes(range=[0,1])
-fig.update_yaxes(range=[0,1])
-# fig.update_xaxes(range=[0.075, 0.25])
-# fig.update_yaxes(range=[0.8, 0.92])
-#fig.write_html("hpsweep.html")
-fig
+#  fig = go.Figure()
+#  # for model, rd in results.items():
+#  for rd in results:
+#  
+#      tprs, fprs, thresh_labels = roc_sc(rd["target_results"], rd["unknown_results"])
+#      ne = rd["num_epochs"]
+#      nb = rd["num_batches"]
+#      bs = rd["details"]["batch_size"]
+#      trial = rd["trial"]
+#      va = rd["details"]["val_accuracy"]
+#      legend = f"""ne: {ne}, nb: {nb}, bs: {bs}, trial: {trial}, va: {va:0.2f}"""
+#      # if bs != 64:
+#      #     continue
+#      # if not nice(ne, nb, bs, trial):
+#      #     continue
+#      # fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=legend))
+#      legend_w_threshs = [legend + f"<br>thresh: {t}" for t in thresh_labels]
+#      fig.add_trace(go.Scatter(x=fprs, y=tprs, text=legend_w_threshs, name=legend))
+#  
+#  fig.update_layout(
+#      xaxis_title="FPR",
+#      yaxis_title="TPR",
+#      title="target: two [speech commands classification accuracy] <br> [ne: #epochs, nb: #batches, bs: batch size, va: val accuracy]",
+#      # hoverlabel=dict(font_size=8), # https://plotly.com/python/hover-text-and-formatting/
+#  )
+#  fig.update_xaxes(range=[0,1])
+#  fig.update_yaxes(range=[0,1])
+#  # fig.update_xaxes(range=[0.075, 0.25])
+#  # fig.update_yaxes(range=[0.8, 0.92])
+#  #fig.write_html("hpsweep.html")
+#  fig
 
 # %%
-rd = "/home/mark/tinyspeech_harvard/utterance_sweep_2/results/"
+test_dir="/home/mark/tinyspeech_harvard/utterance_sweep_2/"
+rd = f"{test_dir}/results/"
 rs = glob.glob(rd + "*.pkl")
 # print(rs)
 
-td = "/home/mark/tinyspeech_harvard/utterance_sweep_2/trials/"
+td = f"{test_dir}/trials/"
 ts = glob.glob(rd + "*.pkl")
 # print(ts)
 
@@ -193,7 +196,7 @@ fig.update_xaxes(range=[0,1])
 fig.update_yaxes(range=[0,1])
 # fig.update_xaxes(range=[0.075, 0.25])
 # fig.update_yaxes(range=[0.8, 0.92])
-#fig.write_html("hpsweep.html")
+#fig.write_html(f"{test_dir}/hpsweep.html")
 fig
 
 

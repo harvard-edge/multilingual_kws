@@ -55,6 +55,9 @@ other_words.sort()
 print(len(other_words))
 assert len(set(other_words).intersection(commands)) == 0
 
+####################################################
+##   HYPERPARAMETER OPTIMIZATION ON SPEECH COMMANDS
+####################################################
 speech_commands = "/home/mark/tinyspeech_harvard/speech_commands/"
 dnames = os.listdir(speech_commands)
 speech_commands_words = [
@@ -95,15 +98,7 @@ print("UNKNOWN_SAMPLE:")
 print(unknown_sample)
 
 #%%
-model_settings = input_data.prepare_model_settings(
-    label_count=3,
-    sample_rate=16000,
-    clip_duration_ms=1000,
-    window_size_ms=30,
-    window_stride_ms=20,
-    feature_bin_count=40,
-    preprocess="micro",
-)
+model_settings = input_data.standard_microspeech_model_settings(3)
 
 #%%
 
@@ -127,14 +122,13 @@ class RunTransferLearning:
     model_settings: Dict
     data_dir: os.PathLike
     base_model_path: os.PathLike
-    base_model_output: str = "dense_2"
+    base_model_output: str
 
 
 def run_transfer_learning(rtl: RunTransferLearning):
     import tensorflow as tf
 
     name, model, details = transfer_learning.transfer_learn(
-        dest_dir=rtl.dest_dir,
         target=rtl.target,
         train_files=rtl.train_files,
         val_files=rtl.val_files,
@@ -186,6 +180,8 @@ def run_transfer_learning(rtl: RunTransferLearning):
 
     return
 
+#%%
+model_settings = input_data.standard_microspeech_model_settings(3)
 
 #%%
 @dataclass
@@ -198,13 +194,13 @@ class SamplePoint:
 sample_points = [
     # SamplePoint(num_epochs=3, num_batches=3, batch_size=64),
     # SamplePoint(num_epochs=4, num_batches=2, batch_size=64),
-    SamplePoint(num_epochs=7, num_batches=2, batch_size=32),
-    SamplePoint(num_epochs=8, num_batches=1, batch_size=64),
+    # SamplePoint(num_epochs=7, num_batches=2, batch_size=32),
+    # SamplePoint(num_epochs=8, num_batches=1, batch_size=64),
     #SamplePoint(num_epochs=9, num_batches=2, batch_size=32),
     SamplePoint(num_epochs=9, num_batches=1, batch_size=64),
 ]
-n_trials = 3
-n_target_sets = 5
+n_trials = 1
+n_target_sets = 1
 ix = 0
 for sample_point in sample_points:
     for target_set in range(1, n_target_sets + 1):
@@ -215,11 +211,11 @@ print("num runs", ix)
 #%%
 N_SHOTS = 5
 VAL_UTTERANCES = 400
-dest_dir = "/home/mark/tinyspeech_harvard/utterance_sweep_2/"
+dest_dir = "/home/mark/tinyspeech_harvard/utterance_sweep_3/"
 trial_info = {}
 
 data_dir = "/home/mark/tinyspeech_harvard/speech_commands/"
-target = "two"
+target = "forward"
 all_utterances = set(glob.glob(data_dir + target + "/*.wav"))
 used_utterances = set()
 
@@ -257,6 +253,7 @@ for sample_point in sample_points:
                 model_settings=model_settings,
                 data_dir=data_dir,
                 base_model_path="/home/mark/tinyspeech_harvard/train_100_augment/hundredword_efficientnet_1600_selu_specaug80.0146-0.8736",
+                base_model_output="dense_2"
             )
 
             start = datetime.datetime.now()
