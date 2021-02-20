@@ -9,18 +9,18 @@ import sox
 import glob
 
 # local
-# WORD_CSVS = "/home/mark/tinyspeech_harvard/frequent_words/en/timings/*.csv"
-# CV_CLIPS_DIR = Path("/home/mark/tinyspeech_harvard/common_voice/en/clips")
-# SWTS_CLIPS_DIR = Path("/home/mark/tinyspeech_harvard/commonvoice_singleword/cv-corpus-5-singleword/en/clips")
-# OUT_DIR = Path("/home/mark/tinyspeech_harvard/frequent_words/en/clips")
-# ERRORS_DIR = Path("/home/mark/tinyspeech_harvard/frequent_words/en/errors")
+WORD_CSVS = "/home/mark/tinyspeech_harvard/frequent_words/rw/timings/*.csv"
+CV_CLIPS_DIR = Path("/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/rw/clips/")
+#SWTS_CLIPS_DIR = Path("/home/mark/tinyspeech_harvard/commonvoice_singleword/cv-corpus-5-singleword/en/clips")
+OUT_DIR = Path("/home/mark/tinyspeech_harvard/frequent_words/rw/clips")
+ERRORS_DIR = Path("/home/mark/tinyspeech_harvard/frequent_words/rw/errors")
 
 # fasrc
-WORD_CSVS = "/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/frequent_words/en/timings/*.csv"
-CV_CLIPS_DIR = Path("/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/commonvoice/cv-corpus-5.1-2020-06-22/en/clips")
-SWTS_CLIPS_DIR = Path("/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/commonvoice_singleword/cv-corpus-5.1-singleword/en/clips")
-OUT_DIR = Path("/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/frequent_words/en/clips")
-ERRORS_DIR = Path("/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/frequent_words/en/errors")
+# WORD_CSVS = "/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/frequent_words/en/timings/*.csv"
+# CV_CLIPS_DIR = Path("/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/commonvoice/cv-corpus-5.1-2020-06-22/en/clips")
+# SWTS_CLIPS_DIR = Path("/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/commonvoice_singleword/cv-corpus-5.1-singleword/en/clips")
+# OUT_DIR = Path("/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/frequent_words/en/clips")
+# ERRORS_DIR = Path("/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/frequent_words/en/errors")
 
 def extract_one_second(duration_s: float, start_s: float, end_s: float):
     """
@@ -73,8 +73,8 @@ def extract(csvpath):
             start_s = float(row[1])
             end_s = float(row[2])
             mp3path = CV_CLIPS_DIR / (mp3name_no_ext + ".mp3")
-            if not os.path.exists(mp3path): # must be in Mozilla SWTS
-                mp3path = SWTS_CLIPS_DIR / (mp3name_no_ext + ".mp3")
+            #if not os.path.exists(mp3path): # must be in Mozilla SWTS
+                #mp3path = SWTS_CLIPS_DIR / (mp3name_no_ext + ".mp3")
             if not os.path.exists(mp3path):
                 # really don't know where this came from, skip it
                 with open(ERRORS_DIR / mp3name_no_ext, 'a') as fh:

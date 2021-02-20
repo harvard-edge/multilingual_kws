@@ -370,7 +370,7 @@ def viz_stream_timeline(
     )
     if num_nontarget_words is not None:
         fpr = false_positives / num_nontarget_words
-        print("FPR",  fpr)
+        print("FPR", f"{fpr:0.2f} {false_positives} false positives/{num_nontarget_words} nontarget words")
         fpr_s = f"{fpr:0.2f}"
     else:
         fpr_s = "[not enough info]"
@@ -388,18 +388,18 @@ def viz_stream_timeline(
 
 #%%
 sse = "/home/mark/tinyspeech_harvard/streaming_sentence_experiments/"
-res = sse + "old_merchant_25_shot/stream_results.pkl"
+res = sse + "old_merchant_5_shot/stream_results.pkl"
 target = "merchant"
 with open(res, "rb") as fh:
     results = pickle.load(fh)
 for ix, thresh in enumerate(results[target].keys()):
     print(ix, thresh)
 
-thresh_ix = 6
+thresh_ix = 13
 thresh, (stats, all_found_words) = list(results[target].items())[thresh_ix]
 print("THRESH", thresh)
 fig, ax = viz_stream_timeline(
-    stats._gt_occurrence, all_found_words, target, thresh, num_nontarget_words=2335
+    stats._gt_occurrence, all_found_words, target, thresh, num_nontarget_words=2328
 )
 
 
