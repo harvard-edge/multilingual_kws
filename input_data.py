@@ -143,8 +143,20 @@ def standard_microspeech_model_settings(label_count: int):
 
 
 def add_background(foreground_audio, background_audio, background_volume):
-    # TODO(mmaz): should we downscale the foreground audio first, to avoid clipping?
-    bg_mul = tf.multiply(background_audio, background_volume)
+    foreground_rms = tf.sqrt(tf.reduce_mean(tf.square(foreground_audio)))
+    background_rms = tf.sqrt(tf.reduce_mean(tf.square(background_audio)))
+
+    snr_scaling = tf.cond(
+        tf.greater(background_rms, tf.constant(0.0)),
+        lambda: tf.divide(foreground_rms, background_rms),
+        lambda: tf.constant(0.0),
+    )
+
+    # background_data_scaled has the same average signal power (really, rms) as the foreground_audio
+    background_data_scaled = tf.multiply(background_audio, snr_scaling)
+
+    # reduce the scaled background volume to the desired volume
+    bg_mul = tf.multiply(background_data_scaled, background_volume)
     bg_add = tf.add(bg_mul, foreground_audio)
     return tf.clip_by_value(bg_add, -1.0, 1.0)
 
@@ -407,28 +419,6 @@ class AudioDataset:
         audio_binary = tf.io.read_file(file_path)
         waveform = self.decode_audio(audio_binary)
         return waveform, label
-
-    # def to_micro_spectrogram(self, audio):
-    #     sample_rate = self.model_settings["sample_rate"]
-    #     window_size_ms = (
-    #         self.model_settings["window_size_samples"] * 1000
-    #     ) / sample_rate
-    #     window_step_ms = (
-    #         self.model_settings["window_stride_samples"] * 1000
-    #     ) / sample_rate
-    #     int16_input = tf.cast(tf.multiply(audio, 32768), tf.int16)
-    #     # https://git.io/Jkuux
-    #     micro_frontend = frontend_op.audio_microfrontend(
-    #         int16_input,
-    #         sample_rate=sample_rate,
-    #         window_size=window_size_ms,
-    #         window_step=window_step_ms,
-    #         num_channels=self.model_settings["fingerprint_width"],
-    #         out_scale=1,
-    #         out_type=tf.float32,
-    #     )
-    #     output = tf.multiply(micro_frontend, (10.0 / 256.0))
-    #     return output
 
     def get_spectrogram_and_label_id(self, audio, label):
         micro_spec = to_micro_spectrogram(self.model_settings, audio)
