@@ -92,6 +92,16 @@ def generate_wordtimings(
     return timings, notfound
 
 
+def full_transcription_timings(textgrid_path):
+    """[(word, start, end)] for a full textgrid
+        note: word often will be blank, denoting pauses
+    """
+    tg = textgrid.TextGrid.fromFile(textgrid_path)
+    word_timings = []
+    for interval in tg[0]:
+        word_timings.append((interval.mark, interval.minTime, interval.maxTime))
+    return word_timings
+
 def extract_one_second(duration_s: float, start_s: float, end_s: float):
     """
     return one second around the midpoint between start_s and end_s

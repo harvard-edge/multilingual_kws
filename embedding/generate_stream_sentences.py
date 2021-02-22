@@ -15,6 +15,7 @@ import textgrid
 import sox
 import pickle
 from scipy.io import wavfile
+from pathlib import Path
 
 import word_extraction
 
@@ -266,3 +267,30 @@ def count_number_of_non_target_words_in_stream(
 files_no_ext = set([s[0] for s in stream])
 wcwt = count_number_of_non_target_words_in_stream("merchant", files_no_ext)
 print("# NON-TARGET WORDS IN STREAM:", wcwt)
+
+
+#%%
+######## GENERATE FULL TRANSCRIPTION FOR VIDEO ###
+
+sse = Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments/")
+stream_data = sse / "old_merchant_5_shot" / "streaming_test_data.pkl"
+ 
+with open(stream_data, 'rb') as fh:
+    mp3_to_textgrid, timings, shots, val, stream = pickle.load(fh)
+
+full_transcription = []
+prev_wav_start = 0
+for mp3_noext, _, _ in stream:
+    tg_path = mp3_to_textgrid[mp3_noext]
+    transcription = word_extraction.full_transcription_timings(tg_path)
+    # add offset for previous wavs
+    transcription = [(w, start + prev_wav_start, end + prev_wav_start) for (w,start,end) in transcription]
+    full_transcription.extend(transcription)
+
+    # "wavs" might now be "intermediate_wavs"
+    wav = sse / "old_merchant_5_shot" / "wavs" / (mp3_noext + ".wav")
+    duration_s = sox.file_info.duration(wav)
+    prev_wav_start += duration_s
+
+with open( sse / "old_merchant_5_shot" / "full_transcription.pkl", 'wb') as fh:
+    pickle.dump(full_transcription, fh)

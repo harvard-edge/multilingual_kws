@@ -740,6 +740,7 @@ def sc_roc_plotly(results: List[Dict]):
         nb = res["details"]["num_batches"]
         target = res["target"]
         curve_label = f"{target} (e:{ne},b:{nb})"
+        # curve_label=target
         tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
         fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=curve_label))
 
