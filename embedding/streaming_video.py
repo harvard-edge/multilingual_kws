@@ -17,21 +17,19 @@ from accuracy_utils import StreamingAccuracyStats
 #%%
 
 
-def make_frame(detections, words, clip_inferences, threshold):
+def make_frame(words_times, detections, clip_inferences, threshold):
     frame_width = 1920
     frame_height = 1080
-    transcription_font_size = 10
-    label_font_size = 10
 
-    detection_ixs = set(detections.keys())
+    # detection_ixs = set(detections.keys())
 
     NUM_WORDS = 6
-    assert len(words) <= NUM_WORDS, "too many words"
-    if len(words) < NUM_WORDS:
-        to_add = NUM_WORDS - len(words)
-        words = to_add * [""] + words
-        detection_ixs = {d + to_add for d in detection_ixs}
-        detections = {k + to_add: v for k, v in detections.items()}
+    assert len(words_times) <= NUM_WORDS, "too many words"
+    if len(words_times) < NUM_WORDS:
+        to_add = NUM_WORDS - len(words_times)
+        words_times = to_add * [("", -1, -1)] + words_times
+        # detection_ixs = {d + to_add for d in detection_ixs}
+        # detections = {k + to_add: v for k, v in detections.items()}
 
     frame = np.zeros((frame_height, frame_width, 3), np.uint8)
 
@@ -66,12 +64,23 @@ def make_frame(detections, words, clip_inferences, threshold):
         top_left = x_border + (ix * word_boxwidth_px), 200
         bottom_right = x_border + (ix + 1) * word_boxwidth_px, 500
         wordcolor = (255, 255, 255)
-        if ix in detection_ixs:
+        (start_s, end_s) = words_times[ix][1], words_times[ix][2]
+        det_score = None
+        for d in detections:
+            det_s = d["time_s"]
+            if end_s < det_s:
+                continue
+            if start_s > det_s + 1:
+                continue
+            if start_s < 0:
+                continue
+            # within detection window
             cv.rectangle(
                 frame, pt1=top_left, pt2=bottom_right, color=(0, 255, 0), thickness=-1,
             )
             wordcolor = (0, 0, 0)
-        w = words[ix]
+            det_score = d["smoothed_score"]
+        w = words_times[ix][0]
 
         word_size_px, _ = cv.getTextSize(w, font, fontScale=1, thickness=2)
         word_width_px = word_size_px[0]
@@ -89,11 +98,10 @@ def make_frame(detections, words, clip_inferences, threshold):
             lineType=cv.LINE_AA,
         )
 
-        if ix in detection_ixs:
-            confidence = detections[ix]
+        if det_score is not None:
             cv.putText(
                 frame,
-                f"[{confidence:0.2f}]",
+                f"[{det_score:0.2f}]",
                 (word_start_px, TEXT_HEIGHT + 50),
                 font,
                 fontScale=1,
@@ -161,13 +169,24 @@ def make_frame(detections, words, clip_inferences, threshold):
 
 clip_inferences = dict(silence=0.023, unknown=0.4, merchant=0.8)
 
-detections = {
-    0: 0.6,
-    2: 0.928215,
-}
-words = "test word six words blah blah".split()
-# frame = make_frame(detections, words, clip_inferences)
-frame = make_frame(dict(), [], dict(), 0.4)
+# detections = {
+#     0: 0.6,
+#     2: 0.928215,
+# }
+d1 = dict(target="merchant", smoothed_score=0.3, time_s=0.9)
+d2 = dict(target="merchant", smoothed_score=0.1, time_s=2.8)
+# words = "test word six words blah blah".split()
+words_times = [
+    ("test", 0, 0.5),
+    ("word", 0.5, 1),
+    ("six", 1, 2),
+    ("blah", 2, 2.5),
+    ("blah", 2.5, 2.7),
+    ("blah", 2.7, 3),
+]
+# words_times = [("test", 0, 0.5)]
+frame = make_frame(words_times, [d1, d2], clip_inferences, threshold=0.4)
+# frame = make_frame(dict(), [], dict(), 0.4)
 fig, ax = plt.subplots()
 ax.imshow(frame)
 fig.set_size_inches(20, 20)
@@ -192,11 +211,15 @@ with open(video_dir / "stream_results.pkl", "rb") as fh:
     results = pickle.load(fh)
 
 
-thresh_ix = 8  # 8, 13
-threshold, (_, all_found_words) = list(results["merchant"].items())[thresh_ix]
+# thresh_ix = 13  # 8, 13
+thresh_ix = 0
+threshold, (_, _, all_found_words_w_scores) = list(results["merchant"].items())[
+    thresh_ix
+]
 print(threshold)
 
-
+raw_inferences = np.load(video_dir / "raw_inferences.npy")
+print(raw_inferences.shape)
 #%%
 
 
@@ -214,25 +237,31 @@ def get_words(transcription, last_ix, frame_time_s):
     return [w for w in transcription[:last_ix][-6:]], last_ix
 
 
-def get_detections(all_found_words, words_times, last_ix_found):
-    if len(words_times) == 0 or len(all_found_words) < last_ix_found:
+def get_detections(found, words_times, last_ix_found):
+    if len(words_times) == 0 or len(found) < last_ix_found:
         return dict(), last_ix_found
     start_time_s = words_times[0][1]
     end_time_s = words_times[-1][2]
 
-    # still before the first word
-    next_detection_s = all_found_words[last_ix_found][1] / 1000
+    next_detection_s = found[last_ix_found][0]
+    # still before the next word
     if next_detection_s > end_time_s:
         return dict(), last_ix_found
 
-    while next_detection_s < end_time_s:
+    while next_detection_s < start_time_s:
         last_ix_found += 1
-        next_detection_s = all_found_words[last_ix_found][1] / 1000
+        next_detection_s = found[last_ix_found][0]
 
-    detections = {len(words_times) - 1: 0}
+    # return detections within the window
+    d_ix = last_ix_found
+    detections = []
+    while found[d_ix][0] <= end_time_s:
+        detections.append(dict(smoothed_score=found[d_ix][1], time_s=found[d_ix][0]))
+        d_ix += 1
     return detections, last_ix_found
 
 
+# FPS seems a little off, words appear too slow
 frame_counter = 0
 fps = 50.0
 num_frames = int(np.ceil(wav_duration * fps))
@@ -240,10 +269,13 @@ print(num_frames)
 
 last_time = datetime.datetime.now()
 
-found_targets = [w for w in all_found_words if w[0] == "merchant"]
+found_times_s_scores = [
+    (w[1] / 1000, w[2]) for w in all_found_words_w_scores if w[0] == "merchant"
+]
 
 last_ix_transcriptions = 0
 last_ix_found = 0
+score_ix = 0
 for frame_ix in range(num_frames):
     if frame_ix % (num_frames // 100) == 0:
         now = datetime.datetime.now()
@@ -255,13 +287,20 @@ for frame_ix in range(num_frames):
     words_times, last_ix_transcriptions = get_words(
         transcription, last_ix_transcriptions, frame_time_s
     )
-    words = [w[0] for w in words_times]
 
     detections, last_ix_found = get_detections(
-        found_targets, words_times, last_ix_found
+        found_times_s_scores, words_times, last_ix_found
     )
 
-    frame = make_frame(detections, words, dict(), threshold)
+    if frame_time_s >= 1:
+        # scores take at least one second to begin accumulating
+        scores = raw_inferences[score_ix]
+        confidences = dict(silence=scores[0], unknown=scores[1], merchant=scores[2])
+        score_ix += 1
+    else:
+        confidences = dict()
+
+    frame = make_frame(words_times, detections, confidences, threshold)
 
     frame_name = str(frames_dir / f"{frame_ix:05d}.jpg")
     cv.imwrite(frame_name, frame)
