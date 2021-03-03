@@ -167,7 +167,8 @@ def make_frame(words_times, detections, clip_inferences, threshold):
     return frame
 
 
-clip_inferences = dict(silence=0.023, unknown=0.4, merchant=0.8)
+#clip_inferences = dict(silence=0.023, unknown=0.4, merchant=0.8)
+clip_inferences = dict()
 
 # detections = {
 #     0: 0.6,
@@ -276,6 +277,8 @@ found_times_s_scores = [
 last_ix_transcriptions = 0
 last_ix_found = 0
 score_ix = 0
+enable_raw_scores=False
+
 for frame_ix in range(num_frames):
     if frame_ix % (num_frames // 100) == 0:
         now = datetime.datetime.now()
@@ -292,7 +295,7 @@ for frame_ix in range(num_frames):
         found_times_s_scores, words_times, last_ix_found
     )
 
-    if frame_time_s >= 1:
+    if frame_time_s >= 1 and enable_raw_scores:
         # scores take at least one second to begin accumulating
         scores = raw_inferences[score_ix]
         confidences = dict(silence=scores[0], unknown=scores[1], merchant=scores[2])

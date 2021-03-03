@@ -12,6 +12,7 @@ import pickle
 import glob
 import subprocess
 import pathlib
+from pathlib import Path
 from typing import List
 
 import numpy as np
@@ -113,6 +114,7 @@ def calculate_streaming_accuracy(model, model_settings, FLAGS):
             minimum_count=4,
         )
         all_found_words = []
+        all_found_words_w_confidences = []
         # calculate statistics using inferences
         for ix, audio_data_offset in enumerate(
             range(0, audio_data_end, clip_stride_samples)
@@ -128,6 +130,9 @@ def calculate_streaming_accuracy(model, model_settings, FLAGS):
             ):
                 all_found_words.append(
                     [recognize_element.founded_command, current_time_ms]
+                )
+                all_found_words_w_confidences.append(
+                    [recognize_element.founded_command, current_time_ms, recognize_element.score]
                 )
                 stats.calculate_accuracy_stats(
                     all_found_words, current_time_ms, FLAGS.time_tolerance_ms
@@ -146,74 +151,115 @@ def calculate_streaming_accuracy(model, model_settings, FLAGS):
         # calculate final stats for full wav file:
         stats.calculate_accuracy_stats(all_found_words, -1, FLAGS.time_tolerance_ms)
         stats.print_accuracy_stats()
-        results[threshold] = (stats, all_found_words)
-    return results
+        results[threshold] = (stats, all_found_words, all_found_words_w_confidences)
+    return results, inferences
 
 
-def calculate_inferences_offline(inferences, FLAGS):
-    wav_loader = tf.io.read_file(FLAGS.wav)
-    (audio, sample_rate) = tf.audio.decode_wav(wav_loader, desired_channels=1)
-    sample_rate = sample_rate.numpy()
-    audio = audio.numpy().flatten()
+# def generate_inferences_offline(model, model_settings, FLAGS):
+#     wav_loader = tf.io.read_file(FLAGS.wav)
+#     (audio, sample_rate) = tf.audio.decode_wav(wav_loader, desired_channels=1)
+#     sample_rate = sample_rate.numpy()
+#     audio = audio.numpy().flatten()
 
-    # Init instance of StreamingAccuracyStats and load ground truth.
-    # number of samples in the entire audio file
-    data_samples = audio.shape[0]
-    # number of samples in one utterance (e.g., a 1 second clip)
-    clip_duration_samples = int(FLAGS.clip_duration_ms * sample_rate / 1000)
-    # number of samples in one stride
-    clip_stride_samples = int(FLAGS.clip_stride_ms * sample_rate / 1000)
-    # leave space for one full clip at end
-    audio_data_end = data_samples - clip_duration_samples
+#     # Init instance of StreamingAccuracyStats and load ground truth.
+#     # number of samples in the entire audio file
+#     data_samples = audio.shape[0]
+#     print("data samples", data_samples)
+#     # number of samples in one utterance (e.g., a 1 second clip)
+#     clip_duration_samples = int(FLAGS.clip_duration_ms * sample_rate / 1000)
+#     # number of samples in one stride
+#     clip_stride_samples = int(FLAGS.clip_stride_ms * sample_rate / 1000)
+#     # leave space for one full clip at end
+#     audio_data_end = data_samples - clip_duration_samples
 
-    results = {}
-    for threshold in FLAGS.detection_thresholds:
-        stats = StreamingAccuracyStats(target_keyword=FLAGS.target_keyword)
-        stats.read_ground_truth_file(FLAGS.ground_truth)
-        recognize_element = RecognizeResult()
-        recognize_commands = RecognizeCommands(
-            labels=FLAGS.labels(),
-            average_window_duration_ms=FLAGS.average_window_duration_ms,
-            detection_threshold=threshold,
-            suppression_ms=FLAGS.suppression_ms,
-            minimum_count=4,
-        )
-        all_found_words = []
-        # calculate statistics using inferences
-        for ix, audio_data_offset in enumerate(
-            range(0, audio_data_end, clip_stride_samples)
-        ):
-            output_softmax = inferences[ix]
-            current_time_ms = int(audio_data_offset * 1000 / sample_rate)
-            recognize_commands.process_latest_result(
-                output_softmax, current_time_ms, recognize_element
-            )
-            if (
-                recognize_element.is_new_command
-                and recognize_element.founded_command != "_silence_"
-            ):
-                all_found_words.append(
-                    [recognize_element.founded_command, current_time_ms]
-                )
-                stats.calculate_accuracy_stats(
-                    all_found_words, current_time_ms, FLAGS.time_tolerance_ms
-                )
-                recognition_state = stats.delta()
-                # print(
-                #     "{}ms {}:{}{}".format(
-                #         current_time_ms,
-                #         recognize_element.founded_command,
-                #         recognize_element.score,
-                #         recognition_state,
-                #     )
-                # )
-                # stats.print_accuracy_stats()
-        print("DONE", threshold)
-        # calculate final stats for full wav file:
-        stats.calculate_accuracy_stats(all_found_words, -1, FLAGS.time_tolerance_ms)
-        stats.print_accuracy_stats()
-        results[threshold] = (stats, all_found_words)
-    return results
+#     # num spectrograms: in the range expression below, if there is a remainder
+#     # in audio_data_end/clip_stride_samples, we need one additional slot
+#     # for a spectrogram
+#     spectrograms = np.zeros(
+#         (
+#             int(np.ceil(audio_data_end / clip_stride_samples)),
+#             model_settings["spectrogram_length"],
+#             model_settings["fingerprint_width"],
+#         )
+#     )
+#     # print("building spectrograms")
+#     # # Inference along audio stream.
+#     # for ix, audio_data_offset in enumerate(
+#     #     range(0, audio_data_end, clip_stride_samples)
+#     # ):
+#     #     input_start = audio_data_offset
+#     #     input_end = audio_data_offset + clip_duration_samples
+#     #     spectrograms[ix] = input_data.to_micro_spectrogram(
+#     #         model_settings, audio[input_start:input_end]
+#     #     )
+#     # inferences = model.predict(spectrograms[:, :, :, np.newaxis])
+#     # print("inferences complete")
+#     return spectrograms
+
+# def calculate_inferences_offline(inferences, FLAGS):
+#     wav_loader = tf.io.read_file(FLAGS.wav)
+#     (audio, sample_rate) = tf.audio.decode_wav(wav_loader, desired_channels=1)
+#     sample_rate = sample_rate.numpy()
+#     audio = audio.numpy().flatten()
+
+#     # Init instance of StreamingAccuracyStats and load ground truth.
+#     # number of samples in the entire audio file
+#     data_samples = audio.shape[0]
+#     # number of samples in one utterance (e.g., a 1 second clip)
+#     clip_duration_samples = int(FLAGS.clip_duration_ms * sample_rate / 1000)
+#     # number of samples in one stride
+#     clip_stride_samples = int(FLAGS.clip_stride_ms * sample_rate / 1000)
+#     # leave space for one full clip at end
+#     audio_data_end = data_samples - clip_duration_samples
+
+#     results = {}
+#     for threshold in FLAGS.detection_thresholds:
+#         stats = StreamingAccuracyStats(target_keyword=FLAGS.target_keyword)
+#         stats.read_ground_truth_file(FLAGS.ground_truth)
+#         recognize_element = RecognizeResult()
+#         recognize_commands = RecognizeCommands(
+#             labels=FLAGS.labels(),
+#             average_window_duration_ms=FLAGS.average_window_duration_ms,
+#             detection_threshold=threshold,
+#             suppression_ms=FLAGS.suppression_ms,
+#             minimum_count=4,
+#         )
+#         all_found_words = []
+#         # calculate statistics using inferences
+#         for ix, audio_data_offset in enumerate(
+#             range(0, audio_data_end, clip_stride_samples)
+#         ):
+#             output_softmax = inferences[ix]
+#             current_time_ms = int(audio_data_offset * 1000 / sample_rate)
+#             recognize_commands.process_latest_result(
+#                 output_softmax, current_time_ms, recognize_element
+#             )
+#             if (
+#                 recognize_element.is_new_command
+#                 and recognize_element.founded_command != "_silence_"
+#             ):
+#                 all_found_words.append(
+#                     [recognize_element.founded_command, current_time_ms]
+#                 )
+#                 stats.calculate_accuracy_stats(
+#                     all_found_words, current_time_ms, FLAGS.time_tolerance_ms
+#                 )
+#                 recognition_state = stats.delta()
+#                 # print(
+#                 #     "{}ms {}:{}{}".format(
+#                 #         current_time_ms,
+#                 #         recognize_element.founded_command,
+#                 #         recognize_element.score,
+#                 #         recognition_state,
+#                 #     )
+#                 # )
+#                 # stats.print_accuracy_stats()
+#         print("DONE", threshold)
+#         # calculate final stats for full wav file:
+#         stats.calculate_accuracy_stats(all_found_words, -1, FLAGS.time_tolerance_ms)
+#         stats.print_accuracy_stats()
+#         results[threshold] = (stats, all_found_words)
+#     return results
 
 
 #%%
@@ -224,6 +270,50 @@ model_settings = input_data.standard_microspeech_model_settings(label_count=3)
 #    full sentence streaming test
 ############################################################################
 
+target = "rebecca"
+
+sse = pathlib.Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments/")
+base_dir = sse / target
+model_dir = sse / target / "model"
+model_name = os.listdir(model_dir)[0]
+print(model_name)
+model_path = model_dir / model_name
+print(model_path)
+
+DESTINATION = base_dir / "stream_results.pkl"
+print("SAVING TO", DESTINATION)
+
+#%%
+tf.get_logger().setLevel(logging.ERROR)
+model = tf.keras.models.load_model(model_path)
+tf.get_logger().setLevel(logging.INFO)
+
+# t_min = 0.4
+# t_max = 0.95
+# t_steps = int(np.ceil((t_max - t_min) / 0.05)) + 1
+# threshs = np.linspace(t_min, t_max, t_steps).tolist()
+flags = FlagTest(
+    wav=str(base_dir / "stream.wav"),
+    ground_truth=str(base_dir / "labels.txt"),
+    target_keyword=target,
+    # detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
+    #detection_thresholds=threshs,  # step threshold 0.05
+    detection_thresholds=[0.65],  # step threshold 0.05
+)
+results = {}
+results[target], inferences = calculate_streaming_accuracy(model, model_settings, flags)
+
+with open(DESTINATION, "wb") as fh:
+    pickle.dump(results, fh)
+np.save(base_dir / "raw_inferences.npy", inferences)
+
+#%%
+found_words_w_confidences = results[target][0.65][2]
+with open(base_dir / f"found_words_w_confidences_{target}.py", "wb") as fh:
+    pickle.dump(found_words_w_confidences, fh)
+
+
+#%%
 target = "merchant"
 
 sse = pathlib.Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments/")
@@ -243,25 +333,44 @@ tf.get_logger().setLevel(logging.ERROR)
 model = tf.keras.models.load_model(model_path)
 tf.get_logger().setLevel(logging.INFO)
 
-t_min = 0.4
-t_max = 0.95
-t_steps = int(np.ceil((t_max - t_min) / 0.05)) + 1
-threshs = np.linspace(t_min, t_max, t_steps).tolist()
+# t_min = 0.4
+# t_max = 0.95
+# t_steps = int(np.ceil((t_max - t_min) / 0.05)) + 1
+# threshs = np.linspace(t_min, t_max, t_steps).tolist()
 flags = FlagTest(
     wav=str(base_dir / "stream.wav"),
     ground_truth=str(base_dir / "labels.txt"),
     target_keyword=target,
     # detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
-    detection_thresholds=threshs,  # step threshold 0.05
+    #detection_thresholds=threshs,  # step threshold 0.05
+    detection_thresholds=[0.65],  # step threshold 0.05
 )
 results = {}
-results[target] = calculate_streaming_accuracy(model, model_settings, flags)
+results[target], inferences = calculate_streaming_accuracy(model, model_settings, flags)
 
 with open(DESTINATION, "wb") as fh:
     pickle.dump(results, fh)
+np.save(base_dir / "raw_inferences.npy", inferences)
 
 #%%
-
+merchant_video = Path("/home/mark/tinyspeech_harvard/merchant_video/")
+merchant_wav = merchant_video / "stream.wav"
+# t_min = 0.4
+# t_max = 0.95
+# t_steps = int(np.ceil((t_max - t_min) / 0.05)) + 1
+# threshs = np.linspace(t_min, t_max, t_steps).tolist()
+flags = FlagTest(
+    wav=str(merchant_wav),
+    ground_truth=str(merchant_video / "labels.txt"),
+    target_keyword="merchant",
+    # detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
+    detection_thresholds=[0.4],  # step threshold 0.05
+)
+model_settings = input_data.standard_microspeech_model_settings(3)
+res = generate_inferences_offline(None, model_settings, flags)
+res.shape
+#%%
+model_settings
 
 #%%
 
@@ -361,7 +470,7 @@ def viz_stream_timeline(
                 true_positives += 1
     tpr = true_positives / len(gt_target_times)
     print("true positives ", true_positives, "TPR:", tpr)
-    # TODO(MMAZ) is there a beter way to calculate false positive rate? 
+    # TODO(MMAZ) is there a beter way to calculate false positive rate?
     # fpr = false_positives / (false_positives + true_negatives)
     # fpr = false_positives / negatives
     print(
@@ -370,7 +479,10 @@ def viz_stream_timeline(
     )
     if num_nontarget_words is not None:
         fpr = false_positives / num_nontarget_words
-        print("FPR", f"{fpr:0.2f} {false_positives} false positives/{num_nontarget_words} nontarget words")
+        print(
+            "FPR",
+            f"{fpr:0.2f} {false_positives} false positives/{num_nontarget_words} nontarget words",
+        )
         fpr_s = f"{fpr:0.2f}"
     else:
         fpr_s = "[not enough info]"
@@ -430,12 +542,12 @@ for modelname in scmodels:
         detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
     )
     results[target] = calculate_streaming_accuracy(model, audio_dataset, FLAGS=flags)
-with open(DESTINATION, "wb") as fh:
-    pickle.dump(results, fh)
+# with open(DESTINATION, "wb") as fh:
+#     pickle.dump(results, fh)
 
 #%%
 scanalysisdir = "/home/mark/tinyspeech_harvard/xfer_speechcommands_5/"
-with open(scanalysisdir + "streaming_results.pkl", "rb") as fh:
+with open(scanalysisdir + "streaming_results_w_words.pkl", "rb") as fh:
     results = pickle.load(fh)
 
 #%%
@@ -460,13 +572,17 @@ results[target] = calculate_streaming_accuracy(model, model_settings, FLAGS=flag
 
 #%%
 print("---")
-# with open("/home/mark/tinyspeech_harvard/tmp/marvin.pkl", "wb") as fh:
-#     pickle.dump(results, fh)
 
 #%%
 
 
 #%%
+# Why do the curves drop here? is Y-axis not the TPR? 
+# is it possible this is happening instead?
+# (number of ALL model positives, both true and false ones)/(# of groundtruth positives)
+# seems to not be the case, i am using n_correct / n_targets
+# need to dig in further to the stats behavior
+
 fig = go.Figure()
 for target, results_per_threshold in results.items():
     print(target)
