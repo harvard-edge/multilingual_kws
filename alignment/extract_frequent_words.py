@@ -9,11 +9,12 @@ import sox
 import glob
 
 # local
-WORD_CSVS = "/home/mark/tinyspeech_harvard/frequent_words/rw/timings/*.csv"
-CV_CLIPS_DIR = Path("/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/rw/clips/")
+LANG_ISOCODE="de"
+WORD_CSVS = f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings/*.csv"
+CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/{LANG_ISOCODE}/clips/")
 #SWTS_CLIPS_DIR = Path("/home/mark/tinyspeech_harvard/commonvoice_singleword/cv-corpus-5-singleword/en/clips")
-OUT_DIR = Path("/home/mark/tinyspeech_harvard/frequent_words/rw/clips")
-ERRORS_DIR = Path("/home/mark/tinyspeech_harvard/frequent_words/rw/errors")
+OUT_DIR = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips")
+ERRORS_DIR = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/errors")
 
 # fasrc
 # WORD_CSVS = "/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/frequent_words/en/timings/*.csv"
@@ -106,6 +107,8 @@ def extract(csvpath):
     return word
 
 def main():
+    if not os.path.isdir(OUT_DIR) or not os.path.isdir(ERRORS_DIR):
+        raise ValueError("create outdir and errordir", OUT_DIR, ERRORS_DIR)
     words = glob.glob(WORD_CSVS)
     print(words)
 

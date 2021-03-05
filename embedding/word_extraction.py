@@ -14,6 +14,8 @@ import textgrid
 import sox
 import pickle
 from scipy.io import wavfile
+import multiprocessing
+import functools
 
 
 def wordcounts(csvpath):
@@ -50,6 +52,26 @@ def generate_filemap(
             filemap[mp3name] = os.path.join(root, textgrid)
     return filemap
 
+def _extract_timings(words_to_search_for, mp3_to_textgrid, timings, notfound, row):
+    # find words in common_words set from each row of csv
+    mp3name_no_extension = os.path.splitext(row[0])[0]
+    words = row[2].split()
+    for word in words:
+        if word not in words_to_search_for:
+            continue
+        # get alignment timings for this word
+        try:
+            tgf = mp3_to_textgrid[mp3name_no_extension]
+        except KeyError as e:
+            notfound.append((mp3name_no_extension, word))
+            continue
+        tg = textgrid.TextGrid.fromFile(tgf)
+        for interval in tg[0]:
+            if interval.mark != word:
+                continue
+            start_s = interval.minTime
+            end_s = interval.maxTime
+            timings[word].append((mp3name_no_extension, start_s, end_s))
 
 def generate_wordtimings(
     words_to_search_for: Set[str],
@@ -58,38 +80,37 @@ def generate_wordtimings(
     alignment_basedir="/home/mark/tinyspeech_harvard/common-voice-forced-alignments/",
 ):
     """for a set of desired words, use alignment TextGrids to return start and end times"""
-    # word: pseudo-datframe of [(mp3_filename, start_time_s, end_time_s)]
-    timings = {w: [] for w in words_to_search_for}
-    notfound = []
     # common voice csv from DeepSpeech/import_cv2.py
     csvpath = pathlib.Path(alignment_basedir) / lang_isocode / "validated.csv"
+    # load csv in-memory https://stackoverflow.com/a/17767445
     with open(csvpath, "r") as fh:
-        reader = csv.reader(fh)
-        for ix, row in enumerate(reader):
-            if ix == 0:
-                continue  # skips header
+        csvdata = fh.read()
+    reader = csv.reader(csvdata.splitlines())
+    next(reader) # skip header
+
+    #https://stackoverflow.com/a/6832693
+    with multiprocessing.Manager() as manager:
+        # timings -> word: pseudo-dataframe of [(mp3_filename, start_time_s, end_time_s)]
+        timings = manager.dict()
+        notfound = manager.list()
+        for w in words_to_search_for:
+            timings[w] = manager.list()
+
+        worker = functools.partial(_extract_timings, words_to_search_for, mp3_to_textgrid, timings, notfound)
+
+        pool = multiprocessing.Pool()
+        for ix, result in enumerate(pool.imap_unordered(worker, reader, chunksize=4000)):
             if ix % 80_000 == 0:
                 print(ix)
-            # find words in common_words set from each row of csv
-            mp3name_no_extension = os.path.splitext(row[0])[0]
-            words = row[2].split()
-            for word in words:
-                if word not in words_to_search_for:
-                    continue
-                # get alignment timings for this word
-                try:
-                    tgf = mp3_to_textgrid[mp3name_no_extension]
-                except KeyError as e:
-                    notfound.append((mp3name_no_extension, word))
-                    continue
-                tg = textgrid.TextGrid.fromFile(tgf)
-                for interval in tg[0]:
-                    if interval.mark != word:
-                        continue
-                    start_s = interval.minTime
-                    end_s = interval.maxTime
-                    timings[word].append((mp3name_no_extension, start_s, end_s))
-    return timings, notfound
+        pool.close()
+        pool.join()
+
+        # TODO(mmaz) I'm iffy about this copying...
+        result_timings = {}
+        for k,v in timings.items():
+            result_timings[k] = list(v)
+        result_notfound = list(notfound)
+        return result_timings, result_notfound
 
 
 def full_transcription_timings(textgrid_path):
