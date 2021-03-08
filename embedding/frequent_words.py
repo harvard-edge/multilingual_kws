@@ -46,12 +46,18 @@ ax.set_xticklabels(langs.keys(), rotation=90)
 fig.set_size_inches(20,5)
 
 # %%
-LANG_ISOCODE="es"
+LANG_ISOCODE="it"
 
 if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}"):
     raise ValueError("need to create dir")
 if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings"):
     raise ValueError("need to create dir")
+if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/errors"):
+    raise ValueError("need to create dir")
+if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips"):
+    raise ValueError("need to create dir")
+if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/_background_noise_"):
+    raise ValueError("need to copy in bg")
 
 # %%
 # generate most frequent words and their counts
@@ -65,7 +71,7 @@ counts.most_common(20)
 # %%
 N_WORDS_TO_SAMPLE = 250
 # get rid of words that are too short
-SKIP_FIRST_N = 19 
+SKIP_FIRST_N = 15 
 to_expunge = counts.most_common(SKIP_FIRST_N)
 non_stopwords = counts.copy()
 for k,_ in to_expunge:
@@ -109,19 +115,29 @@ for word, times in timings.items():
     print(df_dest / (word + ".csv"))
     df.to_csv(df_dest / (word + ".csv"), quoting=csv.QUOTE_MINIMAL, index=False)
 
+
+
+################################################################
+# now, run extract_frequent_words.py
+# below, select splits between 165 commands and 85 other words
+################################################################
+
 # %%
 # select commands and other words
 data_dir = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips/")
 os.chdir(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/")
 
-MIN_NUM_TRAIN_VAL=765
-commands = []
+NUM_COMMANDS=165
 
+# choose 165 most frequent words
+most_frequent = []
 words = os.listdir(data_dir)
 for w in words:
     utterances = os.listdir(data_dir / w)
-    if len(utterances) > MIN_NUM_TRAIN_VAL:
-        commands.append(w)
+    most_frequent.append((w,len(utterances)))
+
+most_frequent.sort(key=lambda word_count: word_count[1], reverse=True)
+commands = [word_count[0] for word_count in most_frequent[:NUM_COMMANDS]]
 
 other_words = set(words).difference(set(commands))
 
@@ -162,7 +178,7 @@ for c in commands:
     test_utterances = utterances[n_val:n_val+n_test]
     train_utterances = utterances[n_val+n_test:]
     
-    print(len(val_utterances), len(test_utterances), len(train_utterances))
+    print("val\t", len(val_utterances), "\ttest\t", len(test_utterances), "\ttrain\t", len(train_utterances))
     train_val_test_data[c] = dict(train=train_utterances, val=val_utterances, test=test_utterances)
 
 

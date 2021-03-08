@@ -9,10 +9,10 @@ import sox
 import glob
 
 # local
-LANG_ISOCODE="es"
+LANG_ISOCODE="it"
 WORD_CSVS = f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings/*.csv"
-#CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/{LANG_ISOCODE}/clips/")
-CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-5.1-2020-06-22/{LANG_ISOCODE}/clips/")
+#CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-5.1-2020-06-22/{LANG_ISOCODE}/clips/")
+CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/{LANG_ISOCODE}/clips/")
 #SWTS_CLIPS_DIR = Path("/home/mark/tinyspeech_harvard/commonvoice_singleword/cv-corpus-5-singleword/en/clips")
 OUT_DIR = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips")
 ERRORS_DIR = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/errors")
@@ -110,8 +110,12 @@ def extract(csvpath):
 def main():
     if not os.path.isdir(OUT_DIR) or not os.path.isdir(ERRORS_DIR):
         raise ValueError("create outdir and errordir", OUT_DIR, ERRORS_DIR)
+    if not os.path.isdir(CV_CLIPS_DIR):
+        raise ValueError("data not found")
     words = glob.glob(WORD_CSVS)
     print(words)
+    if len(words) == 0:
+        raise ValueError("no csvs")
 
     pool = multiprocessing.Pool()
     for i, result in enumerate(pool.imap_unordered(extract, words), start=1):

@@ -2,6 +2,7 @@
 from multiprocessing import Value
 import os
 import logging
+from os.path import splitext
 import re
 from typing import Dict, List
 import datetime
@@ -791,7 +792,7 @@ traindir = Path(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/")
 base_model_path = (
     traindir
     / "models"
-    / "es_165commands_efficientnet_selu_specaug80_resume34.010-0.8559"
+    / "de_165commands_efficientnet_selu_specaug80_resume93.127-0.8515"
 )
 
 # fmt: off
@@ -858,11 +859,31 @@ print("after including original embeddings", len(unknown_files))
 
 #%%
 ### SELECT TARGET
-for ix in range(7):
+
+
+def results_exist(target, results_dir):
+    results = [
+        os.path.splitext(r)[0]
+        for r in os.listdir(results_dir)
+        if os.path.splitext(r)[1] == ".pkl"
+    ]
+    for r in results:
+        result_target = r.split("_")[-1]
+        if result_target == target:
+            return True
+    return False
+
+
+for ix in range(9):
     print(f"::::::::::::::::::::::::::::::{ix}:::::::::::::::::::::::::::::::")
     N_SHOTS = 5
-    target = np.random.choice(oov_words)
-    print(target)
+
+    has_results = True
+    # skip existing results
+    while has_results:
+        target = np.random.choice(oov_words)
+        has_results = results_exist(target, results_dir)
+    print("TARGET:", target)
     target_wavs = glob.glob(str(data_dir / target / "*.wav"))
     np.random.shuffle(target_wavs)
     train_files = target_wavs[:N_SHOTS]
@@ -871,7 +892,6 @@ for ix in range(7):
 
     num_targets = len(os.listdir(data_dir / target))
     print("n targets", num_targets)
-
 
     ###############
     ## FINETUNING
@@ -920,6 +940,9 @@ for ix in range(7):
         unknown_results=unknown_results,
         details=details,
         target=target,
+        train_files=train_files,
+        unknown_words=unknown_words,
+        oov_words=oov_words,
     )
     with open(model_dest_dir / "results" / f"hpsweep_{target}.pkl", "wb",) as fh:
         pickle.dump(results, fh)
@@ -972,3 +995,5 @@ for w in os.listdir(data_dir):
     wavs = glob.glob(str(data_dir / w / "*.wav"))
     n_utterances += len(wavs)
 print(n_utterances, len(os.listdir(data_dir)))
+
+# %%
