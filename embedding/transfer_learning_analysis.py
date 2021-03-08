@@ -1,4 +1,5 @@
 #%%
+from multiprocessing import Value
 import os
 import logging
 import re
@@ -731,6 +732,7 @@ tf.keras.backend.clear_session()  # https://keras.io/api/utils/backend_utils/
 
 #%%
 
+
 def sc_roc_plotly(results: List[Dict]):
     fig = go.Figure()
     for ix, res in enumerate(results):
@@ -764,6 +766,202 @@ for pkl_file in os.listdir(model_dest_dir / "results"):
 print("N words", len(results))
 fig = sc_roc_plotly(results)
 fig.write_html(str(model_dest_dir / "5shot_classification_roc_kinyarwanda.html"))
+fig
+
+
+#%%
+# how many utterances total in dataset
+n_utterances = 0
+for w in os.listdir(data_dir):
+    wavs = glob.glob(str(data_dir / w / "*.wav"))
+    n_utterances += len(wavs)
+print(n_utterances, len(os.listdir(data_dir)))
+
+
+#%%
+###############################################
+##               Any Language
+###############################################
+
+LANG_ISOCODE = "es"
+
+data_dir = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips/")
+traindir = Path(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/")
+
+base_model_path = (
+    traindir
+    / "models"
+    / "es_165commands_efficientnet_selu_specaug80_resume34.010-0.8559"
+)
+
+# fmt: off
+model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/sweep_{LANG_ISOCODE}")
+if not os.path.isdir(model_dest_dir):
+    raise ValueError("no model dir", model_dest_dir)
+results_dir = model_dest_dir / "results"
+if not os.path.isdir(results_dir):
+    raise ValueError("no results dir", results_dir)
+# fmt: on
+
+
+with open(traindir / "commands.txt", "r") as fh:
+    commands = fh.read().splitlines()
+with open(traindir / "other_words.txt", "r") as fh:
+    other_words = fh.read().splitlines()
+
+# with open("train_val_test_data.pkl", 'rb') as fh:
+#     train_val_test_data = pickle.load(fh)
+
+with open(traindir / "train_files.txt", "r") as fh:
+    train_files = fh.read().splitlines()
+with open(traindir / "val_files.txt", "r") as fh:
+    val_files = fh.read().splitlines()
+with open(traindir / "test_files.txt", "r") as fh:
+    test_files = fh.read().splitlines()
+
+bg_datadir = (
+    f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/_background_noise_/"
+)
+if not os.path.isdir(bg_datadir):
+    raise ValueError("no bg data", bg_datadir)
+
+#%%
+# find layer name (optional)
+tf.get_logger().setLevel(logging.ERROR)
+model = tf.keras.models.load_model(base_model_path)
+tf.get_logger().setLevel(logging.INFO)
+model.summary()
+
+#%%
+N_UNKNOWN_WORDS = 50
+unknown_words = np.random.choice(other_words, N_UNKNOWN_WORDS, replace=False)
+oov_words = list(set(other_words).difference(set(unknown_words)))
+print("OOV:", oov_words)
+
+unknown_files = []
+for w in unknown_words:
+    wavs = glob.glob(str(data_dir / w / "*.wav"))
+    unknown_files.extend(wavs)
+np.random.shuffle(unknown_files)
+
+print("before including original embeddings", len(unknown_files))
+
+for w in commands:
+    wavs = glob.glob(str(data_dir / w / "*.wav"))
+    sample = np.random.choice(wavs, 100, replace=False)
+    unknown_files.extend(sample)
+np.random.shuffle(unknown_files)
+
+print("after including original embeddings", len(unknown_files))
+
+# TODO(mmaz): we only sample like 600 [= 128 steps * 9 epochs / 2] of these :(
+
+#%%
+### SELECT TARGET
+for ix in range(7):
+    print(f"::::::::::::::::::::::::::::::{ix}:::::::::::::::::::::::::::::::")
+    N_SHOTS = 5
+    target = np.random.choice(oov_words)
+    print(target)
+    target_wavs = glob.glob(str(data_dir / target / "*.wav"))
+    np.random.shuffle(target_wavs)
+    train_files = target_wavs[:N_SHOTS]
+    val_files = target_wavs[N_SHOTS:]
+    print("\n".join(train_files))
+
+    num_targets = len(os.listdir(data_dir / target))
+    print("n targets", num_targets)
+
+
+    ###############
+    ## FINETUNING
+    ###############
+
+    model_settings = input_data.standard_microspeech_model_settings(label_count=3)
+
+    name, model, details = transfer_learning.transfer_learn(
+        target=target,
+        train_files=train_files,
+        val_files=val_files,
+        unknown_files=unknown_files,
+        num_epochs=4,
+        num_batches=1,
+        batch_size=64,
+        model_settings=model_settings,
+        base_model_path=base_model_path,
+        base_model_output="dense_2",
+    )
+    print("saving", name)
+    model.save(model_dest_dir / "models" / name)
+
+    # target="imodoka"
+    # model_path = model_dest_dir / "models" / "xfer_epochs_9_bs_64_nbs_2_val_acc_0.89_target_imodoka"
+    # tf.get_logger().setLevel(logging.ERROR)
+    # model = tf.keras.models.load_model(model_path)
+    # tf.get_logger().setLevel(logging.INFO)
+
+    some_commands = np.random.choice(commands, 20, replace=False)
+    some_unknown = np.random.choice(unknown_words, 20, replace=False)
+    some_oov = np.random.choice(oov_words, 20, replace=False)
+    flat = set([w for l in [some_commands, some_unknown, some_oov] for w in l])
+    unknown_sample = list(flat.difference({target}))
+    print(unknown_sample, len(unknown_sample))
+
+    target_results = transfer_learning.evaluate_fast(
+        [target], 2, str(data_dir) + "/", num_targets, model, model_settings
+    )
+    unknown_results = transfer_learning.evaluate_fast(
+        unknown_sample, 1, str(data_dir) + "/", 300, model, model_settings
+    )
+
+    # tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+    results = dict(
+        target_results=target_results,
+        unknown_results=unknown_results,
+        details=details,
+        target=target,
+    )
+    with open(model_dest_dir / "results" / f"hpsweep_{target}.pkl", "wb",) as fh:
+        pickle.dump(results, fh)
+
+    tf.keras.backend.clear_session()  # https://keras.io/api/utils/backend_utils/
+
+#%%
+
+
+def sc_roc_plotly(results: List[Dict]):
+    fig = go.Figure()
+    for ix, res in enumerate(results):
+        target_results = res["target_results"]
+        unknown_results = res["unknown_results"]
+        ne = res["details"]["num_epochs"]
+        nb = res["details"]["num_batches"]
+        target = res["target"]
+        curve_label = f"{target} (e:{ne},b:{nb})"
+        # curve_label=target
+        tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+        fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=curve_label))
+
+    fig.update_layout(
+        xaxis_title="FPR",
+        yaxis_title="TPR",
+        title=f"{LANG_ISOCODE} 5-shot classification accuracy",
+    )
+    fig.update_xaxes(range=[0, 1])
+    fig.update_yaxes(range=[0, 1])
+    return fig
+
+
+results = []
+for pkl_file in os.listdir(model_dest_dir / "results"):
+    filename = model_dest_dir / "results" / pkl_file
+    print(filename)
+    with open(filename, "rb") as fh:
+        result = pickle.load(fh)
+        results.append(result)
+print("N words", len(results))
+fig = sc_roc_plotly(results)
+fig.write_html(str(model_dest_dir / "5shot_classification_roc_{LANG_ISOCODE}.html"))
 fig
 
 

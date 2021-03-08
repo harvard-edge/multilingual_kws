@@ -46,13 +46,13 @@ ax.set_xticklabels(langs.keys(), rotation=90)
 fig.set_size_inches(20,5)
 
 # %%
-#LANG_ISOCODE="de"
-LANG_ISOCODE="el"
+LANG_ISOCODE="es"
 
 if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}"):
     raise ValueError("need to create dir")
 if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings"):
     raise ValueError("need to create dir")
+
 # %%
 # generate most frequent words and their counts
 alignments = Path("/home/mark/tinyspeech_harvard/common-voice-forced-alignments")
@@ -65,8 +65,8 @@ counts.most_common(20)
 # %%
 N_WORDS_TO_SAMPLE = 250
 # get rid of words that are too short
-SKIP_FIRST_N = 8
-to_expunge = counts.most_common(8)
+SKIP_FIRST_N = 19 
+to_expunge = counts.most_common(SKIP_FIRST_N)
 non_stopwords = counts.copy()
 for k,_ in to_expunge:
     del non_stopwords[k]
@@ -92,9 +92,9 @@ timings, notfound = word_extraction.generate_wordtimings(words_to_search_for=wor
 print("errors", len(notfound))
 
 # %%
-#with open(f"/home/mark/tinyspeech_harvard/frequent_words/{ISO_CODE}/all_timings.pkl", "wb") as fh:
+# with open(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/all_timings.pkl", "wb") as fh:
 #   pickle.dump(timings, fh)
-#with open(f"/home/mark/tinyspeech_harvard/frequent_words/{ISO_CODE}/all_timings.pkl", "rb") as fh:
+#with open(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/all_timings.pkl", "rb") as fh:
 #    timings = pickle.load(fh)
 
 # %%
@@ -108,4 +108,116 @@ for word, times in timings.items():
         df = df.sample(n=MAX_NUM_UTTERANCES_TO_SAMPLE, replace=False)
     print(df_dest / (word + ".csv"))
     df.to_csv(df_dest / (word + ".csv"), quoting=csv.QUOTE_MINIMAL, index=False)
+
 # %%
+# select commands and other words
+data_dir = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips/")
+os.chdir(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/")
+
+MIN_NUM_TRAIN_VAL=765
+commands = []
+
+words = os.listdir(data_dir)
+for w in words:
+    utterances = os.listdir(data_dir / w)
+    if len(utterances) > MIN_NUM_TRAIN_VAL:
+        commands.append(w)
+
+other_words = set(words).difference(set(commands))
+
+print("num commands", len(commands))
+print("num other words", len(other_words))
+
+# %%
+# with open("commands.txt", 'w') as fh:
+#     for w in commands:
+#         fh.write(f"{w}\n")
+# with open("other_words.txt", 'w') as fh:
+#     for w in other_words:
+#         fh.write(f"{w}\n")
+
+# %%
+with open("commands.txt", "r") as fh:
+    commands = fh.read().splitlines()
+with open("other_words.txt", "r") as fh:
+    other_words = fh.read().splitlines()  
+
+# %%
+print(len(commands), len(other_words), len(set(commands).intersection(other_words)))
+
+# %%
+train_val_test_data = {}
+
+VALIDATION_FRAC = 0.1
+TEST_FRAC = 0.1
+
+for c in commands:
+    utterances = glob.glob(str(data_dir / c / "*.wav"))
+    np.random.shuffle(utterances)
+    
+    n_val = int(VALIDATION_FRAC * len(utterances))
+    n_test = int(TEST_FRAC * len(utterances))
+
+    val_utterances = utterances[:n_val]
+    test_utterances = utterances[n_val:n_val+n_test]
+    train_utterances = utterances[n_val+n_test:]
+    
+    print(len(val_utterances), len(test_utterances), len(train_utterances))
+    train_val_test_data[c] = dict(train=train_utterances, val=val_utterances, test=test_utterances)
+
+
+# %%
+# with open("train_val_test_data.pkl", 'wb') as fh:
+#     pickle.dump(train_val_test_data, fh)
+
+# %%
+
+with open("train_val_test_data.pkl", 'rb') as fh:
+    train_val_test_data = pickle.load(fh)
+
+# %%
+train_val_test_counts = [(w, len(d["train"]), len(d["val"]), len(d["test"])) for w,d in train_val_test_data.items()]
+train_val_test_counts = sorted(train_val_test_counts, key=lambda c: c[1], reverse=True)
+train_val_test_counts[:3]
+
+# %%
+fig,ax = plt.subplots()
+btrain = ax.bar([c[0] for c in train_val_test_counts], [c[1] for c in train_val_test_counts])
+bval   = ax.bar([c[0] for c in train_val_test_counts], [c[2] for c in train_val_test_counts], bottom=[c[1] for c in train_val_test_counts])
+btest  = ax.bar([c[0] for c in train_val_test_counts], [c[3] for c in train_val_test_counts], bottom=[c[1]+c[2] for c in train_val_test_counts])
+ax.set_xticklabels([c[0] for c in train_val_test_counts], rotation=70);
+plt.legend((btrain[0], bval[0], btest[0]), ('train', 'val', 'test'))
+fig.set_size_inches(40,20)
+
+# %%
+train_files = []
+val_files = []
+test_files = []
+for w, d in train_val_test_data.items():
+    train_files.extend(d["train"])
+    val_files.extend(d["val"])
+    test_files.extend(d["test"])
+np.random.shuffle(train_files)
+
+# %%
+# for fname, data in zip(["train_files.txt", "val_files.txt", "test_files.txt"], [train_files, val_files, test_files]):
+#    print(fname)
+#    with open(fname, 'w') as fh:
+#        for utterance_path in data:
+#            fh.write(f"{utterance_path}\n")
+
+# %%
+with open("train_files.txt", 'r') as fh:
+    train_files = fh.read().splitlines()
+with open("val_files.txt", 'r') as fh:
+    val_files = fh.read().splitlines()
+with open("test_files.txt", 'r') as fh:
+    test_files = fh.read().splitlines() 
+print(len(train_files), train_files[0])
+print(len(val_files), val_files[0])
+print(len(test_files), test_files[0])
+assert set(train_files).intersection(set(val_files)) == set(), "error: overlap between train and val data"
+assert set(train_files).intersection(set(test_files)) == set(), "error: overlap between train and test data"           
+
+# %%
+# copy background data

@@ -9,9 +9,10 @@ import sox
 import glob
 
 # local
-LANG_ISOCODE="de"
+LANG_ISOCODE="es"
 WORD_CSVS = f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings/*.csv"
-CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/{LANG_ISOCODE}/clips/")
+#CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/{LANG_ISOCODE}/clips/")
+CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-5.1-2020-06-22/{LANG_ISOCODE}/clips/")
 #SWTS_CLIPS_DIR = Path("/home/mark/tinyspeech_harvard/commonvoice_singleword/cv-corpus-5-singleword/en/clips")
 OUT_DIR = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips")
 ERRORS_DIR = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/errors")
