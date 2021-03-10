@@ -1,6 +1,7 @@
 #%%
 import numpy as np
 import os
+import shutil
 import glob
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -46,18 +47,25 @@ ax.set_xticklabels(langs.keys(), rotation=90)
 fig.set_size_inches(20,5)
 
 # %%
-LANG_ISOCODE="it"
+LANG_ISOCODE="nl"
 
-if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}"):
-    raise ValueError("need to create dir")
-if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings"):
-    raise ValueError("need to create dir")
-if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/errors"):
-    raise ValueError("need to create dir")
-if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips"):
-    raise ValueError("need to create dir")
-if not os.path.isdir(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/_background_noise_"):
-    raise ValueError("need to copy in bg")
+frequent_words_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}"
+timings_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings"
+errors_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/errors"
+clips_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips"
+background_noise_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/_background_noise_"
+
+BASE_BACKGROUND_NOISE="/home/mark/tinyspeech_harvard/speech_commands/_background_noise_"
+
+# for dir in [frequent_words_dir, timings_dir, errors_dir, clips_dir]:
+#     os.makedirs(dir)
+# shutil.copytree(BASE_BACKGROUND_NOISE, background_noise_dir)
+
+for dir in [frequent_words_dir, timings_dir, errors_dir, clips_dir]:
+    if not os.path.isdir(dir):
+        raise ValueError("need to create", dir)
+if not os.path.isdir(background_noise_dir):
+    raise ValueError("need to copy bg data", background_noise_dir)
 
 # %%
 # generate most frequent words and their counts
@@ -66,12 +74,12 @@ counts = word_extraction.wordcounts(alignments / LANG_ISOCODE / "validated.csv")
 
 # %%
 # look for stopwords that are too short
-counts.most_common(20)
+counts.most_common(30)
 
 # %%
 N_WORDS_TO_SAMPLE = 250
 # get rid of words that are too short
-SKIP_FIRST_N = 15 
+SKIP_FIRST_N = 9 
 to_expunge = counts.most_common(SKIP_FIRST_N)
 non_stopwords = counts.copy()
 for k,_ in to_expunge:
@@ -98,15 +106,16 @@ timings, notfound = word_extraction.generate_wordtimings(words_to_search_for=wor
 print("errors", len(notfound))
 
 # %%
-# with open(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/all_timings.pkl", "wb") as fh:
+# print("saving to", f"{frequent_words_dir}/all_timings.pkl")
+# with open(f"{frequent_words_dir}/all_timings.pkl", "wb") as fh:
 #   pickle.dump(timings, fh)
-#with open(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/all_timings.pkl", "rb") as fh:
+#with open(f"{frequent_words_dir}/all_timings.pkl", "rb") as fh:
 #    timings = pickle.load(fh)
 
 # %%
 # write timings to csvs per word
 MAX_NUM_UTTERANCES_TO_SAMPLE = 2500
-df_dest = pathlib.Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings")
+df_dest = pathlib.Path(timings_dir)
 for word, times in timings.items():
     df = pd.DataFrame(times, columns=["mp3_filename", "start_time_s", "end_time_s"])
     if df.shape[0] > MAX_NUM_UTTERANCES_TO_SAMPLE:
@@ -124,8 +133,17 @@ for word, times in timings.items():
 
 # %%
 # select commands and other words
-data_dir = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips/")
-os.chdir(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/")
+
+embedding_model_dir=f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/"
+save_model_dir=f"{embedding_model_dir}/models"
+print("creating embedding model dir", embedding_model_dir)
+if os.path.isdir(embedding_model_dir):
+    raise ValueError("Embedding model already exists!", embedding_model_dir)
+os.makedirs(save_model_dir)
+
+# %%
+data_dir = Path(clips_dir)
+os.chdir(embedding_model_dir)
 
 NUM_COMMANDS=165
 

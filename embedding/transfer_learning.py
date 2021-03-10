@@ -149,9 +149,12 @@ def evaluate_fast(
 
     specs = []
     for word in words_to_evaluate:
-        fs = np.random.choice(
-            glob.glob(data_dir + word + "/*.wav"), utterances_per_word, replace=False
-        )
+        wavs = glob.glob(data_dir + word + "/*.wav")
+        if len(wavs) > utterances_per_word:
+            fs = np.random.choice(wavs, utterances_per_word, replace=False)
+        else:
+            print("using all wavs for ", word)
+            fs = wavs
         specs.extend([input_data.file2spec(model_settings, f) for f in fs])
     specs = np.array(specs)
     preds = model.predict(np.expand_dims(specs, -1))

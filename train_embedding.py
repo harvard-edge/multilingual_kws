@@ -9,17 +9,24 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras import models
 
+import sys
+
+sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
 import input_data
 
 from pathlib import Path
 import pickle
 
-LANG_ISOCODE = "es"
+LANG_ISOCODE = "nl"
+embedding_model_dir=f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/"
+save_models_dir=f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/models/"
 data_dir = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips/")
-os.chdir(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/")
+os.chdir(embedding_model_dir)
 
-if not os.path.isdir(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/models/"):
+if not os.path.isdir(save_models_dir):
     raise ValueError("create model dir")
+if len(os.listdir(save_models_dir)) > 0:
+    raise ValueError("models already exist in ", save_models_dir)
 
 with open("commands.txt", "r") as fh:
     commands = fh.read().splitlines()
@@ -62,13 +69,14 @@ train_ds = train_ds.shuffle(buffer_size=4000).batch(batch_size)
 val_ds = val_ds.batch(batch_size)
 
 
-# NEW MODEL
 
 input_shape = (49, 40, 1)
 num_labels = len(a.commands)  # will include silence/unknown
 
 assert num_labels == model_settings["label_count"]
 
+# NEW MODEL
+#
 # https://keras.io/examples/vision/image_classification_efficientnet_fine_tuning/#b0-to-b7-variants-of-efficientnet
 base_model = tf.keras.applications.EfficientNetB0(
     include_top=False,
@@ -101,21 +109,22 @@ model.compile(
 # TODO(mmaz) class_weight parameter on model.fit
 
 # LOAD PREVIOUS CHECKPOINT
-#  model_dir = Path("/home/mark/tinyspeech_harvard/train_es_165/models")
-#  checkpoint = model_dir / "es_165commands_efficientnet_selu_specaug80_resume34.010-0.8559"
-#  model = models.load_model(checkpoint)
-#  model.compile(
-#     optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), #<-- change learning rate!
-#     loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-#     metrics=["accuracy"],
-#  )
+# model_dir = Path(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/models")
+# checkpoint = model_dir / "it_165commands_efficientnet_selu_specaug80.053-0.7861"
+# model = models.load_model(checkpoint)
+# # change learning rate:
+# model.compile(
+#    optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), #<-- change learning rate!
+#    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+#    metrics=["accuracy"],
+# )
 
 # CHANGE FILENAME
-EPOCHS = 100
+EPOCHS = 70
 os.chdir(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/models/")
 checkpoint_filepath = (
     LANG_ISOCODE
-    + "_165commands_efficientnet_selu_specaug80.{epoch:03d}-{val_accuracy:.4f}"
+    + "_165commands_efficientnet_selu_specaug80_resume53.{epoch:03d}-{val_accuracy:.4f}"
 )
 
 model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(

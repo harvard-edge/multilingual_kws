@@ -1,9 +1,6 @@
 #%%
-from multiprocessing import Value
 import os
 import logging
-from os.path import splitext
-import re
 from typing import Dict, List
 import datetime
 from pathlib import Path
@@ -347,6 +344,38 @@ def make_viz(results: List[Dict], threshold: float, nrows: int, ncols: int):
     return fig, axes
 
 
+def roc_sc(target_resuts, unknown_results):
+    # _TARGET_ is class 1, _UNKNOWN_ is class 0
+
+    # positive label: target keywords classified as _TARGET_
+    # true positives
+    target_correct = np.array(target_resuts["correct"])
+    # false negatives -> target kws incorrectly classified as _UNKNOWN_:
+    target_incorrect = np.array(target_resuts["incorrect"])
+    total_positives = target_correct.shape[0] + target_incorrect.shape[0]
+
+    # negative labels
+
+    # true negatives -> unknown classified as unknown
+    unknown_correct = np.array(unknown_results["correct"])
+    # false positives: _UNKNOWN_ keywords incorrectly (falsely) classified as _TARGET_ (positive)
+    unknown_incorrect = np.array(unknown_results["incorrect"])
+    unknown_total = unknown_correct.shape[0] + unknown_incorrect.shape[0]
+
+    # TPR = TP / (TP + FN)
+    # FPR = FP / (FP + TN)
+
+    tprs, fprs = [], []
+
+    threshs = np.arange(0, 1.01, 0.01)
+    for threshold in threshs:
+        tpr = target_correct[target_correct > threshold].shape[0] / total_positives
+        tprs.append(tpr)
+        fpr = unknown_incorrect[unknown_incorrect > threshold].shape[0] / unknown_total
+        fprs.append(fpr)
+    return tprs, fprs, threshs
+
+
 #%% LOAD DATA
 data_dir = "/home/mark/tinyspeech_harvard/frequent_words/en/clips/"
 model_dir = "/home/mark/tinyspeech_harvard/xfer_oov_efficientnet_binary/"
@@ -511,38 +540,6 @@ print(non_embedding_speech_commands)
 #     print(c, w, c / (c + w))
 #
 # #%%
-
-
-def roc_sc(target_resuts, unknown_results):
-    # _TARGET_ is class 1, _UNKNOWN_ is class 0
-
-    # positive label: target keywords classified as _TARGET_
-    # true positives
-    target_correct = np.array(target_resuts["correct"])
-    # false negatives -> target kws incorrectly classified as _UNKNOWN_:
-    target_incorrect = np.array(target_resuts["incorrect"])
-    total_positives = target_correct.shape[0] + target_incorrect.shape[0]
-
-    # negative labels
-
-    # true negatives -> unknown classified as unknown
-    unknown_correct = np.array(unknown_results["correct"])
-    # false positives: _UNKNOWN_ keywords incorrectly (falsely) classified as _TARGET_ (positive)
-    unknown_incorrect = np.array(unknown_results["incorrect"])
-    unknown_total = unknown_correct.shape[0] + unknown_incorrect.shape[0]
-
-    # TPR = TP / (TP + FN)
-    # FPR = FP / (FP + TN)
-
-    tprs, fprs = [], []
-
-    threshs = np.arange(0, 1.01, 0.01)
-    for threshold in threshs:
-        tpr = target_correct[target_correct > threshold].shape[0] / total_positives
-        tprs.append(tpr)
-        fpr = unknown_incorrect[unknown_incorrect > threshold].shape[0] / unknown_total
-        fprs.append(fpr)
-    return tprs, fprs, threshs
 
 
 #%%
@@ -784,26 +781,24 @@ print(n_utterances, len(os.listdir(data_dir)))
 ##               Any Language
 ###############################################
 
-LANG_ISOCODE = "es"
+LANG_ISOCODE = "it"
 
 data_dir = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips/")
 traindir = Path(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/")
 
+# SELECT MODEL
 base_model_path = (
     traindir
     / "models"
-    / "de_165commands_efficientnet_selu_specaug80_resume93.127-0.8515"
+    / "it_165commands_efficientnet_selu_specaug80_resume53.018-0.8208"
 )
 
-# fmt: off
 model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/sweep_{LANG_ISOCODE}")
 if not os.path.isdir(model_dest_dir):
     raise ValueError("no model dir", model_dest_dir)
 results_dir = model_dest_dir / "results"
 if not os.path.isdir(results_dir):
     raise ValueError("no results dir", results_dir)
-# fmt: on
-
 
 with open(traindir / "commands.txt", "r") as fh:
     commands = fh.read().splitlines()
@@ -984,7 +979,9 @@ for pkl_file in os.listdir(model_dest_dir / "results"):
         results.append(result)
 print("N words", len(results))
 fig = sc_roc_plotly(results)
-fig.write_html(str(model_dest_dir / "5shot_classification_roc_{LANG_ISOCODE}.html"))
+dest_plot = str(model_dest_dir / f"5shot_classification_roc_{LANG_ISOCODE}.html")
+print("saving to", dest_plot)
+fig.write_html(dest_plot)
 fig
 
 
