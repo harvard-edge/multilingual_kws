@@ -17,6 +17,7 @@ import plotly.graph_objects as go
 
 sns.set()
 sns.set_palette("bright")
+# sns.set(font_scale=1.6)
 
 
 # %%
@@ -170,7 +171,8 @@ ax.set_ylim(-0.01, 1)
 # %%
 
 fig, ax = plt.subplots()
-for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
+# for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
+for ix, LANG_ISOCODE in enumerate(["nl"]):
     color = sns.color_palette("bright")[ix % len(sns.color_palette("bright"))]
 
     data_dir = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips/")
@@ -200,7 +202,8 @@ for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
         tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
         all_tprs.append(tprs)
         all_fprs.append(fprs)
-        ax.plot(fprs, tprs, color=color, alpha=0.1)
+        #ax.plot(fprs, tprs, color=color, alpha=0.1)
+        ax.plot(fprs, tprs, label=curve_label)
     all_tprs = np.array(all_tprs)
     all_fprs = np.array(all_fprs)
 
@@ -225,7 +228,7 @@ for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
     ax.legend(loc="lower right")
     ax.set_xlabel("false positive rate")
     ax.set_ylabel("true positive rate")
-    fig.set_size_inches(12,12)
+    fig.set_size_inches(14,14)
 
 # %%
 # %%

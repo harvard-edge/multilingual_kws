@@ -11,6 +11,7 @@ from collections import Counter
 import csv
 import pathlib
 import textgrid
+from textgrid.exceptions import TextGridError
 import sox
 import pickle
 from scipy.io import wavfile
@@ -65,7 +66,11 @@ def _extract_timings(words_to_search_for, mp3_to_textgrid, timings, notfound, ro
         except KeyError as e:
             notfound.append((mp3name_no_extension, word))
             continue
-        tg = textgrid.TextGrid.fromFile(tgf)
+        try:
+            tg = textgrid.TextGrid.fromFile(tgf)
+        except TextGridError as e:
+            notfound.append((mp3name_no_extension, word))
+            continue
         for interval in tg[0]:
             if interval.mark != word:
                 continue

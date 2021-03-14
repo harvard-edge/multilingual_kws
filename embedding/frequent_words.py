@@ -23,7 +23,7 @@ import word_extraction
 
 sns.set()
 sns.set_palette("bright")
-# sns.set(font_scale=1)
+# sns.set(font_scale=1.6)
 
 #%%
 # how large is each language?
@@ -47,7 +47,31 @@ ax.set_xticklabels(langs.keys(), rotation=90)
 fig.set_size_inches(20,5)
 
 # %%
-LANG_ISOCODE="nl"
+#  # https://matplotlib.org/stable/gallery/ticks_and_spines/tick-formatters.html
+#  from matplotlib import ticker
+#  # https://stackoverflow.com/a/579376
+#  def human_format(num):
+#      magnitude = 0
+#      while abs(num) >= 1000:
+#          magnitude += 1
+#          num /= 1000.0
+#      # add more suffixes if you need them
+#      return '%.0f%s' % (num, ['', 'K', 'M', 'G', 'T', 'P'][magnitude])
+#  @ticker.FuncFormatter
+#  def major_formatter(x, pos):
+#      return human_format(x)
+#  flangs = {k:langs[k] for k in ["de", "rw", "es", "it", "nl"]}
+#  
+#  fig, ax = plt.subplots()
+#  ax.bar(flangs.keys(), flangs.values())
+#  ax.set_xticklabels(flangs.keys(), rotation=90)
+#  # ax.set_xlabel("language")
+#  # ax.set_ylabel("")
+#  ax.yaxis.set_major_formatter(major_formatter)
+#  fig.set_size_inches(3,10)
+
+# %%
+LANG_ISOCODE="ca"
 
 frequent_words_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}"
 timings_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings"
@@ -74,12 +98,12 @@ counts = word_extraction.wordcounts(alignments / LANG_ISOCODE / "validated.csv")
 
 # %%
 # look for stopwords that are too short
-counts.most_common(30)
+counts.most_common(35)
 
 # %%
 N_WORDS_TO_SAMPLE = 250
 # get rid of words that are too short
-SKIP_FIRST_N = 9 
+SKIP_FIRST_N = 25
 to_expunge = counts.most_common(SKIP_FIRST_N)
 non_stopwords = counts.copy()
 for k,_ in to_expunge:
@@ -99,17 +123,20 @@ fig.set_size_inches(40,10)
 
 # %%
 # fetch timings for all words of interest
+dest_pkl = f"{frequent_words_dir}/all_timings.pkl"
+if os.path.isfile(dest_pkl):
+    raise ValueError("already exists", dest_pkl)
 words = set([w[0] for w in longer_words[:N_WORDS_TO_SAMPLE]])
 tgs = word_extraction.generate_filemap(lang_isocode=LANG_ISOCODE, alignment_basedir=alignments)
 print("extracting timings")
 timings, notfound = word_extraction.generate_wordtimings(words_to_search_for=words, mp3_to_textgrid=tgs, lang_isocode=LANG_ISOCODE, alignment_basedir=alignments)
 print("errors", len(notfound))
+print("saving to", dest_pkl)
+with open(dest_pkl, "wb") as fh:
+  pickle.dump(timings, fh)
 
 # %%
-# print("saving to", f"{frequent_words_dir}/all_timings.pkl")
-# with open(f"{frequent_words_dir}/all_timings.pkl", "wb") as fh:
-#   pickle.dump(timings, fh)
-#with open(f"{frequent_words_dir}/all_timings.pkl", "rb") as fh:
+# with open(f"{frequent_words_dir}/all_timings.pkl", "rb") as fh:
 #    timings = pickle.load(fh)
 
 # %%
