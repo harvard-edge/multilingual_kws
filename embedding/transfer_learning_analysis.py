@@ -1172,7 +1172,7 @@ def results_exist(target, results_dir):
     return False
 
 
-for ix in range(9):
+for ix in range(18):
     print(f"::::::::::::::::::::::::::::::{ix}:::::::::::::::::::::::::::::::")
 
     has_results = True
@@ -1227,6 +1227,7 @@ for ix in range(9):
         oov_lang_words=oov_lang_words,
         commands=commands,
     )
+    print("num unknown sample", len(unknown_sample))
 
     target_results = transfer_learning.evaluate_files(
         target_wavs, 2, model, model_settings
@@ -1256,6 +1257,12 @@ for ix in range(9):
 
 #%%
 
+model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis/")
+if not os.path.isdir(model_dest_dir):
+    raise ValueError("no model dir", model_dest_dir)
+results_dir = model_dest_dir / "results"
+if not os.path.isdir(results_dir):
+    raise ValueError("no results dir", results_dir)
 
 def sc_roc_plotly(results: List[Dict]):
     fig = go.Figure()
@@ -1264,8 +1271,9 @@ def sc_roc_plotly(results: List[Dict]):
         unknown_results = res["unknown_results"]
         ne = res["details"]["num_epochs"]
         nb = res["details"]["num_batches"]
-        target = res["target"]
-        curve_label = f"{target} (e:{ne},b:{nb})"
+        target_word = res["target_word"]
+        target_lang = res["target_lang"]
+        curve_label = f"{target_lang} {target_word} (e:{ne},b:{nb})"
         # curve_label=target
         tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
         fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=curve_label))
@@ -1273,7 +1281,7 @@ def sc_roc_plotly(results: List[Dict]):
     fig.update_layout(
         xaxis_title="FPR",
         yaxis_title="TPR",
-        title=f"{LANG_ISOCODE} 5-shot classification accuracy",
+        title=f"5-shot classification accuracy",
     )
     fig.update_xaxes(range=[0, 1])
     fig.update_yaxes(range=[0, 1])
@@ -1289,18 +1297,11 @@ for pkl_file in os.listdir(model_dest_dir / "results"):
         results.append(result)
 print("N words", len(results))
 fig = sc_roc_plotly(results)
-dest_plot = str(model_dest_dir / f"5shot_classification_roc_{LANG_ISOCODE}.html")
+dest_plot = str(model_dest_dir / f"5shot_classification_roc.html")
 print("saving to", dest_plot)
 fig.write_html(dest_plot)
 fig
 
 
-#%%
-# how many utterances total in dataset
-n_utterances = 0
-for w in os.listdir(data_dir):
-    wavs = glob.glob(str(data_dir / w / "*.wav"))
-    n_utterances += len(wavs)
-print(n_utterances, len(os.listdir(data_dir)))
 
 # %%

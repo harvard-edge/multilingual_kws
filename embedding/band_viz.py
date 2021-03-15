@@ -284,3 +284,70 @@ for ix, LANG_ISOCODE in enumerate(["nl"]):
 #         ax.set_ylabel("tpr")
 #         # ax.legend(loc="lower right")
 #     return fig, axes
+
+# %%
+
+# multilang embedding model results
+
+results = []
+for pkl_file in os.listdir(model_dest_dir / "results"):
+    filename = model_dest_dir / "results" / pkl_file
+    print(filename)
+    with open(filename, "rb") as fh:
+        result = pickle.load(fh)
+        results.append(result)
+print("N words", len(results))
+
+lang2results = {}
+for ix, res in enumerate(results):
+    target_lang = res["target_lang"]
+    if not target_lang in lang2results:
+        lang2results[target_lang] = []
+    lang2results[target_lang].append(res)
+
+fig, ax = plt.subplots()
+for ix, (lang, results) in enumerate(lang2results.items()):
+    color = sns.color_palette("bright")[ix % len(sns.color_palette("bright"))]
+
+    # def make_roc(results: List[Dict]):
+    all_tprs, all_fprs = [], []
+    for ix, res in enumerate(results):
+        target_results = res["target_results"]
+        unknown_results = res["unknown_results"]
+        ne = res["details"]["num_epochs"]
+        nb = res["details"]["num_batches"]
+        target_word = res["target_word"]
+        target_lang = res["target_lang"]
+        # curve_label = f"{target} (e:{ne},b:{nb})"
+        # curve_label=target
+        tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+        all_tprs.append(tprs)
+        all_fprs.append(fprs)
+        ax.plot(fprs, tprs, color=color, alpha=0.1)
+        # ax.plot(fprs, tprs, label=curve_label)
+    all_tprs = np.array(all_tprs)
+    all_fprs = np.array(all_fprs)
+
+    # make sure all tprs and fprs are monotonically increasing
+    for ix in range(all_fprs.shape[0]):
+        # https://stackoverflow.com/a/47004533
+        if not np.all(np.diff(np.flip(all_fprs[ix,:])) >=0):
+            raise ValueError("fprs not in sorted order")
+        if not np.all(np.diff(np.flip(all_tprs[ix,:])) >=0):
+            raise ValueError("tprs not in sorted order")
+
+    # https://stackoverflow.com/a/43035301
+    x_all = np.unique(all_fprs.ravel())
+    y_all = np.empty((x_all.shape[0], all_tprs.shape[0]))
+    for ix in range(all_fprs.shape[0]):
+        y_all[:, ix] = np.interp(x_all, np.flip(all_fprs[ix,:]), np.flip(all_tprs[ix,:]))
+    ymin = y_all.min(axis=1)
+    ymax = y_all.max(axis=1)
+    ax.fill_between(x_all, ymin, ymax, alpha=0.2, label=f"{lang}")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.legend(loc="lower right")
+    ax.set_xlabel("false positive rate")
+    ax.set_ylabel("true positive rate")
+    fig.set_size_inches(14,14)
+# %%
