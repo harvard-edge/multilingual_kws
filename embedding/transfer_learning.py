@@ -24,7 +24,7 @@ def transfer_learn(
     base_model_path: os.PathLike,
     base_model_output: str,
     UNKNOWN_PERCENTAGE=50.0,
-    bg_datadir="/home/mark/tinyspeech_harvard/frequent_words/en/clips/_background_noise_/",
+    bg_datadir="/home/mark/tinyspeech_harvard/speech_commands/_background_noise_/",
 ):
     """this only words for single-target models: see audio_dataset and CATEGORIES"""
 
@@ -50,6 +50,7 @@ def transfer_learn(
         metrics=["accuracy"],
     )
 
+    # TODO(mmaz): use keras class weights?
     audio_dataset = input_data.AudioDataset(
         model_settings=model_settings,
         commands=[target],
@@ -173,6 +174,32 @@ def evaluate_fast(
         "correct": correct_confidences,
         "incorrect": incorrect_confidences,
     }
+
+
+def evaluate_files(
+    files_to_evaluate: List[os.PathLike],
+    target_id: int,
+    model: tf.keras.Model,
+    model_settings: Dict,
+):
+    correct_confidences = []
+    incorrect_confidences = []
+
+    specs = [input_data.file2spec(model_settings, f) for f in files_to_evaluate]
+    specs = np.array(specs)
+    preds = model.predict(np.expand_dims(specs, -1))
+
+    # softmaxes = np.max(preds,axis=1)
+    # unknown_other_words_confidences.extend(softmaxes.tolist())
+    cols = np.argmax(preds, axis=1)
+    # figure out how to fancy-index this later
+    for row, col in enumerate(cols):
+        confidence = preds[row][col]
+        if col == target_id:
+            correct_confidences.append(confidence)
+        else:
+            incorrect_confidences.append(confidence)
+    return dict(correct=correct_confidences, incorrect=incorrect_confidences)
 
 
 def evaluate_and_track(
