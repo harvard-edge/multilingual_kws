@@ -346,6 +346,8 @@ for ix, (lang, results) in enumerate(lang2results.items()):
     ax.fill_between(x_all, ymin, ymax, alpha=0.2, label=f"{lang}")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
+    # ax.set_xlim(0, 0.1)
+    # ax.set_ylim(0.8, 1)
     ax.legend(loc="lower right")
     ax.set_xlabel("false positive rate")
     ax.set_ylabel("true positive rate")

@@ -1172,7 +1172,7 @@ def results_exist(target, results_dir):
     return False
 
 
-for ix in range(18):
+for ix in range(2):
     print(f"::::::::::::::::::::::::::::::{ix}:::::::::::::::::::::::::::::::")
 
     has_results = True
@@ -1180,11 +1180,16 @@ for ix in range(18):
     while has_results:
         rand_ix = np.random.randint(len(oov_lang_words))
         target_lang, target_word = oov_lang_words[rand_ix]
+        # if target_lang != "fa": # generate for a specific language
+        #     continue
         has_results = results_exist(target_word, results_dir)
     print("TARGET:", target_lang, target_word)
     target_wavs = glob.glob(
         str(frequent_words / target_lang / "clips" / target_word / "*.wav")
     )
+    if len(target_wavs) == 0:
+        print(str(frequent_words / target_lang / "clips" / target_word / "*.wav"))
+        raise ValueError("bug in word search due to unicode issues in", target_word)
     np.random.shuffle(target_wavs)
     train_files = target_wavs[:N_SHOTS]
     val_files = target_wavs[N_SHOTS:]

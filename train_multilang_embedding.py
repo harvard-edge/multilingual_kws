@@ -96,7 +96,7 @@ assert num_labels == model_settings["label_count"]
 
 # LOAD PREVIOUS CHECKPOINT
 model_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_embedding/models")
-checkpoint = model_dir / "multilang_resume40_.005-0.7739"
+checkpoint = model_dir / "multilang_resume40_resume05.020-0.7879"
 model = models.load_model(checkpoint)
 # change learning rate:
 model.compile(
@@ -107,9 +107,9 @@ model.compile(
 )
 
 # CHANGE FILENAME
-EPOCHS = 20
+EPOCHS = 26
 os.chdir(save_models_dir)
-checkpoint_filepath = "multilang_resume40_resume05.{epoch:03d}-{val_accuracy:.4f}"
+checkpoint_filepath = "multilang_resume40_resume05_resume20.{epoch:03d}-{val_accuracy:.4f}"
 
 model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
     filepath=checkpoint_filepath,
