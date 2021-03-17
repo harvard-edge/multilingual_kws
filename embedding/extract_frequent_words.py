@@ -9,13 +9,14 @@ import sox
 import glob
 
 # local
-LANG_ISOCODE="it"
+LANG_ISOCODE="eu"
 WORD_CSVS = f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings/*.csv"
 #CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-5.1-2020-06-22/{LANG_ISOCODE}/clips/")
 CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/{LANG_ISOCODE}/clips/")
 #SWTS_CLIPS_DIR = Path("/home/mark/tinyspeech_harvard/commonvoice_singleword/cv-corpus-5-singleword/en/clips")
 OUT_DIR = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips")
 ERRORS_DIR = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/errors")
+WRITE_PROGRESS = False
 
 # fasrc
 # WORD_CSVS = "/n/holyscratch01/janapa_reddi_lab/Lab/mmaz/tinyspeech/frequent_words/en/timings/*.csv"
@@ -69,8 +70,9 @@ def extract(csvpath):
         for ix, row in enumerate(reader):
             if ix % 1000 == 0:
                 print(word, ix)
-                with open("progress.txt", 'a') as fh:
-                    fh.write(f"{word} {ix}\n")
+                if WRITE_PROGRESS:
+                    with open("progress.txt", 'a') as fh:
+                        fh.write(f"{word} {ix}\n")
             mp3name_no_ext = row[0]
             start_s = float(row[1])
             end_s = float(row[2])
@@ -120,13 +122,15 @@ def main():
     pool = multiprocessing.Pool()
     for i, result in enumerate(pool.imap_unordered(extract, words), start=1):
         print("counter: ", i, "word", result)
-        with open("finished.txt", 'a') as fh:
-            fh.write(f"counter {i} word {result}\n")
+        if WRITE_PROGRESS:
+            with open("finished.txt", 'a') as fh:
+                fh.write(f"counter {i} word {result}\n")
     pool.close()
     pool.join()
 
-    with open("finished.txt", 'a') as fh:
-        fh.write("complete\n")
+    if WRITE_PROGRESS:
+        with open("finished.txt", 'a') as fh:
+            fh.write("complete\n")
 
 
 if __name__ == "__main__":

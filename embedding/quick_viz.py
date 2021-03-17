@@ -102,7 +102,8 @@ def roc_sc(target_resuts, unknown_results):
 ####### MULTI LANGUAGE
 ##############################################################################################
 
-model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis/")
+#model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis/")
+model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe/")
 if not os.path.isdir(model_dest_dir):
     raise ValueError("no model dir", model_dest_dir)
 results_dir = model_dest_dir / "results"

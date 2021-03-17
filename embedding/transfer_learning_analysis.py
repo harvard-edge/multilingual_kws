@@ -606,166 +606,6 @@ print(non_embedding_speech_commands)
 # )
 # fig
 
-#%%
-###############################################
-##               Kinyarwanda
-###############################################
-
-data_dir = Path("/home/mark/tinyspeech_harvard/frequent_words/rw/clips/")
-rw_traindir = Path("/home/mark/tinyspeech_harvard/train_rw_165/")
-
-with open(rw_traindir / "commands.txt", "r") as fh:
-    commands = fh.read().splitlines()
-with open(rw_traindir / "other_words.txt", "r") as fh:
-    other_words = fh.read().splitlines()
-
-# with open("train_val_test_data.pkl", 'rb') as fh:
-#     train_val_test_data = pickle.load(fh)
-
-with open(rw_traindir / "train_files.txt", "r") as fh:
-    train_files = fh.read().splitlines()
-with open(rw_traindir / "val_files.txt", "r") as fh:
-    val_files = fh.read().splitlines()
-with open(rw_traindir / "test_files.txt", "r") as fh:
-    test_files = fh.read().splitlines()
-
-bg_datadir = "/home/mark/tinyspeech_harvard/frequent_words/rw/_background_noise_/"
-
-#%%
-N_UNKNOWN_WORDS = 50
-unknown_words = np.random.choice(other_words, N_UNKNOWN_WORDS, replace=False)
-oov_words = list(set(other_words).difference(set(unknown_words)))
-print("OOV:", oov_words)
-
-unknown_files = []
-for w in unknown_words:
-    wavs = glob.glob(str(data_dir / w / "*.wav"))
-    unknown_files.extend(wavs)
-np.random.shuffle(unknown_files)
-
-print("before including original embeddings", len(unknown_files))
-
-for w in commands:
-    wavs = glob.glob(str(data_dir / w / "*.wav"))
-    sample = np.random.choice(wavs, 100, replace=False)
-    unknown_files.extend(sample)
-np.random.shuffle(unknown_files)
-
-print("after including original embeddings", len(unknown_files))
-
-# TODO(mmaz): we only sample like 600 [= 128 steps * 9 epochs / 2] of these :(
-
-#%%
-### SELECT TARGET
-N_SHOTS = 5
-target = np.random.choice(oov_words)
-print(target)
-target_wavs = glob.glob(str(data_dir / target / "*.wav"))
-np.random.shuffle(target_wavs)
-train_files = target_wavs[:N_SHOTS]
-val_files = target_wavs[N_SHOTS:]
-print("\n".join(train_files))
-
-#%%
-###############
-## FINETUNING
-###############
-
-# fmt: off
-model_dest_dir = Path("/home/mark/tinyspeech_harvard/xfer_rw_5")
-base_model_path = rw_traindir / "models" / "rw_165commands_efficientnet_selu_specaug80_resume93.008-0.7895"
-model_settings = input_data.standard_microspeech_model_settings(label_count=3)
-# fmt: on
-
-name, model, details = transfer_learning.transfer_learn(
-    target=target,
-    train_files=train_files,
-    val_files=val_files,
-    unknown_files=unknown_files,
-    num_epochs=4,
-    num_batches=1,
-    batch_size=64,
-    model_settings=model_settings,
-    base_model_path=base_model_path,
-    base_model_output="dense_2",
-)
-print("saving", name)
-model.save(model_dest_dir / "models" / name)
-
-# target="imodoka"
-# model_path = model_dest_dir / "models" / "xfer_epochs_9_bs_64_nbs_2_val_acc_0.89_target_imodoka"
-# tf.get_logger().setLevel(logging.ERROR)
-# model = tf.keras.models.load_model(model_path)
-# tf.get_logger().setLevel(logging.INFO)
-
-some_commands = np.random.choice(commands, 20, replace=False)
-some_unknown = np.random.choice(unknown_words, 20, replace=False)
-some_oov = np.random.choice(oov_words, 20, replace=False)
-flat = set([w for l in [some_commands, some_unknown, some_oov] for w in l])
-unknown_sample = list(flat.difference({target}))
-print(unknown_sample, len(unknown_sample))
-
-num_targets = len(os.listdir(data_dir / target))
-print("n targets", num_targets)
-
-
-target_results = transfer_learning.evaluate_fast(
-    [target], 2, str(data_dir) + "/", num_targets, model, model_settings
-)
-unknown_results = transfer_learning.evaluate_fast(
-    unknown_sample, 1, str(data_dir) + "/", 300, model, model_settings
-)
-
-# tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
-results = dict(
-    target_results=target_results,
-    unknown_results=unknown_results,
-    details=details,
-    target=target,
-)
-with open(model_dest_dir / "results" / f"hpsweep_{target}.pkl", "wb",) as fh:
-    pickle.dump(results, fh)
-
-tf.keras.backend.clear_session()  # https://keras.io/api/utils/backend_utils/
-
-#%%
-
-
-def sc_roc_plotly(results: List[Dict]):
-    fig = go.Figure()
-    for ix, res in enumerate(results):
-        target_results = res["target_results"]
-        unknown_results = res["unknown_results"]
-        ne = res["details"]["num_epochs"]
-        nb = res["details"]["num_batches"]
-        target = res["target"]
-        curve_label = f"{target} (e:{ne},b:{nb})"
-        # curve_label=target
-        tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
-        fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=curve_label))
-
-    fig.update_layout(
-        xaxis_title="FPR",
-        yaxis_title="TPR",
-        title=f"kinyarwanda 5-shot classification accuracy",
-    )
-    fig.update_xaxes(range=[0, 1])
-    fig.update_yaxes(range=[0, 1])
-    return fig
-
-
-results = []
-for pkl_file in os.listdir(model_dest_dir / "results"):
-    filename = model_dest_dir / "results" / pkl_file
-    print(filename)
-    with open(filename, "rb") as fh:
-        result = pickle.load(fh)
-        results.append(result)
-print("N words", len(results))
-fig = sc_roc_plotly(results)
-fig.write_html(str(model_dest_dir / "5shot_classification_roc_kinyarwanda.html"))
-fig
-
 
 #%%
 # how many utterances total in dataset
@@ -778,7 +618,7 @@ print(n_utterances, len(os.listdir(data_dir)))
 
 #%%
 ###############################################
-##               Any Language
+##   per language embedding model
 ###############################################
 
 LANG_ISOCODE = "nl"
@@ -1003,9 +843,9 @@ print(n_utterances, len(os.listdir(data_dir)))
 traindir = Path(f"/home/mark/tinyspeech_harvard/multilang_embedding")
 
 # SELECT MODEL
-base_model_path = traindir / "models" / "multilang_resume40_resume05.020-0.7879"
+base_model_path = traindir / "models" / "multilang_resume40_resume05_resume20.022-0.7969"
 
-model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis/")
+model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe/")
 if not os.path.isdir(model_dest_dir):
     raise ValueError("no model dir", model_dest_dir)
 if not os.path.isdir(model_dest_dir / "models"):
@@ -1034,9 +874,12 @@ N_UNKNOWN_WORDS = 300
 N_UNKNOWN_UTTERANCES_PER_WORD = 10
 N_ORIGINAL_EMBEDDING_AS_UNKNOWN = 200
 
-lang2words = {}
 frequent_words = Path("/home/mark/tinyspeech_harvard/frequent_words/")
-for lang in os.listdir(frequent_words):
+language_isocodes = os.listdir(frequent_words)
+lang_isocodes_for_unknown_words = [li for li in language_isocodes if li in ["fa", "de", "ca", "it", "en", "fr", "es", "nl", "rw"]]
+
+lang2words = {}
+for lang in lang_isocodes_for_unknown_words:
     clips = frequent_words / lang / "clips"
     words = os.listdir(clips)
     lang2words[lang] = words
@@ -1073,7 +916,7 @@ original_as_unknown = np.random.choice(
 )
 for word in original_as_unknown:
     # which language?
-    for lang in os.listdir(frequent_words):
+    for lang in lang_isocodes_for_unknown_words:
         word_dir = frequent_words / lang / "clips" / word
         if os.path.isdir(word_dir):
             break
@@ -1091,19 +934,20 @@ print("unknown files after original embeddings added", len(unknown_files))
 print(unknown_files[0])
 # TODO(mmaz): we only sample like 600 [= 128 steps * 9 epochs / 2] of these :(
 
+# search through all languages (both embedding langs and non-embedding langs) for oov words
 oov_lang_words = []
-for lang in os.listdir(frequent_words):
+for lang in language_isocodes:
     clips = frequent_words / lang / "clips"
     words = os.listdir(clips)
     for word in words:
         if word in command_set or word in unknown_word_set:
             continue
         oov_lang_words.append((lang, word))
-print(len(oov_lang_words))
+print("oov lang words", len(oov_lang_words))
 
 
 #%%
-# select unknown/oov/command words for model evaluation
+# select unknown/oov/command words for model evaluation (not finetuning)
 
 def generate_random_non_target_files(
     target_word,
@@ -1172,7 +1016,7 @@ def results_exist(target, results_dir):
     return False
 
 
-for ix in range(2):
+for ix in range(20):
     print(f"::::::::::::::::::::::::::::::{ix}:::::::::::::::::::::::::::::::")
 
     has_results = True
@@ -1180,8 +1024,8 @@ for ix in range(2):
     while has_results:
         rand_ix = np.random.randint(len(oov_lang_words))
         target_lang, target_word = oov_lang_words[rand_ix]
-        # if target_lang != "fa": # generate for a specific language
-        #     continue
+        if target_lang not in ["cs", "cy", "eu"]: # generate for a specific language
+            continue
         has_results = results_exist(target_word, results_dir)
     print("TARGET:", target_lang, target_word)
     target_wavs = glob.glob(

@@ -71,7 +71,9 @@ fig.set_size_inches(20,5)
 #  fig.set_size_inches(3,10)
 
 # %%
-LANG_ISOCODE="ca"
+# done cs cy eu 
+# todo pl ru tr
+LANG_ISOCODE="eu"
 
 frequent_words_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}"
 timings_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings"
@@ -81,9 +83,9 @@ background_noise_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCOD
 
 BASE_BACKGROUND_NOISE="/home/mark/tinyspeech_harvard/speech_commands/_background_noise_"
 
-# for dir in [frequent_words_dir, timings_dir, errors_dir, clips_dir]:
-#     os.makedirs(dir)
-# shutil.copytree(BASE_BACKGROUND_NOISE, background_noise_dir)
+for dir in [frequent_words_dir, timings_dir, errors_dir, clips_dir]:
+    os.makedirs(dir)
+shutil.copytree(BASE_BACKGROUND_NOISE, background_noise_dir)
 
 for dir in [frequent_words_dir, timings_dir, errors_dir, clips_dir]:
     if not os.path.isdir(dir):
@@ -98,12 +100,12 @@ counts = word_extraction.wordcounts(alignments / LANG_ISOCODE / "validated.csv")
 
 # %%
 # look for stopwords that are too short
-counts.most_common(35)
+counts.most_common(15)
 
 # %%
 N_WORDS_TO_SAMPLE = 250
 # get rid of words that are too short
-SKIP_FIRST_N = 25
+SKIP_FIRST_N = 6
 to_expunge = counts.most_common(SKIP_FIRST_N)
 non_stopwords = counts.copy()
 for k,_ in to_expunge:
