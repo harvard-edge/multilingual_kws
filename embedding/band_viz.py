@@ -22,7 +22,7 @@ sns.set_palette("bright")
 
 # %%
 
-def roc_sc(target_resuts, unknown_results):
+def roc_curve(target_resuts, unknown_results):
     # _TARGET_ is class 1, _UNKNOWN_ is class 0
 
     # positive label: target keywords classified as _TARGET_
@@ -81,7 +81,7 @@ def make_roc(results: List[Dict]):
         target = res["target"]
         curve_label = f"{target} (e:{ne},b:{nb})"
         # curve_label=target
-        tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+        tprs, fprs, thresh_labels = roc_curve(target_results, unknown_results)
 
         ax.plot(fprs, tprs, label=curve_label)
     ax.set_xlim(-0.01, 1)
@@ -129,7 +129,7 @@ for ix, res in enumerate(results):
     target = res["target"]
     curve_label = f"{target} (e:{ne},b:{nb})"
     # curve_label=target
-    tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+    tprs, fprs, thresh_labels = roc_curve(target_results, unknown_results)
     all_tprs.append(tprs)
     all_fprs.append(fprs)
     ax.plot(fprs, tprs, label=curve_label)
@@ -200,7 +200,7 @@ for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
         target = res["target"]
         curve_label = f"{target} (e:{ne},b:{nb})"
         # curve_label=target
-        tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+        tprs, fprs, thresh_labels = roc_curve(target_results, unknown_results)
         all_tprs.append(tprs)
         all_fprs.append(fprs)
         ax.plot(fprs, tprs, color=color, alpha=0.1)
@@ -251,7 +251,7 @@ for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
 #         target = res["target"]
 #         curve_label = f"{target} (e:{ne},b:{nb})"
 #         # curve_label=target
-#         tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+#         tprs, fprs, thresh_labels = roc_curve(target_results, unknown_results)
 #         fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=curve_label))
 
 #     fig.update_layout(
@@ -276,7 +276,7 @@ for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
 #     assert nrows * ncols == len(results), "fewer results than requested plots"
 #     fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
 #     for ix, (res, ax) in enumerate(zip(results, axes.flatten())):
-#         tprs, fprs, threshs = roc_sc(res)
+#         tprs, fprs, threshs = roc_curve(res)
 
 #         ax.plot(fprs, tprs)
 #         ax.set_xlim(-0.01, 1)
@@ -327,7 +327,7 @@ for ix, (lang, results) in enumerate(lang2results.items()):
         target_lang = res["target_lang"]
         # curve_label = f"{target} (e:{ne},b:{nb})"
         # curve_label=target
-        tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+        tprs, fprs, thresh_labels = roc_curve(target_results, unknown_results)
         all_tprs.append(tprs)
         all_fprs.append(fprs)
         ax.plot(fprs, tprs, color=color, alpha=0.1)

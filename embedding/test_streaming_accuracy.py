@@ -284,14 +284,22 @@ assert len(os.listdir(model_dir)) == 1, "multiple models?"
 print(model_name)
 model_path = model_dir / model_name
 print(model_path)
+# wav_path = base_dir / "stream.wav"
+wav_path = base_dir / "per_word" / "iaith2" / "streaming_test.wav"
+# ground_truth_path = base_dir / "labels.txt"
+ground_truth_path = base_dir / "per_word" / "iaith2" / "streaming_labels.txt"
 
-DESTINATION = base_dir / "stream_results.pkl"
-print("SAVING TO", DESTINATION)
+#DESTINATION = base_dir / "stream_results.pkl"
+DESTINATION_RESULTS_PKL = base_dir / "per_word" / "iaith2" / "stream_results.pkl"
+#DESTINATION_INFERENCES = base_dir / "raw_inferences.npy"
+DESTINATION_INFERENCES = base_dir / "per_word" / "iaith2" / "raw_inferences.npy"
+print("SAVING results TO\n", DESTINATION_RESULTS_PKL)
+print("SAVING inferences TO\n", DESTINATION_RESULTS_PKL)
 
 #%%
 
-assert not os.path.isfile(DESTINATION), "results already present"
-assert not os.path.isfile(base_dir / "raw_inferences.npy"), "inferences already present"
+assert not os.path.isfile(DESTINATION_RESULTS_PKL), "results already present"
+assert not os.path.isfile(DESTINATION_INFERENCES), "inferences already present"
 
 tf.get_logger().setLevel(logging.ERROR)
 model = tf.keras.models.load_model(model_path)
@@ -302,31 +310,32 @@ tf.get_logger().setLevel(logging.INFO)
 # t_steps = int(np.ceil((t_max - t_min) / 0.05)) + 1
 # threshs = np.linspace(t_min, t_max, t_steps).tolist()
 flags = FlagTest(
-    wav=str(base_dir / "stream.wav"),
-    ground_truth=str(base_dir / "labels.txt"),
+    wav=str(wav_path),
+    ground_truth=str(ground_truth_path),
     target_keyword=target,
     # detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
     #detection_thresholds=threshs,  # step threshold 0.05
-    detection_thresholds=[0.65],  # step threshold 0.05
+    detection_thresholds=[0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.65, 0.7, 0.75, 0.8],  # step threshold 0.05
 )
 results = {}
 results[target], inferences = calculate_streaming_accuracy(model, model_settings, flags)
 
-with open(DESTINATION, "wb") as fh:
+with open(DESTINATION_RESULTS_PKL, "wb") as fh:
     pickle.dump(results, fh)
-np.save(base_dir / "raw_inferences.npy", inferences)
+np.save(DESTINATION_INFERENCES, inferences)
 
 #%%
 # reuse existing saved inferences
-existing_inferences = np.load(base_dir / "raw_inferences.npy")
+# existing_inferences = np.load(base_dir / "raw_inferences.npy")
+existing_inferences = np.load(DESTINATION_INFERENCES)
 
 flags = FlagTest(
-    wav=str(base_dir / "stream.wav"),
-    ground_truth=str(base_dir / "labels.txt"),
+    wav=str(wav_path),
+    ground_truth=str(ground_truth_path),
     target_keyword=target,
     # detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
     #detection_thresholds=threshs,  # step threshold 0.05
-    detection_thresholds=[0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.65, 0.7, 0.75],  # step threshold 0.05
+    detection_thresholds=[0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95],  # step threshold 0.05
 )
 results = {}
 results[target], _ = calculate_streaming_accuracy(model, model_settings, flags, existing_inferences=existing_inferences)
@@ -334,9 +343,9 @@ print(len(results[target].keys()))
 
 
 #%%
-assert not os.path.isfile(DESTINATION), "results already present"
-print("saving to", DESTINATION)
-with open(DESTINATION, "wb") as fh:
+assert not os.path.isfile(DESTINATION_RESULTS_PKL), "results already present"
+print("saving to", DESTINATION_RESULTS_PKL)
+with open(DESTINATION_RESULTS_PKL, "wb") as fh:
     pickle.dump(results, fh)
 
 #%%
@@ -538,16 +547,17 @@ def viz_stream_timeline(
 #res = sse + "old_merchant_5_shot/stream_results.pkl"
 target = "iaith"
 res = sse / target / "stream_results.pkl"
+# res = sse / target / "per_word" / "iaith2" / "stream_results.pkl"
 with open(res, "rb") as fh:
     results = pickle.load(fh)
 for ix, thresh in enumerate(results[target].keys()):
     print(ix, thresh)
 
-thresh_ix = 4
+thresh_ix = 6
 thresh, (stats, all_found_words, all_found_w_confidences) = list(results[target].items())[thresh_ix]
 print("THRESH", thresh)
 fig, ax = viz_stream_timeline(
-    stats._gt_occurrence, all_found_words, target, thresh, num_nontarget_words=2328
+    stats._gt_occurrence, all_found_words, target, thresh, num_nontarget_words=None
 )
 
 
