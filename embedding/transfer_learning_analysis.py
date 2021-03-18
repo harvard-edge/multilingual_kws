@@ -843,7 +843,9 @@ print(n_utterances, len(os.listdir(data_dir)))
 traindir = Path(f"/home/mark/tinyspeech_harvard/multilang_embedding")
 
 # SELECT MODEL
-base_model_path = traindir / "models" / "multilang_resume40_resume05_resume20.022-0.7969"
+base_model_path = (
+    traindir / "models" / "multilang_resume40_resume05_resume20.022-0.7969"
+)
 
 model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe/")
 if not os.path.isdir(model_dest_dir):
@@ -874,9 +876,17 @@ N_UNKNOWN_WORDS = 300
 N_UNKNOWN_UTTERANCES_PER_WORD = 10
 N_ORIGINAL_EMBEDDING_AS_UNKNOWN = 200
 
+unknown_collection_path = model_dest_dir / "unknown_collection.pkl"
+if os.path.isfile(unknown_collection_path):
+    raise ValueError("already exists", unknown_collection_path)
+
 frequent_words = Path("/home/mark/tinyspeech_harvard/frequent_words/")
 language_isocodes = os.listdir(frequent_words)
-lang_isocodes_for_unknown_words = [li for li in language_isocodes if li in ["fa", "de", "ca", "it", "en", "fr", "es", "nl", "rw"]]
+lang_isocodes_for_unknown_words = [
+    li
+    for li in language_isocodes
+    if li in ["fa", "de", "ca", "it", "en", "fr", "es", "nl", "rw"]
+]
 
 lang2words = {}
 for lang in lang_isocodes_for_unknown_words:
@@ -945,9 +955,29 @@ for lang in language_isocodes:
         oov_lang_words.append((lang, word))
 print("oov lang words", len(oov_lang_words))
 
+unknown_collection = dict(
+    unknown_lang_words=unknown_lang_words,
+    unknown_files=unknown_files,
+    oov_lang_words=oov_lang_words,
+    commands=commands,
+    lang_isocodes_for_unknown_words=lang_isocodes_for_unknown_words,
+)
+assert not os.path.isfile(unknown_collection_path)
+with open(unknown_collection_path, "wb") as fh:
+    pickle.dump(unknown_collection, fh)
+
+#%%
+
+unknown_collection_path = model_dest_dir / "unknown_collection.pkl"
+with open(unknown_collection_path, "rb") as fh:
+    unknown_collection = pickle.load(fh)
+unknown_lang_words = unknown_collection["unknown_lang_words"]
+unknown_files = unknown_collection["unknown_files"]
+oov_lang_words = unknown_collection["oov_lang_words"]
 
 #%%
 # select unknown/oov/command words for model evaluation (not finetuning)
+
 
 def generate_random_non_target_files(
     target_word,
@@ -1016,7 +1046,7 @@ def results_exist(target, results_dir):
     return False
 
 
-for ix in range(20):
+for ix in range(1):
     print(f"::::::::::::::::::::::::::::::{ix}:::::::::::::::::::::::::::::::")
 
     has_results = True
@@ -1024,7 +1054,7 @@ for ix in range(20):
     while has_results:
         rand_ix = np.random.randint(len(oov_lang_words))
         target_lang, target_word = oov_lang_words[rand_ix]
-        if target_lang not in ["cs", "cy", "eu"]: # generate for a specific language
+        if target_lang not in ["cs", "cy", "eu"]:  # generate for a specific language
             continue
         has_results = results_exist(target_word, results_dir)
     print("TARGET:", target_lang, target_word)
@@ -1106,12 +1136,14 @@ for ix in range(20):
 
 #%%
 
-model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis/")
+# model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis/")
+model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe/")
 if not os.path.isdir(model_dest_dir):
     raise ValueError("no model dir", model_dest_dir)
 results_dir = model_dest_dir / "results"
 if not os.path.isdir(results_dir):
     raise ValueError("no results dir", results_dir)
+
 
 def sc_roc_plotly(results: List[Dict]):
     fig = go.Figure()
@@ -1128,9 +1160,7 @@ def sc_roc_plotly(results: List[Dict]):
         fig.add_trace(go.Scatter(x=fprs, y=tprs, text=thresh_labels, name=curve_label))
 
     fig.update_layout(
-        xaxis_title="FPR",
-        yaxis_title="TPR",
-        title=f"5-shot classification accuracy",
+        xaxis_title="FPR", yaxis_title="TPR", title=f"5-shot classification accuracy",
     )
     fig.update_xaxes(range=[0, 1])
     fig.update_yaxes(range=[0, 1])
@@ -1150,7 +1180,6 @@ dest_plot = str(model_dest_dir / f"5shot_classification_roc.html")
 print("saving to", dest_plot)
 fig.write_html(dest_plot)
 fig
-
 
 
 # %%

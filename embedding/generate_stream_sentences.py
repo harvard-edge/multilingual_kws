@@ -20,53 +20,68 @@ from pathlib import Path
 import word_extraction
 
 
-
 #%%
 
+target_lang = "cy"
 counts = word_extraction.wordcounts(
-    "/home/mark/tinyspeech_harvard/common-voice-forced-alignments/en/validated.csv"
+    f"/home/mark/tinyspeech_harvard/common-voice-forced-alignments/{target_lang}/validated.csv"
 )
 #%%
+target = "iaith"  # 243
+
 common = counts.most_common(600)
-print(common[455])
-# for ix, (w, _) in enumerate(common):
-#     if w == "merchant":
-#         print(ix)
+# print(common[455])
+for ix, (w, c) in enumerate(common):
+    if w == target:
+        print(target, ix, c)
 # saint (415)
 # dream (425): 2364
 # merchant (455): 2204
 
 
-
 # %%
 
-target = "merchant"
-
-# %%
-
-mp3_to_textgrid = word_extraction.generate_filemap()
+mp3_to_textgrid = word_extraction.generate_filemap(lang_isocode=target_lang)
 print(len(mp3_to_textgrid.keys()))
-timings, notfound = word_extraction.generate_wordtimings({target}, mp3_to_textgrid)
-print(len(notfound))
-print(len(timings[target]))
-print(timings[target][0])
+timings_w_dups, notfound = word_extraction.generate_wordtimings(
+    {target}, mp3_to_textgrid, lang_isocode=target_lang
+)
+print("notfound", len(notfound))
+print("num timings", len(timings_w_dups[target]))
+print(timings_w_dups[target][0])
 
 # %%
 # how many mp3s have two or more utterances of the target
-mp3s = [t[0] for t in timings[target]]
+mp3s = [t[0] for t in timings_w_dups[target]]
 n_samples = len(mp3s)
 n_mp3s = len(set(mp3s))
-print(n_samples, n_mp3s, n_samples - n_mp3s)
+print(n_samples, n_mp3s, "2 or more utterances of the target:", n_samples - n_mp3s)
 
-# %%
+# remove duplicates (removes any mp3 that shows up more than once, not just subsequent occurences)
+seen_mp3s = set()
+seen_multiple = set()
+for t in timings_w_dups[target]:
+    mp3_filename = t[0]
+    if mp3_filename in seen_mp3s:
+        seen_multiple.add(mp3_filename)
+    seen_mp3s.add(mp3_filename)
+
+timings = {target: []}
+for t in timings_w_dups[target]:
+    mp3_filename = t[0]
+    if mp3_filename in seen_multiple:
+        continue
+    timings[target].append(t)
+
+print("after removing duplicates", len(timings[target]), ", dropped mp3s:", n_mp3s - len(timings[target]))
 
 # %%
 #####################################################
 ##    select examples to string into a long wav
 ####################################################
-NUM_SAMPLES_FOR_STREAMING_WAV = 250
-NUM_SHOTS = 25
-NUM_VAL = 100
+NUM_SAMPLES_FOR_STREAMING_WAV = 100
+NUM_SHOTS = 5
+NUM_VAL = 30
 # https://stackoverflow.com/questions/23445936/numpy-random-choice-of-tuples
 ix_samples = np.random.choice(
     len(timings[target]),
@@ -81,9 +96,32 @@ assert (
 
 shots = samples[:NUM_SHOTS]
 val = samples[NUM_SHOTS : NUM_SHOTS + NUM_VAL]
-stream = samples[NUM_SHOTS + NUM_VAL :]
-print(len(shots), len(val), len(stream))
+target_stream = samples[NUM_SHOTS + NUM_VAL :]
+print(len(shots), len(val), len(target_stream))
 
+# select non-target sentences to intersperse
+non_targets = word_extraction.random_non_target_sentences(
+    num_sentences=len(target_stream),
+    words_to_exclude={target},
+    lang_isocode=target_lang,
+)
+
+wav_data = []
+for (target_sample, non_target_sample) in zip(target_stream, non_targets):
+    target_data = dict(
+        is_target=True,
+        mp3name_no_ext=target_sample[0],
+        start_s=target_sample[1],
+        end_s=target_sample[2],
+    )
+    non_target_data = dict(is_target=False, mp3name_no_ext=non_target_sample)
+    wav_data.append(target_data)
+    wav_data.append(non_target_data)
+
+assert len(wav_data) == len(target_stream) * 2, "missing a pair for the targets"
+
+# %%
+# write out data
 base_dir = pathlib.Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments")
 dest_dir = base_dir / target
 shot_targets = dest_dir / "n_shots"
@@ -97,22 +135,47 @@ os.makedirs(shot_targets, exist_ok=False)
 os.makedirs(val_targets, exist_ok=False)
 os.makedirs(wav_intermediates, exist_ok=False)
 with open(streaming_test_data, "wb") as fh:
-    pickle.dump((mp3_to_textgrid, timings, shots, val, stream), fh)
-
+    stream_data = dict(
+        target_word=target,
+        target_lang=target_lang,
+        mp3_to_textgrid=mp3_to_textgrid,
+        timings=timings,
+        shots=shots,
+        val=val,
+        target_stream=target_stream,
+        non_targets=non_targets,
+        wav_data=wav_data,
+    )
+    pickle.dump(stream_data, fh)
 
 
 # %%
 # GENERATE SHOTS
+
+# fmt: off
+cv_clipsdir = Path("/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/") / target_lang / "clips"
+# fmt: on
+
+print("generating shots")
 for mp3name_no_ext, start_s, end_s in shots:
     print(mp3name_no_ext, start_s, end_s)
     word_extraction.extract_shot_from_mp3(
-        mp3name_no_ext, float(start_s), float(end_s), dest_dir=shot_targets
+        mp3name_no_ext,
+        float(start_s),
+        float(end_s),
+        dest_dir=shot_targets,
+        cv_clipsdir=cv_clipsdir,
     )
-# GENERATE VAL
+
+print("generating val")
 for mp3name_no_ext, start_s, end_s in val:
     print(mp3name_no_ext, start_s, end_s)
     word_extraction.extract_shot_from_mp3(
-        mp3name_no_ext, float(start_s), float(end_s), dest_dir=val_targets
+        mp3name_no_ext,
+        float(start_s),
+        float(end_s),
+        dest_dir=val_targets,
+        cv_clipsdir=cv_clipsdir,
     )
 
 # %%
@@ -128,6 +191,7 @@ audiofiles = glob.glob(str(shot_targets / "*.wav"))
 for ix, f in enumerate(audiofiles):
     print(ix, f)
 
+print("listening:")
 for ix, f in enumerate(audiofiles):
     print(ix, f)
     play(pydub.AudioSegment.from_wav(f))
@@ -144,14 +208,18 @@ for ix, f in enumerate(audiofiles):
 # food for thought: sox mp3s may have a gap when concatenating
 # https://stackoverflow.com/questions/25280958/sox-concatenate-multiple-audio-files-without-a-gap-in-between
 
-cv_clipsdir = pathlib.Path(
-    "/home/mark/tinyspeech_harvard/common_voice/cv-corpus-6.1-2020-12-11/en/clips"
-)
+# fmt: off
+#cv_clipsdir = Path("/home/mark/tinyspeech_harvard/common_voice/cv-corpus-6.1-2020-12-11/en/clips")
+cv_clipsdir = Path("/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/") / target_lang / "clips"
+# fmt: on
+
 assert os.path.isdir(wav_intermediates), "no destination dir available"
 
 wavs = []
 total_duration_mp3s_s = 0
-for ix, (mp3name_no_ext, start_s, end_s) in enumerate(stream):
+for ix, stream_component in enumerate(wav_data):
+    mp3name_no_ext = stream_component["mp3name_no_ext"]
+
     if ix % 250 == 0:
         print(ix)
     mp3path = cv_clipsdir / (mp3name_no_ext + ".mp3")
@@ -176,7 +244,13 @@ total_duration_wavs_s = 0
 for w in wavs:
     duration_s = sox.file_info.duration(w)
     total_duration_wavs_s += duration_s
-print(total_duration_wavs_s, "sec = ", total_duration_wavs_s / 60, "min")
+print(
+    "individual wavs:",
+    total_duration_wavs_s,
+    "sec = ",
+    total_duration_wavs_s / 60,
+    "min",
+)
 
 # step 3: combine the wavs. godspeed.
 combiner = sox.Combiner()
@@ -186,15 +260,22 @@ combiner.build(wavs, str(dest_dir / "stream.wav"), "concatenate")
 
 # step 4: how long is the total wavfile? should be the sum of the individual wavs
 duration_s = sox.file_info.duration(dest_dir / "stream.wav")
-print(duration_s, "sec = ", duration_s / 60, "min")
+print("concatenated wav:", duration_s, "sec = ", duration_s / 60, "min")
 
 # step 5: generate labels using the wav file durations, not the sloppy mp3 file durations
 
 target_times_s = []
 current_sentence_start_s = 0
-for ix, (mp3name_no_ext, start_s, end_s) in enumerate(stream):
+for ix, stream_component in enumerate(wav_data):
+    mp3name_no_ext = stream_component["mp3name_no_ext"]
     wavpath = dest_dir / "wavs" / (mp3name_no_ext + ".wav")
     sentence_duration_s = sox.file_info.duration(wavpath)
+    if not stream_component["is_target"]:
+        # add full duration of non-target sentence to current offset
+        current_sentence_start_s += sentence_duration_s
+        continue
+    start_s = stream_component["start_s"]
+    end_s = stream_component["end_s"]
     target_utterance_start_s = current_sentence_start_s + float(start_s)
     target_utterance_end_s = current_sentence_start_s + float(end_s)
     target_times_s.append((target_utterance_start_s, target_utterance_end_s))
@@ -231,10 +312,10 @@ play(pydub.AudioSegment(data=utterance, sample_width=2, frame_rate=sr, channels=
 # Count the number of words in the stream.wav file to estimate word rate FPR
 # NOTE: skip the target words or else the FPR will be inaccurate!
 sse = pathlib.Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments/")
-stream_data = sse / "old_merchant_5_shot" / "streaming_test_data.pkl"
- 
-with open(stream_data, 'rb') as fh:
-    mp3_to_textgrid, timings, shots, val, stream = pickle.load(fh)
+stream_data_pkl = sse / "iaith" / "streaming_test_data.pkl"
+
+with open(stream_data_pkl, "rb") as fh:
+    stream_data = pickle.load(fh)
 
 #%%
 def count_number_of_non_target_words_in_stream(
@@ -244,6 +325,7 @@ def count_number_of_non_target_words_in_stream(
     alignment_basedir="/home/mark/tinyspeech_harvard/common-voice-forced-alignments/",
 ):
     word_count_without_targets = 0
+    target_word_counts = 0
     # common voice csv from DeepSpeech/import_cv2.py
     csvpath = pathlib.Path(alignment_basedir) / lang_isocode / "validated.csv"
     with open(csvpath, "r") as fh:
@@ -258,39 +340,57 @@ def count_number_of_non_target_words_in_stream(
             if mp3name_no_extension not in mp3_files_noext_used_in_stream:
                 continue
             words = row[2].split()
-            if target_word not in words:
-                raise ValueError("one of the sentences doesnt contain the target")
-            # - 1 skips counting the target word:
-            word_count_without_targets += len(words) - 1
-    return word_count_without_targets
+            for word in words:
+                if word == target_word:
+                    # print(words, mp3name_no_extension)
+                    target_word_counts += 1
+                else:
+                    word_count_without_targets += 1
+    return word_count_without_targets, target_word_counts
 
-files_no_ext = set([s[0] for s in stream])
-wcwt = count_number_of_non_target_words_in_stream("merchant", files_no_ext)
-print("# NON-TARGET WORDS IN STREAM:", wcwt)
+
+files_no_ext = set([d["mp3name_no_ext"] for d in stream_data["wav_data"]])
+target_word = stream_data["target_word"]
+target_lang = stream_data["target_lang"]
+wcwt = count_number_of_non_target_words_in_stream(
+    target_word, files_no_ext, lang_isocode=target_lang
+)
+print("# WORDS IN STREAM:", wcwt)
+
+#%%
 
 
 #%%
 ######## GENERATE FULL TRANSCRIPTION FOR VIDEO ###
 
 sse = Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments/")
-stream_data = sse / "old_merchant_5_shot" / "streaming_test_data.pkl"
- 
-with open(stream_data, 'rb') as fh:
-    mp3_to_textgrid, timings, shots, val, stream = pickle.load(fh)
+stream_data_pkl = sse / target / "streaming_test_data.pkl"
+
+destination_pkl = sse / target / "full_transcription.pkl"
+assert not os.path.isfile(destination_pkl), f"{destination_pkl} already exists"
+
+with open(stream_data_pkl, "rb") as fh:
+    stream_data = pickle.load(fh)
 
 full_transcription = []
 prev_wav_start = 0
-for mp3_noext, _, _ in stream:
-    tg_path = mp3_to_textgrid[mp3_noext]
+for stream_component in stream_data["wav_data"]:
+    mp3name_no_ext = stream_component["mp3name_no_ext"]
+    tg_path = mp3_to_textgrid[mp3name_no_ext]
     transcription = word_extraction.full_transcription_timings(tg_path)
     # add offset for previous wavs
-    transcription = [(w, start + prev_wav_start, end + prev_wav_start) for (w,start,end) in transcription]
+    transcription = [
+        (w, start + prev_wav_start, end + prev_wav_start)
+        for (w, start, end) in transcription
+    ]
     full_transcription.extend(transcription)
 
     # "wavs" might now be "intermediate_wavs"
-    wav = sse / "old_merchant_5_shot" / "wavs" / (mp3_noext + ".wav")
+    wav = sse / target / "wavs" / (mp3name_no_ext + ".wav")
     duration_s = sox.file_info.duration(wav)
     prev_wav_start += duration_s
 
-with open( sse / "old_merchant_5_shot" / "full_transcription.pkl", 'wb') as fh:
+with open(destination_pkl, "wb") as fh:
     pickle.dump(full_transcription, fh)
+
+# %%

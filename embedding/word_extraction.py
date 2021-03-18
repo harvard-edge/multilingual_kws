@@ -53,6 +53,7 @@ def generate_filemap(
             filemap[mp3name] = os.path.join(root, textgrid)
     return filemap
 
+
 def _extract_timings(words_to_search_for, mp3_to_textgrid, timings, notfound, row):
     # find words in common_words set from each row of csv
     mp3name_no_extension = os.path.splitext(row[0])[0]
@@ -78,6 +79,7 @@ def _extract_timings(words_to_search_for, mp3_to_textgrid, timings, notfound, ro
             end_s = interval.maxTime
             timings[word].append((mp3name_no_extension, start_s, end_s))
 
+
 def generate_wordtimings(
     words_to_search_for: Set[str],
     mp3_to_textgrid,
@@ -91,9 +93,9 @@ def generate_wordtimings(
     with open(csvpath, "r") as fh:
         csvdata = fh.read()
     reader = csv.reader(csvdata.splitlines())
-    next(reader) # skip header
+    next(reader)  # skip header
 
-    #https://stackoverflow.com/a/6832693
+    # https://stackoverflow.com/a/6832693
     with multiprocessing.Manager() as manager:
         # timings -> word: pseudo-dataframe of [(mp3_filename, start_time_s, end_time_s)]
         timings = manager.dict()
@@ -101,10 +103,14 @@ def generate_wordtimings(
         for w in words_to_search_for:
             timings[w] = manager.list()
 
-        worker = functools.partial(_extract_timings, words_to_search_for, mp3_to_textgrid, timings, notfound)
+        worker = functools.partial(
+            _extract_timings, words_to_search_for, mp3_to_textgrid, timings, notfound
+        )
 
         pool = multiprocessing.Pool()
-        for ix, result in enumerate(pool.imap_unordered(worker, reader, chunksize=4000)):
+        for ix, result in enumerate(
+            pool.imap_unordered(worker, reader, chunksize=4000)
+        ):
             if ix % 80_000 == 0:
                 print(ix)
         pool.close()
@@ -112,10 +118,47 @@ def generate_wordtimings(
 
         # TODO(mmaz) I'm iffy about this copying...
         result_timings = {}
-        for k,v in timings.items():
+        for k, v in timings.items():
             result_timings[k] = list(v)
         result_notfound = list(notfound)
         return result_timings, result_notfound
+
+
+def random_non_target_sentences(
+    num_sentences,
+    words_to_exclude: Set[str],
+    lang_isocode="en",
+    alignment_basedir="/home/mark/tinyspeech_harvard/common-voice-forced-alignments/",
+):
+    """ returns a list of mp3names (no extension) """
+    # common voice csv from DeepSpeech/import_cv2.py
+    csvpath = pathlib.Path(alignment_basedir) / lang_isocode / "validated.csv"
+    # load csv in-memory https://stackoverflow.com/a/17767445
+    with open(csvpath, "r") as fh:
+        csvdata = fh.read()
+    lines = csvdata.splitlines()
+    if len(lines) - 1 < num_sentences: # skip header
+        raise ValueError("not enough data in csv")
+    rand_indices = set(np.random.choice(range(len(lines) - 1), num_sentences, replace=False))
+    reader = csv.reader(lines)
+    next(reader)  # skip header
+    selected = []
+    for ix, row in enumerate(reader):
+        if ix not in rand_indices:
+            continue
+        mp3name_no_extension = os.path.splitext(row[0])[0]
+        words = row[2].split()
+        usable = True
+        for word in words:
+            if word in words_to_exclude:
+                usable=False
+                break
+        if not usable:
+            rand_indices.add(ix + 1) # try next row
+            continue
+        selected.append(mp3name_no_extension)
+    return selected
+
 
 
 def full_transcription_timings(textgrid_path):
@@ -127,6 +170,7 @@ def full_transcription_timings(textgrid_path):
     for interval in tg[0]:
         word_timings.append((interval.mark, interval.minTime, interval.maxTime))
     return word_timings
+
 
 def extract_one_second(duration_s: float, start_s: float, end_s: float):
     """

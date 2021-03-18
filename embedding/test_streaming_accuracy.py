@@ -61,7 +61,7 @@ class FlagTest:
         ]
 
 
-def calculate_streaming_accuracy(model, model_settings, FLAGS):
+def calculate_streaming_accuracy(model, model_settings, FLAGS, existing_inferences=None):
     wav_loader = tf.io.read_file(FLAGS.wav)
     (audio, sample_rate) = tf.audio.decode_wav(wav_loader, desired_channels=1)
     sample_rate = sample_rate.numpy()
@@ -77,29 +77,32 @@ def calculate_streaming_accuracy(model, model_settings, FLAGS):
     # leave space for one full clip at end
     audio_data_end = data_samples - clip_duration_samples
 
-    # num spectrograms: in the range expression below, if there is a remainder
-    # in audio_data_end/clip_stride_samples, we need one additional slot
-    # for a spectrogram
-    spectrograms = np.zeros(
-        (
-            int(np.ceil(audio_data_end / clip_stride_samples)),
-            model_settings["spectrogram_length"],
-            model_settings["fingerprint_width"],
+    if existing_inferences is not None:
+        inferences = existing_inferences
+    else:
+        # num spectrograms: in the range expression below, if there is a remainder
+        # in audio_data_end/clip_stride_samples, we need one additional slot
+        # for a spectrogram
+        spectrograms = np.zeros(
+            (
+                int(np.ceil(audio_data_end / clip_stride_samples)),
+                model_settings["spectrogram_length"],
+                model_settings["fingerprint_width"],
+            )
         )
-    )
-    print("building spectrograms")
-    # Inference along audio stream.
-    for ix, audio_data_offset in enumerate(
-        range(0, audio_data_end, clip_stride_samples)
-    ):
-        input_start = audio_data_offset
-        input_end = audio_data_offset + clip_duration_samples
-        spectrograms[ix] = input_data.to_micro_spectrogram(
-            model_settings, audio[input_start:input_end]
-        )
+        print("building spectrograms")
+        # Inference along audio stream.
+        for ix, audio_data_offset in enumerate(
+            range(0, audio_data_end, clip_stride_samples)
+        ):
+            input_start = audio_data_offset
+            input_end = audio_data_offset + clip_duration_samples
+            spectrograms[ix] = input_data.to_micro_spectrogram(
+                model_settings, audio[input_start:input_end]
+            )
 
-    inferences = model.predict(spectrograms[:, :, :, np.newaxis])
-    print("inferences complete")
+        inferences = model.predict(spectrograms[:, :, :, np.newaxis])
+        print("inferences complete")
 
     results = {}
     for threshold in FLAGS.detection_thresholds:
@@ -270,12 +273,14 @@ model_settings = input_data.standard_microspeech_model_settings(label_count=3)
 #    full sentence streaming test
 ############################################################################
 
-target = "rebecca"
+target = "iaith"
 
 sse = pathlib.Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments/")
+#sse = pathlib.Path("/home/mark/tinyspeech_harvard/multilingual_streaming_sentence_experiments/")
 base_dir = sse / target
 model_dir = sse / target / "model"
 model_name = os.listdir(model_dir)[0]
+assert len(os.listdir(model_dir)) == 1, "multiple models?"
 print(model_name)
 model_path = model_dir / model_name
 print(model_path)
@@ -284,6 +289,10 @@ DESTINATION = base_dir / "stream_results.pkl"
 print("SAVING TO", DESTINATION)
 
 #%%
+
+assert not os.path.isfile(DESTINATION), "results already present"
+assert not os.path.isfile(base_dir / "raw_inferences.npy"), "inferences already present"
+
 tf.get_logger().setLevel(logging.ERROR)
 model = tf.keras.models.load_model(model_path)
 tf.get_logger().setLevel(logging.INFO)
@@ -306,6 +315,29 @@ results[target], inferences = calculate_streaming_accuracy(model, model_settings
 with open(DESTINATION, "wb") as fh:
     pickle.dump(results, fh)
 np.save(base_dir / "raw_inferences.npy", inferences)
+
+#%%
+# reuse existing saved inferences
+existing_inferences = np.load(base_dir / "raw_inferences.npy")
+
+flags = FlagTest(
+    wav=str(base_dir / "stream.wav"),
+    ground_truth=str(base_dir / "labels.txt"),
+    target_keyword=target,
+    # detection_thresholds=np.linspace(0, 1, 21).tolist(),  # step threshold 0.05
+    #detection_thresholds=threshs,  # step threshold 0.05
+    detection_thresholds=[0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.65, 0.7, 0.75],  # step threshold 0.05
+)
+results = {}
+results[target], _ = calculate_streaming_accuracy(model, model_settings, flags, existing_inferences=existing_inferences)
+print(len(results[target].keys()))
+
+
+#%%
+assert not os.path.isfile(DESTINATION), "results already present"
+print("saving to", DESTINATION)
+with open(DESTINATION, "wb") as fh:
+    pickle.dump(results, fh)
 
 #%%
 found_words_w_confidences = results[target][0.65][2]
@@ -499,16 +531,20 @@ def viz_stream_timeline(
 
 
 #%%
-sse = "/home/mark/tinyspeech_harvard/streaming_sentence_experiments/"
-res = sse + "old_merchant_5_shot/stream_results.pkl"
-target = "merchant"
+
+#%%
+
+#sse = "/home/mark/tinyspeech_harvard/streaming_sentence_experiments/"
+#res = sse + "old_merchant_5_shot/stream_results.pkl"
+target = "iaith"
+res = sse / target / "stream_results.pkl"
 with open(res, "rb") as fh:
     results = pickle.load(fh)
 for ix, thresh in enumerate(results[target].keys()):
     print(ix, thresh)
 
-thresh_ix = 13
-thresh, (stats, all_found_words) = list(results[target].items())[thresh_ix]
+thresh_ix = 4
+thresh, (stats, all_found_words, all_found_w_confidences) = list(results[target].items())[thresh_ix]
 print("THRESH", thresh)
 fig, ax = viz_stream_timeline(
     stats._gt_occurrence, all_found_words, target, thresh, num_nontarget_words=2328

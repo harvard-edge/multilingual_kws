@@ -170,9 +170,10 @@ ax.set_ylim(-0.01, 1)
 # %%
 # %%
 
+## Per-Language Embedding Model 
 fig, ax = plt.subplots()
-# for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
-for ix, LANG_ISOCODE in enumerate(["nl"]):
+for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
+# for ix, LANG_ISOCODE in enumerate(["nl"]):
     color = sns.color_palette("bright")[ix % len(sns.color_palette("bright"))]
 
     data_dir = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips/")
@@ -202,8 +203,8 @@ for ix, LANG_ISOCODE in enumerate(["nl"]):
         tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
         all_tprs.append(tprs)
         all_fprs.append(fprs)
-        #ax.plot(fprs, tprs, color=color, alpha=0.1)
-        ax.plot(fprs, tprs, label=curve_label)
+        ax.plot(fprs, tprs, color=color, alpha=0.1)
+        # ax.plot(fprs, tprs, label=curve_label)
     all_tprs = np.array(all_tprs)
     all_fprs = np.array(all_fprs)
 
@@ -223,11 +224,15 @@ for ix, LANG_ISOCODE in enumerate(["nl"]):
     ymin = y_all.min(axis=1)
     ymax = y_all.max(axis=1)
     ax.fill_between(x_all, ymin, ymax, alpha=0.2, label=f"{LANG_ISOCODE}")
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
+    ax.set_xlim(0, 0.4)
+    ax.set_ylim(0.6, 1)
     ax.legend(loc="lower right")
-    ax.set_xlabel("false positive rate")
-    ax.set_ylabel("true positive rate")
+    ax.set_xlabel("False positive rate")
+    ax.set_ylabel("True positive rate")
+    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_legend().get_texts() +
+                ax.get_xticklabels() + ax.get_yticklabels()):
+        item.set_fontsize(20)
+    
     fig.set_size_inches(14,14)
 
 # %%
@@ -288,14 +293,16 @@ for ix, LANG_ISOCODE in enumerate(["nl"]):
 # %%
 
 # multilang embedding model results
-
 results = []
-for pkl_file in os.listdir(model_dest_dir / "results"):
-    filename = model_dest_dir / "results" / pkl_file
-    print(filename)
-    with open(filename, "rb") as fh:
-        result = pickle.load(fh)
-        results.append(result)
+emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis")
+non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe")
+for model_dest_dir in [emb_langs, non_emb_langs]:
+    for pkl_file in os.listdir(model_dest_dir / "results"):
+        filename = model_dest_dir / "results" / pkl_file
+        print(filename)
+        with open(filename, "rb") as fh:
+            result = pickle.load(fh)
+            results.append(result)
 print("N words", len(results))
 
 lang2results = {}
@@ -344,12 +351,15 @@ for ix, (lang, results) in enumerate(lang2results.items()):
     ymin = y_all.min(axis=1)
     ymax = y_all.max(axis=1)
     ax.fill_between(x_all, ymin, ymax, alpha=0.2, label=f"{lang}")
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    # ax.set_xlim(0, 0.1)
-    # ax.set_ylim(0.8, 1)
+    # ax.set_xlim(0, 1)
+    # ax.set_ylim(0, 1)
+    ax.set_xlim(0, 0.4)
+    ax.set_ylim(0.6, 1)
     ax.legend(loc="lower right")
-    ax.set_xlabel("false positive rate")
-    ax.set_ylabel("true positive rate")
+    ax.set_xlabel("False positive rate")
+    ax.set_ylabel("True positive rate")
+    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_legend().get_texts() +
+                ax.get_xticklabels() + ax.get_yticklabels()):
+        item.set_fontsize(20)
     fig.set_size_inches(14,14)
 # %%

@@ -2,6 +2,7 @@
 import datetime
 import cv2 as cv
 import numpy as np
+import os
 import matplotlib.pyplot as plt
 from pathlib import Path
 import pickle
@@ -194,16 +195,23 @@ fig.set_size_inches(20, 20)
 
 #%%
 
-video_dir = Path("/home/mark/tinyspeech_harvard/merchant_video/")
-frames_dir = video_dir / "frames"
+#fmt: off
+#video_dir = Path("/home/mark/tinyspeech_harvard/merchant_video/")
+#transcription_file = "/home/mark/tinyspeech_harvard/merchant_video/full_transcription.pkl"
+#wav_file = "/home/mark/tinyspeech_harvard/merchant_video/stream.wav"
+#video_dir = Path("/home/mark/tinyspeech_harvard/multilingual_streaming_sentence_experiments/merchant/")
+target_word = "iaith"
+video_dir = Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments/") / target_word
+transcription_file = video_dir / "full_transcription.pkl"
+wav_file = video_dir / "stream.wav"
+#fmt: on
 
-transcription_file = (
-    "/home/mark/tinyspeech_harvard/merchant_video/full_transcription.pkl"
-)
+frames_dir = video_dir / "frames"
+assert os.path.isdir(frames_dir), "no frames dir"
+
 with open(transcription_file, "rb") as fh:
     transcription = pickle.load(fh)
 
-wav_file = "/home/mark/tinyspeech_harvard/merchant_video/stream.wav"
 wav_duration = sox.file_info.duration(wav_file)
 
 transcription[0], wav_duration
@@ -213,8 +221,8 @@ with open(video_dir / "stream_results.pkl", "rb") as fh:
 
 
 # thresh_ix = 13  # 8, 13
-thresh_ix = 0
-threshold, (_, _, all_found_words_w_scores) = list(results["merchant"].items())[
+thresh_ix = 4
+threshold, (_, _, all_found_words_w_scores) = list(results[target_word].items())[
     thresh_ix
 ]
 print(threshold)
@@ -271,7 +279,7 @@ print(num_frames)
 last_time = datetime.datetime.now()
 
 found_times_s_scores = [
-    (w[1] / 1000, w[2]) for w in all_found_words_w_scores if w[0] == "merchant"
+    (w[1] / 1000, w[2]) for w in all_found_words_w_scores if w[0] == target_word
 ]
 
 last_ix_transcriptions = 0
