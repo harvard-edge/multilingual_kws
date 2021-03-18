@@ -137,7 +137,7 @@ def random_sample_transfer_models(
         )
 
 
-def evaluate_fast(
+def evaluate_fast_multiclass(
     words_to_evaluate: List[str],
     target_id: int,
     data_dir: os.PathLike,
@@ -175,8 +175,29 @@ def evaluate_fast(
         "incorrect": incorrect_confidences,
     }
 
+def evaluate_fast_single_target(
+    words_to_evaluate: List[str],
+    target_id: int,
+    data_dir: os.PathLike,
+    utterances_per_word: int,
+    model: tf.keras.Model,
+    model_settings: Dict,
+):
+    specs = []
+    for word in words_to_evaluate:
+        wavs = glob.glob(data_dir + word + "/*.wav")
+        if len(wavs) > utterances_per_word:
+            fs = np.random.choice(wavs, utterances_per_word, replace=False)
+        else:
+            print("using all wavs for ", word)
+            fs = wavs
+        specs.extend([input_data.file2spec(model_settings, f) for f in fs])
+    specs = np.array(specs)
+    preds = model.predict(np.expand_dims(specs, -1))
+    return preds[:, target_id]
 
-def evaluate_files(
+
+def evaluate_files_multiclass(
     files_to_evaluate: List[os.PathLike],
     target_id: int,
     model: tf.keras.Model,
@@ -201,6 +222,18 @@ def evaluate_files(
             incorrect_confidences.append(confidence)
     return dict(correct=correct_confidences, incorrect=incorrect_confidences)
 
+def evaluate_files_single_target(
+    files_to_evaluate: List[os.PathLike],
+    target_id: int,
+    model: tf.keras.Model,
+    model_settings: Dict,
+):
+    specs = [input_data.file2spec(model_settings, f) for f in files_to_evaluate]
+    specs = np.array(specs)
+    preds = model.predict(np.expand_dims(specs, -1))
+    return preds[:, target_id]
+
+
 
 def evaluate_and_track(
     words_to_evaluate: List[str],
@@ -211,6 +244,7 @@ def evaluate_and_track(
     model_settings: Dict,
 ):
     # TODO(mmaz) rewrite and combine with evaluate_fast
+    raise ValueError("this only works for multiclass, see other evaluation functions")
 
     correct_confidences = []
     incorrect_confidences = []

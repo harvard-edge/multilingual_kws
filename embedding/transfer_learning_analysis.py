@@ -375,6 +375,34 @@ def roc_sc(target_resuts, unknown_results):
         fprs.append(fpr)
     return tprs, fprs, threshs
 
+def roc_single_target(target_results, unknown_results):
+    # _TARGET_ is class 1, _UNKNOWN_ is class 0
+
+    # positive label: target keywords are classified as _TARGET_ if above threshold
+    # false negatives -> target kws incorrectly classified as _UNKNOWN_ if below threshold:
+    # true negatives -> unknown classified as unknown if below threshold
+    # false positives: _UNKNOWN_ keywords incorrectly (falsely) classified as _TARGET_ (positive) if above threshold
+
+    # positives
+
+    total_positives = target_results.shape[0]
+
+    # negatives
+
+    unknown_total = unknown_results.shape[0]
+
+    # TPR = TP / (TP + FN)
+    # FPR = FP / (FP + TN)
+
+    tprs, fprs = [], []
+
+    threshs = np.arange(0, 1.01, 0.01)
+    for threshold in threshs:
+        tpr = target_results[target_results > threshold].shape[0] / total_positives
+        tprs.append(tpr)
+        fpr = unknown_results[unknown_results > threshold].shape[0] / unknown_total
+        fprs.append(fpr)
+    return tprs, fprs, threshs
 
 #%% LOAD DATA
 data_dir = "/home/mark/tinyspeech_harvard/frequent_words/en/clips/"
@@ -847,7 +875,7 @@ base_model_path = (
     traindir / "models" / "multilang_resume40_resume05_resume20.022-0.7969"
 )
 
-model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe/")
+model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2/")
 if not os.path.isdir(model_dest_dir):
     raise ValueError("no model dir", model_dest_dir)
 if not os.path.isdir(model_dest_dir / "models"):
@@ -863,6 +891,7 @@ bg_datadir = f"/home/mark/tinyspeech_harvard/multilang_embedding/_background_noi
 if not os.path.isdir(bg_datadir):
     raise ValueError("no bg data", bg_datadir)
 
+frequent_words = Path("/home/mark/tinyspeech_harvard/frequent_words/")
 #%%
 # find layer name (optional)
 tf.get_logger().setLevel(logging.ERROR)
@@ -880,7 +909,6 @@ unknown_collection_path = model_dest_dir / "unknown_collection.pkl"
 if os.path.isfile(unknown_collection_path):
     raise ValueError("already exists", unknown_collection_path)
 
-frequent_words = Path("/home/mark/tinyspeech_harvard/frequent_words/")
 language_isocodes = os.listdir(frequent_words)
 lang_isocodes_for_unknown_words = [
     li
@@ -1025,6 +1053,74 @@ def generate_random_non_target_files(
             non_target_files.extend(wavs)
     return non_target_files
 
+
+# %%
+# run on existing models
+
+
+for model_file in os.listdir(model_dest_dir / "models"):
+    #raise ValueError("caution - overwrites results")
+
+    target_word = model_file.split("_")[-1]
+    target_lang = None
+    for lang, word in oov_lang_words:
+        if word == target_word:
+            target_lang = lang
+            break
+    print(model_file, "\t target word:", target_word, "\t target lang:", target_lang)
+
+    target_wavs = glob.glob(
+        str(frequent_words / target_lang / "clips" / target_word / "*.wav")
+    )
+    if len(target_wavs) == 0:
+        print(str(frequent_words / target_lang / "clips" / target_word / "*.wav"))
+        raise ValueError("bug in word search due to unicode issues in", target_word)
+
+    # load model
+    model_path = model_dest_dir / "models" / model_file
+
+    tf.get_logger().setLevel(logging.ERROR)
+    model = tf.keras.models.load_model(model_path)
+    tf.get_logger().setLevel(logging.INFO)
+
+    # get non-target (negative) examples
+    unknown_sample = generate_random_non_target_files(
+        target_word=target_word,
+        unknown_lang_words=unknown_lang_words,
+        oov_lang_words=oov_lang_words,
+        commands=commands,
+    )
+    print("num unknown sample", len(unknown_sample))
+
+    model_settings = input_data.standard_microspeech_model_settings(label_count=3)
+
+    target_results = transfer_learning.evaluate_files_single_target(
+        target_wavs, 2, model, model_settings
+    )
+    # note: passing in the _TARGET_ category ID (2) for negative examples too:
+    # we ignore other categories altogether
+    unknown_results = transfer_learning.evaluate_files_single_target(
+        unknown_sample, 2, model, model_settings
+    )
+
+    # tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+    results = dict(
+        target_results=target_results,
+        unknown_results=unknown_results,
+        details=details,
+        target_word=target_word,
+        target_lang=target_lang,
+        #train_files=train_files,
+        unknown_words=unknown_lang_words,
+        oov_words=oov_lang_words,
+        commands=commands,
+    )
+    with open(
+        model_dest_dir / "results" / f"hpsweep_{target_lang}_{target_word}.pkl", "wb",
+    ) as fh:
+        pickle.dump(results, fh)
+
+    tf.keras.backend.clear_session()  # https://keras.io/api/utils/backend_utils/
 
 #%%
 ### SELECT TARGET

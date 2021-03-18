@@ -22,8 +22,37 @@ sns.set_palette("bright")
 
 # %%
 
-def roc_curve(target_resuts, unknown_results):
-    # _TARGET_ is class 1, _UNKNOWN_ is class 0
+def roc_single_target(target_results, unknown_results):
+    # _TARGET_ is class 2, _UNKNOWN_ is class 1
+
+    # positive label: target keywords are classified as _TARGET_ if above threshold
+    # false negatives -> target kws incorrectly classified as _UNKNOWN_ if below threshold:
+    # true negatives -> unknown classified as unknown if below threshold
+    # false positives: _UNKNOWN_ keywords incorrectly (falsely) classified as _TARGET_ (positive) if above threshold
+
+    # positives
+
+    total_positives = target_results.shape[0]
+
+    # negatives
+
+    unknown_total = unknown_results.shape[0]
+
+    # TPR = TP / (TP + FN)
+    # FPR = FP / (FP + TN)
+
+    tprs, fprs = [], []
+
+    threshs = np.arange(0, 1.01, 0.01)
+    for threshold in threshs:
+        tpr = target_results[target_results > threshold].shape[0] / total_positives
+        tprs.append(tpr)
+        fpr = unknown_results[unknown_results > threshold].shape[0] / unknown_total
+        fprs.append(fpr)
+    return tprs, fprs, threshs
+
+def roc_curve_multiclass(target_resuts, unknown_results):
+    # _TARGET_ is class 2, _UNKNOWN_ is class 0
 
     # positive label: target keywords classified as _TARGET_
     # true positives
@@ -53,6 +82,7 @@ def roc_curve(target_resuts, unknown_results):
         fprs.append(fpr)
     return tprs, fprs, threshs
 
+"""
 # %%
 
 LANG_ISOCODE = "it"
@@ -289,14 +319,18 @@ for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
 #         ax.set_ylabel("tpr")
 #         # ax.legend(loc="lower right")
 #     return fig, axes
+"""
 
 # %%
 
 # multilang embedding model results
 results = []
 emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis")
-non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe")
-for model_dest_dir in [emb_langs, non_emb_langs]:
+#non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe")
+non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2")
+#all_langs = [emb_langs, non_emb_langs]
+all_langs = [non_emb_langs]
+for model_dest_dir in all_langs:
     for pkl_file in os.listdir(model_dest_dir / "results"):
         filename = model_dest_dir / "results" / pkl_file
         print(filename)
@@ -321,13 +355,13 @@ for ix, (lang, results) in enumerate(lang2results.items()):
     for ix, res in enumerate(results):
         target_results = res["target_results"]
         unknown_results = res["unknown_results"]
-        ne = res["details"]["num_epochs"]
-        nb = res["details"]["num_batches"]
+        # ne = res["details"]["num_epochs"]
+        # nb = res["details"]["num_batches"]
         target_word = res["target_word"]
         target_lang = res["target_lang"]
         # curve_label = f"{target} (e:{ne},b:{nb})"
         # curve_label=target
-        tprs, fprs, thresh_labels = roc_curve(target_results, unknown_results)
+        tprs, fprs, thresh_labels = roc_single_target(target_results, unknown_results)
         all_tprs.append(tprs)
         all_fprs.append(fprs)
         ax.plot(fprs, tprs, color=color, alpha=0.1)
@@ -351,15 +385,18 @@ for ix, (lang, results) in enumerate(lang2results.items()):
     ymin = y_all.min(axis=1)
     ymax = y_all.max(axis=1)
     ax.fill_between(x_all, ymin, ymax, alpha=0.2, label=f"{lang}")
-    # ax.set_xlim(0, 1)
-    # ax.set_ylim(0, 1)
-    ax.set_xlim(0, 0.4)
-    ax.set_ylim(0.6, 1)
-    ax.legend(loc="lower right")
-    ax.set_xlabel("False positive rate")
-    ax.set_ylabel("True positive rate")
-    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_legend().get_texts() +
-                ax.get_xticklabels() + ax.get_yticklabels()):
-        item.set_fontsize(20)
-    fig.set_size_inches(14,14)
+
+# ax.set_xlim(0, 1)
+# ax.set_ylim(0, 1)
+ax.set_xlim(0, 0.4)
+ax.set_ylim(0.6, 1)
+ax.legend(loc="lower right")
+ax.set_xlabel("False positive rate")
+ax.set_ylabel("True positive rate")
+for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_legend().get_texts() +
+            ax.get_xticklabels() + ax.get_yticklabels()):
+    item.set_fontsize(20)
+fig.set_size_inches(14,14)
+fig.savefig("/home/mark/tinyspeech_harvard/tmp/v2.png")
+
 # %%
