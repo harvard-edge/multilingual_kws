@@ -2,10 +2,10 @@
 
 
 #%%
-import argparse
 from dataclasses import dataclass
 import logging
 import sox
+import datetime
 import os
 import sys
 import pprint
@@ -192,7 +192,7 @@ DESTINATION_INFERENCES = base_dir / "raw_inferences.npy"
 #DESTINATION_RESULTS_PKL = base_dir / "per_word" / "iaith2" / "stream_results.pkl"
 #DESTINATION_INFERENCES = base_dir / "per_word" / "iaith2" / "raw_inferences.npy"
 print("SAVING results TO\n", DESTINATION_RESULTS_PKL)
-print("SAVING inferences TO\n", DESTINATION_RESULTS_PKL)
+print("SAVING inferences TO\n", DESTINATION_INFERENCES)
 
 # %%
 
@@ -253,6 +253,80 @@ assert not os.path.isfile(DESTINATION_RESULTS_PKL), "results already present"
 print("saving to", DESTINATION_RESULTS_PKL)
 with open(DESTINATION_RESULTS_PKL, "wb") as fh:
     pickle.dump(results, fh)
+
+
+
+#%%
+############################################################################
+#    full sentence batch streaming test
+############################################################################
+
+sse = pathlib.Path("/home/mark/tinyspeech_harvard/streaming_batch_sentences/")
+for ix,target in enumerate(os.listdir(sse)):
+    print(f":::::::::::::::: {ix} ::::::::: - {target}")
+    base_dir = sse / target
+    model_dir = sse / target / "model"
+    model_name = os.listdir(model_dir)[0]
+    assert len(os.listdir(model_dir)) == 1, "multiple models?"
+    print(model_name)
+    model_path = model_dir / model_name
+    print(model_path)
+
+    wav_path = base_dir / "stream.wav"
+    ground_truth_path = base_dir / "labels.txt"
+    #wav_path = base_dir / "per_word" / "iaith2" / "streaming_test.wav"
+    #ground_truth_path = base_dir / "per_word" / "iaith2" / "streaming_labels.txt"
+
+    DESTINATION_RESULTS_PKL = base_dir / "stream_results.pkl"
+    DESTINATION_INFERENCES = base_dir / "raw_inferences.npy"
+    #DESTINATION_RESULTS_PKL = base_dir / "per_word" / "iaith2" / "stream_results.pkl"
+    #DESTINATION_INFERENCES = base_dir / "per_word" / "iaith2" / "raw_inferences.npy"
+
+    print("SAVING results TO\n", DESTINATION_RESULTS_PKL)
+    print("SAVING inferences TO\n", DESTINATION_INFERENCES)
+    assert not os.path.isfile(DESTINATION_RESULTS_PKL), "results already present"
+    inferences_exist = False
+    if os.path.isfile(DESTINATION_INFERENCES):
+        print("inferences already present")
+        loaded_inferences = np.load(DESTINATION_INFERENCES)
+        inferences_exist=True
+
+    tf.get_logger().setLevel(logging.ERROR)
+    model = tf.keras.models.load_model(model_path)
+    tf.get_logger().setLevel(logging.INFO)
+    model_settings = input_data.standard_microspeech_model_settings(label_count=3)
+
+    flags = FlagTest(
+        wav=str(wav_path),
+        ground_truth=str(ground_truth_path),
+        target_keyword=target,
+        detection_thresholds=np.linspace(0.05, 1, 20).tolist(),  # step threshold 0.05
+    )
+    start = datetime.datetime.now()
+    results = {}
+    if inferences_exist:
+        results[target], _ = calculate_streaming_accuracy(model, model_settings, flags, loaded_inferences)
+    else:
+        results[target], inferences = calculate_streaming_accuracy(model, model_settings, flags)
+    end = datetime.datetime.now()
+    print("elapsed time:", end-start)
+
+    with open(DESTINATION_RESULTS_PKL, "wb") as fh:
+        pickle.dump(results, fh)
+    if not inferences_exist:
+        np.save(DESTINATION_INFERENCES, inferences)
+##############################################################################3
+
+
+#%%
+# undo batch (dangerous)
+sse = pathlib.Path("/home/mark/tinyspeech_harvard/streaming_batch_sentences/")
+for ix,target in enumerate(os.listdir(sse)):
+    base_dir = sse / target
+    DESTINATION_RESULTS_PKL = base_dir / "stream_results.pkl"
+    if os.path.isfile(DESTINATION_RESULTS_PKL):
+        print("REMOVING", DESTINATION_RESULTS_PKL)
+        #os.remove(DESTINATION_RESULTS_PKL)
 
 #%%
 found_words_w_confidences = results[target][0.65][2]

@@ -330,14 +330,12 @@ def find_target_counts(target_word, common_counts):
 #%%
 base_dir = Path("/home/mark/tinyspeech_harvard/streaming_batch_sentences")
 frequent_words = Path("/home/mark/tinyspeech_harvard/frequent_words")
-for ix in range(5):
+for ix in range(3):
     langs = os.listdir(frequent_words)
+    langs = ["cy", "eu", "cs", "it", "nl", "fr"]
     target_lang = np.random.choice(langs)
     if target_lang == "fa":
         print("skipping persian due to unicode issues")
-        continue
-    if target_lang == "en":
-        print("skpping en, boring")
         continue
     print(f":::::::::::{ix}::::::::::: TARGET LANG: {target_lang}")
 
