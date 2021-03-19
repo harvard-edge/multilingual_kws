@@ -38,10 +38,13 @@ unknown_words = set([lw[1] for lw in unknown_lang_words])
 #%%
 #sse = Path("/home/mark/tinyspeech_harvard/streaming_sentence_experiments/")
 #sse = Path("/home/mark/tinyspeech_harvard/multilingual_streaming_sentence_experiments/")
-sse = Path("/home/mark/tinyspeech_harvard/streaming_batch_sentences/")
+#sse = Path("/home/mark/tinyspeech_harvard/streaming_batch_sentences/")
+sse = Path("/home/mark/tinyspeech_harvard/streaming_batch_perword/")
 
 #for ix, target in enumerate(["kurz"]):
 for ix, target in enumerate(os.listdir(sse)):
+    if not os.path.isdir(sse / target):
+        continue
     print("::::::::::::::::::: ",ix, target)
     if target in commands:
         print( "target was used as an embedding word")
