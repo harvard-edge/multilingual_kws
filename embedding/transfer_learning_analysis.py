@@ -376,7 +376,7 @@ def roc_sc(target_resuts, unknown_results):
     return tprs, fprs, threshs
 
 def roc_single_target(target_results, unknown_results):
-    # _TARGET_ is class 1, _UNKNOWN_ is class 0
+    # _TARGET_ is class 2, _UNKNOWN_ is class 1
 
     # positive label: target keywords are classified as _TARGET_ if above threshold
     # false negatives -> target kws incorrectly classified as _UNKNOWN_ if below threshold:
@@ -1053,13 +1053,13 @@ def generate_random_non_target_files(
             non_target_files.extend(wavs)
     return non_target_files
 
+# %%
 
 # %%
 # run on existing models
 
-
 for model_file in os.listdir(model_dest_dir / "models"):
-    #raise ValueError("caution - overwrites results")
+    raise ValueError("caution - overwrites results")
 
     target_word = model_file.split("_")[-1]
     target_lang = None
@@ -1107,7 +1107,7 @@ for model_file in os.listdir(model_dest_dir / "models"):
     results = dict(
         target_results=target_results,
         unknown_results=unknown_results,
-        details=details,
+        #details=details,
         target_word=target_word,
         target_lang=target_lang,
         #train_files=train_files,

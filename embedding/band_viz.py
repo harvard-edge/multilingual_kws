@@ -322,13 +322,16 @@ for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
 """
 
 # %%
-
 # multilang embedding model results
+
+# openai viz: https://github.com/openai/baselines/blob/master/docs/viz/viz.ipynb
+
+
 results = []
-emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis")
+#emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis")
 #non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe")
-non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2")
 #all_langs = [emb_langs, non_emb_langs]
+non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2")
 all_langs = [non_emb_langs]
 for model_dest_dir in all_langs:
     for pkl_file in os.listdir(model_dest_dir / "results"):
@@ -350,7 +353,6 @@ fig, ax = plt.subplots()
 for ix, (lang, results) in enumerate(lang2results.items()):
     color = sns.color_palette("bright")[ix % len(sns.color_palette("bright"))]
 
-    # def make_roc(results: List[Dict]):
     all_tprs, all_fprs = [], []
     for ix, res in enumerate(results):
         target_results = res["target_results"]
@@ -386,10 +388,10 @@ for ix, (lang, results) in enumerate(lang2results.items()):
     ymax = y_all.max(axis=1)
     ax.fill_between(x_all, ymin, ymax, alpha=0.2, label=f"{lang}")
 
-# ax.set_xlim(0, 1)
-# ax.set_ylim(0, 1)
-ax.set_xlim(0, 0.4)
-ax.set_ylim(0.6, 1)
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+# ax.set_xlim(0, 0.4)
+# ax.set_ylim(0.6, 1)
 ax.legend(loc="lower right")
 ax.set_xlabel("False positive rate")
 ax.set_ylabel("True positive rate")
@@ -397,6 +399,6 @@ for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_legend().get_te
             ax.get_xticklabels() + ax.get_yticklabels()):
     item.set_fontsize(20)
 fig.set_size_inches(14,14)
-fig.savefig("/home/mark/tinyspeech_harvard/tmp/v2.png")
+#fig.savefig("/home/mark/tinyspeech_harvard/tmp/v2.png")
 
 # %%
