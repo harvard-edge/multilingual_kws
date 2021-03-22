@@ -34,6 +34,7 @@ for lang in os.listdir(frequent_words):
     per_lang[lang] = []
     clips = frequent_words / lang / "clips"
     words = os.listdir(clips)
+    raise ValueError("do we need to make words a set? what caused the bug with duplicate words in commands??")
     for word in words:
         wavs = glob.glob(str(clips / word / "*.wav"))
         if len(wavs) > NUM_WAVS:
@@ -44,6 +45,30 @@ for lang in os.listdir(frequent_words):
 print("num commands", sum([len(v) for v in per_lang.values()]))
 print(per_lang['en'][0])
 plt.bar(per_lang.keys(), [len(v) for v in per_lang.values()])
+
+# %%
+raise ValueError("DUPLICATE WORD ISSUE")
+for lang, words in per_lang.items():
+    print(lang, len(words))
+    commands = [w[0] for w in words]
+    commands_set = set(commands)
+    if not len(commands) == len(commands_set):
+        print("error", lang, len(commands))
+print("--------------")
+dup_word = "six"
+commands = []
+for lang,commands_worddirs in per_lang.items():
+    print(lang)
+    for (command, worddir) in commands_worddirs:
+        if command == dup_word:
+            print("---------------------*****", lang, dup_word)
+        if command in commands:
+            print("adding dup", lang, command)
+        commands.append(command)
+print("total", len(commands), len(set(commands)))
+# %%
+print("num commands: list", sum([len(v) for v in per_lang.values()]))
+print("num commands: set", len())
 
 # %%
 

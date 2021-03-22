@@ -73,7 +73,7 @@ fig.set_size_inches(20,5)
 # %%
 # done cs cy eu 
 # todo pl ru tr
-LANG_ISOCODE="eu"
+LANG_ISOCODE="en"
 
 frequent_words_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}"
 timings_dir=f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings"
@@ -284,3 +284,37 @@ assert set(train_files).intersection(set(test_files)) == set(), "error: overlap 
 
 # %%
 # copy background data
+
+# %%
+
+##############################
+# Extract a single word      #
+##############################
+target_word = "stop"
+LANG_ISOCODE="en"
+tgs = word_extraction.generate_filemap(lang_isocode=LANG_ISOCODE, alignment_basedir=alignments)
+timings, notfound = word_extraction.generate_wordtimings(words_to_search_for={target_word}, mp3_to_textgrid=tgs, lang_isocode=LANG_ISOCODE, alignment_basedir=alignments)
+# %%
+target_word="stop"
+print("num occurences", len(timings[target_word]))
+# %%
+timings_dir = "/home/mark/tinyspeech_harvard/tmp/en_stop/"
+assert os.path.isdir(timings_dir) and os.listdir(timings_dir) == [], "make empty dir"
+df_dest = pathlib.Path(timings_dir)
+for word, times in timings.items():
+    df = pd.DataFrame(times, columns=["mp3_filename", "start_time_s", "end_time_s"])
+    # if df.shape[0] > MAX_NUM_UTTERANCES_TO_SAMPLE:
+    #     print(word, "SUBSAMPLING")
+    #     df = df.sample(n=MAX_NUM_UTTERANCES_TO_SAMPLE, replace=False)
+    print(df_dest / (word + ".csv"))
+    df.to_csv(df_dest / (word + ".csv"), quoting=csv.QUOTE_MINIMAL, index=False)
+# %%
+t =0
+#d = Path("/home/mark/tinyspeech_harvard/frequent_words/en/clips/")
+d = Path("/home/mark/tinyspeech_harvard/speech_commands/")
+for w in ["stop", "left", "right", "up", "down"]:
+    c = len(os.listdir(d / w))
+    t += c
+    print(w, c)
+print(t)
+# %%
