@@ -163,7 +163,7 @@ def add_background(foreground_audio, background_audio, background_volume):
 
 @dataclass(frozen=True)
 class SpecAugParams:
-    percentage: float = 50.0
+    percentage: float = 80.0
     # how many augmentations to include, inclusive
     frequency_n_range: int = 2
     # how large each mask should be (pixels)
