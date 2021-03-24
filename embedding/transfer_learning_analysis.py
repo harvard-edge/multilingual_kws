@@ -375,6 +375,7 @@ def roc_sc(target_resuts, unknown_results):
         fprs.append(fpr)
     return tprs, fprs, threshs
 
+
 def roc_single_target(target_results, unknown_results):
     # _TARGET_ is class 2, _UNKNOWN_ is class 1
 
@@ -403,6 +404,7 @@ def roc_single_target(target_results, unknown_results):
         fpr = unknown_results[unknown_results > threshold].shape[0] / unknown_total
         fprs.append(fpr)
     return tprs, fprs, threshs
+
 
 #%% LOAD DATA
 data_dir = "/home/mark/tinyspeech_harvard/frequent_words/en/clips/"
@@ -649,45 +651,55 @@ print(n_utterances, len(os.listdir(data_dir)))
 ##   per language embedding model
 ###############################################
 
-LANG_ISOCODE = "nl"
+isocode2model = dict(
+    #en="/home/mark/tinyspeech_harvard/train_100_augment/hundredword_efficientnet_1600_selu_specaug80.0150-0.8727",
+    #rw="rw_165commands_efficientnet_selu_specaug80_resume93.008-0.7895",
+    # nl="nl_165commands_efficientnet_selu_specaug80_resume62_resume08.037-0.7960",
+    #es="es_165commands_efficientnet_selu_specaug80_resume34_10_.009-0.8620",
+    # de="de_165commands_efficientnet_selu_specaug80_resume93.127-0.8515",
+    it="it_165commands_efficientnet_selu_specaug80_resume53.018-0.8208",
+)
+
+LANG_ISOCODE = "it"
 
 data_dir = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips/")
-traindir = Path(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/")
 
 # SELECT MODEL
-base_model_path = (
-    traindir
-    / "models"
-    / "nl_165commands_efficientnet_selu_specaug80_resume62_resume08.037-0.7960"
+if LANG_ISOCODE == "en":
+    traindir = Path("/home/mark/tinyspeech_harvard/train_100_augment/")
+    base_model_path = isocode2model[LANG_ISOCODE]
+    with open(traindir / "wordlist.txt", "r") as fh:
+        commands = fh.read().splitlines()
+    words = os.listdir(data_dir)
+    other_words = list(set(words).difference(set(commands)))
+
+else:
+    traindir = Path(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/")
+    base_model_path = traindir / "models" / isocode2model[LANG_ISOCODE]
+    with open(traindir / "commands.txt", "r") as fh:
+        commands = fh.read().splitlines()
+    with open(traindir / "other_words.txt", "r") as fh:
+        other_words = fh.read().splitlines()
+
+model_dest_dir = Path(
+    f"/home/mark/tinyspeech_harvard/paper_data/perlang/perlang_{LANG_ISOCODE}"
 )
 
-model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/sweep_{LANG_ISOCODE}")
-if not os.path.isdir(model_dest_dir):
-    raise ValueError("no model dir", model_dest_dir)
-results_dir = model_dest_dir / "results"
-if not os.path.isdir(results_dir):
-    raise ValueError("no results dir", results_dir)
 
-with open(traindir / "commands.txt", "r") as fh:
-    commands = fh.read().splitlines()
-with open(traindir / "other_words.txt", "r") as fh:
-    other_words = fh.read().splitlines()
-
-# with open("train_val_test_data.pkl", 'rb') as fh:
-#     train_val_test_data = pickle.load(fh)
-
-with open(traindir / "train_files.txt", "r") as fh:
-    train_files = fh.read().splitlines()
-with open(traindir / "val_files.txt", "r") as fh:
-    val_files = fh.read().splitlines()
-with open(traindir / "test_files.txt", "r") as fh:
-    test_files = fh.read().splitlines()
-
-bg_datadir = (
-    f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/_background_noise_/"
-)
+bg_datadir = "/home/mark/tinyspeech_harvard/speech_commands/_background_noise_/"
 if not os.path.isdir(bg_datadir):
     raise ValueError("no bg data", bg_datadir)
+
+results_dir = model_dest_dir / "results"
+
+# comment these out if you want to rerun existing models
+if os.path.isdir(model_dest_dir):
+    raise ValueError("model dir exists", model_dest_dir)
+os.makedirs(model_dest_dir)
+os.makedirs(model_dest_dir / "models")
+os.makedirs(results_dir)
+#%%
+
 
 #%%
 # find layer name (optional)
@@ -698,27 +710,106 @@ model.summary()
 
 #%%
 N_UNKNOWN_WORDS = 50
+N_SAMPLES_FROM_UNKNOWN = 70
+N_SAMPLES_FROM_COMMANDS = 20
+
 unknown_words = np.random.choice(other_words, N_UNKNOWN_WORDS, replace=False)
 oov_words = list(set(other_words).difference(set(unknown_words)))
-print("OOV:", oov_words)
+print("OOV:", oov_words, len(oov_words))
 
 unknown_files = []
 for w in unknown_words:
     wavs = glob.glob(str(data_dir / w / "*.wav"))
-    unknown_files.extend(wavs)
+    if len(wavs) > N_SAMPLES_FROM_UNKNOWN:
+        sample = np.random.choice(wavs, N_SAMPLES_FROM_UNKNOWN, replace=False)
+    else:
+        sample = wavs
+    unknown_files.extend(sample)
 np.random.shuffle(unknown_files)
 
 print("before including original embeddings", len(unknown_files))
 
 for w in commands:
     wavs = glob.glob(str(data_dir / w / "*.wav"))
-    sample = np.random.choice(wavs, 100, replace=False)
+    if len(wavs) > N_SAMPLES_FROM_COMMANDS:
+        sample = np.random.choice(wavs, N_SAMPLES_FROM_COMMANDS, replace=False)
+    else:
+        sample = wavs
     unknown_files.extend(sample)
 np.random.shuffle(unknown_files)
 
 print("after including original embeddings", len(unknown_files))
 
 # TODO(mmaz): we only sample like 600 [= 128 steps * 9 epochs / 2] of these :(
+
+# %%
+# run on existing models
+N_SHOTS = 5
+for ix, model_file in enumerate(os.listdir(model_dest_dir / "models")):
+    raise ValueError("caution - overwrites results")
+
+    start_word = datetime.datetime.now()
+    print(f"::::::::::::::::::::{ix} --- {LANG_ISOCODE}::::::::::::::::::::::::::")
+
+    model_path = model_dest_dir / "models" / model_file
+    if not os.path.isdir(model_path):
+        continue  # probably a training log
+
+    target = model_file.split("_")[-1]
+    target_wavs = glob.glob(str(data_dir / target / "*.wav"))
+    np.random.shuffle(target_wavs)
+    train_files = target_wavs[:N_SHOTS]
+    val_files = target_wavs[N_SHOTS:]
+    print("\n".join(train_files))
+
+    num_targets = len(os.listdir(data_dir / target))
+    print("n targets", num_targets)
+
+    some_commands = np.random.choice(commands, 30, replace=False)
+    some_unknown = np.random.choice(unknown_words, 30, replace=False)
+    some_oov = np.random.choice(oov_words, 30, replace=False)
+    flat = set([w for l in [some_commands, some_unknown, some_oov] for w in l])
+    unknown_sample = list(flat.difference({target}))
+    print(unknown_sample, len(unknown_sample))
+
+    # load model
+    tf.get_logger().setLevel(logging.ERROR)
+    model = tf.keras.models.load_model(model_path)
+    tf.get_logger().setLevel(logging.INFO)
+
+    model_settings = input_data.standard_microspeech_model_settings(label_count=3)
+
+    target_results, all_preds_target = transfer_learning.evaluate_fast_single_target(
+        [target], 2, str(data_dir) + "/", num_targets, model, model_settings
+    )
+    # note: passing in the _TARGET_ category ID (2) for negative examples too:
+    # we ignore other categories altogether
+    unknown_results, all_preds_unknown = transfer_learning.evaluate_fast_single_target(
+        unknown_sample, 2, str(data_dir) + "/", 300, model, model_settings
+    )
+
+    # tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
+    results = dict(
+        target_results=target_results,
+        unknown_results=unknown_results,
+        all_predictions_targets=all_preds_target,
+        all_predictions_unknown=all_preds_unknown,
+        # details=details,
+        target=target,
+        train_files=train_files,
+        unknown_words=unknown_words,
+        oov_words=oov_words,
+        unknown_sample=unknown_sample,
+    )
+    with open(
+        model_dest_dir / "results" / f"result_{LANG_ISOCODE}_{target}.pkl", "wb",
+    ) as fh:
+        pickle.dump(results, fh)
+
+    tf.keras.backend.clear_session()  # https://keras.io/api/utils/backend_utils/
+    end_word = datetime.datetime.now()
+    print("time elapsed", end_word - start_word)
+
 
 #%%
 ### SELECT TARGET
@@ -737,15 +828,21 @@ def results_exist(target, results_dir):
     return False
 
 
-for ix in range(9):
-    print(f"::::::::::::::::::::::::::::::{ix}:::::::::::::::::::::::::::::::")
+for ix in range(20):
+    start_word = datetime.datetime.now()
+    print(f":::::::::::::::::::::::::{ix} --- {LANG_ISOCODE}:::::::::::::::::::::::")
     N_SHOTS = 5
+    MAX_TRIES = 100
 
     has_results = True
+    n_tries = 0
     # skip existing results
-    while has_results:
+    while has_results and n_tries < MAX_TRIES:
         target = np.random.choice(oov_words)
         has_results = results_exist(target, results_dir)
+        n_tries += 1
+    if n_tries >= MAX_TRIES:
+        raise ValueError("not enough oov words left to choose from")
     print("TARGET:", target)
     target_wavs = glob.glob(str(data_dir / target / "*.wav"))
     np.random.shuffle(target_wavs)
@@ -762,6 +859,9 @@ for ix in range(9):
 
     model_settings = input_data.standard_microspeech_model_settings(label_count=3)
 
+    csvlog_dest = str(model_dest_dir / "models" / f"{target}_trainlog.csv")
+    assert not os.path.isfile(csvlog_dest), f"{csvlog_dest} csvlog already exists"
+
     name, model, details = transfer_learning.transfer_learn(
         target=target,
         train_files=train_files,
@@ -771,46 +871,49 @@ for ix in range(9):
         num_batches=1,
         batch_size=64,
         model_settings=model_settings,
+        csvlog_dest=csvlog_dest,
         base_model_path=base_model_path,
         base_model_output="dense_2",
     )
     print("saving", name)
     model.save(model_dest_dir / "models" / name)
 
-    # target="imodoka"
-    # model_path = model_dest_dir / "models" / "xfer_epochs_9_bs_64_nbs_2_val_acc_0.89_target_imodoka"
-    # tf.get_logger().setLevel(logging.ERROR)
-    # model = tf.keras.models.load_model(model_path)
-    # tf.get_logger().setLevel(logging.INFO)
-
-    some_commands = np.random.choice(commands, 20, replace=False)
-    some_unknown = np.random.choice(unknown_words, 20, replace=False)
-    some_oov = np.random.choice(oov_words, 20, replace=False)
+    some_commands = np.random.choice(commands, 30, replace=False)
+    some_unknown = np.random.choice(unknown_words, 30, replace=False)
+    some_oov = np.random.choice(oov_words, 30, replace=False)
     flat = set([w for l in [some_commands, some_unknown, some_oov] for w in l])
     unknown_sample = list(flat.difference({target}))
     print(unknown_sample, len(unknown_sample))
 
-    target_results = transfer_learning.evaluate_fast(
+    target_results, all_preds_target = transfer_learning.evaluate_fast_single_target(
         [target], 2, str(data_dir) + "/", num_targets, model, model_settings
     )
-    unknown_results = transfer_learning.evaluate_fast(
-        unknown_sample, 1, str(data_dir) + "/", 300, model, model_settings
+    # note: passing in the _TARGET_ category ID (2) for negative examples too:
+    # we ignore other categories altogether
+    unknown_results, all_preds_unknown = transfer_learning.evaluate_fast_single_target(
+        unknown_sample, 2, str(data_dir) + "/", 300, model, model_settings
     )
 
     # tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
     results = dict(
         target_results=target_results,
         unknown_results=unknown_results,
+        all_predictions_targets=all_preds_target,
+        all_predictions_unknown=all_preds_unknown,
         details=details,
         target=target,
         train_files=train_files,
         unknown_words=unknown_words,
         oov_words=oov_words,
     )
-    with open(model_dest_dir / "results" / f"hpsweep_{target}.pkl", "wb",) as fh:
+    result_file = model_dest_dir / "results" / f"result_{LANG_ISOCODE}_{target}.pkl"
+    assert not os.path.isfile(result_file), f"{result_file} already exists"
+    with open(result_file, "wb",) as fh:
         pickle.dump(results, fh)
 
     tf.keras.backend.clear_session()  # https://keras.io/api/utils/backend_utils/
+    end_word = datetime.datetime.now()
+    print("time elapsed", end_word - start_word)
 
 #%%
 
@@ -862,6 +965,30 @@ for w in os.listdir(data_dir):
 print(n_utterances, len(os.listdir(data_dir)))
 
 # %%
+# how many oov words are saved:
+uc = "/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2/unknown_collection.pkl"
+with open(uc, "rb") as fh:
+    unknown_collection = pickle.load(fh)
+# %%
+oov_lang_words = unknown_collection["oov_lang_words"]
+iso2lang = {
+    "en": "English",
+    "fr": "French",
+    "ca": "Catalan",
+    "rw": "Kinyarwanda",
+    "de": "German",
+    "it": "Italian",
+    "nl": "Dutch",
+    "fa": "Persian",
+    "es": "Spanish",
+}
+counts = {l: 0 for l in iso2lang.keys()}
+for l, w in oov_lang_words:
+    if l not in counts.keys():
+        continue
+    counts[l] += 1
+print(counts)
+
 
 #%%
 ###############################################
@@ -875,19 +1002,21 @@ base_model_path = (
     traindir / "models" / "multilang_resume40_resume05_resume20.022-0.7969"
 )
 
-model_dest_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2/")
-if not os.path.isdir(model_dest_dir):
-    raise ValueError("no model dir", model_dest_dir)
-if not os.path.isdir(model_dest_dir / "models"):
-    raise ValueError("no model save dir", model_dest_dir)
+LANG_ISOCODE = "de"
+model_dest_dir = Path(
+    f"/home/mark/tinyspeech_harvard/paper_data/multilang_class/multilang_{LANG_ISOCODE}"
+)
+if os.path.isdir(model_dest_dir):
+    raise ValueError("model dir exists", model_dest_dir)
+os.makedirs(model_dest_dir)
+os.makedirs(model_dest_dir / "models")
 results_dir = model_dest_dir / "results"
-if not os.path.isdir(results_dir):
-    raise ValueError("no results dir", results_dir)
+os.makedirs(results_dir)
 
 with open(traindir / "commands.txt", "r") as fh:
     commands = fh.read().splitlines()
 
-bg_datadir = f"/home/mark/tinyspeech_harvard/multilang_embedding/_background_noise_/"
+bg_datadir = "/home/mark/tinyspeech_harvard/speech_commands/_background_noise_/"
 if not os.path.isdir(bg_datadir):
     raise ValueError("no bg data", bg_datadir)
 
@@ -909,6 +1038,9 @@ unknown_collection_path = model_dest_dir / "unknown_collection.pkl"
 if os.path.isfile(unknown_collection_path):
     raise ValueError("already exists", unknown_collection_path)
 
+# only sample unkonwn words from languages already in multilingual embedding model
+# otherwise eval would be unfair (finetuned model might see more than just
+# the 5shot examples, i.e., unknown words in target language )
 language_isocodes = os.listdir(frequent_words)
 lang_isocodes_for_unknown_words = [
     li
@@ -1007,15 +1139,17 @@ oov_lang_words = unknown_collection["oov_lang_words"]
 # select unknown/oov/command words for model evaluation (not finetuning)
 
 
-def generate_random_non_target_files(
+def generate_random_non_target_files_for_eval(
     target_word,
     unknown_lang_words,
-    oov_lang_words,
+    oov_lang_words,  # these should prob be in the language being evaluated
     commands,
+    frequent_words,
     n_non_targets_per_category=100,
     n_utterances_per_non_target=80,
-    frequent_words=Path("/home/mark/tinyspeech_harvard/frequent_words/"),
 ):
+    # select unknown/oov/command words for model evaluation (**not for finetuning**)
+
     # 3 categories: unknown, oov, command
     some_unknown_ixs = np.random.choice(
         range(len(unknown_lang_words)), n_non_targets_per_category, replace=False
@@ -1052,6 +1186,7 @@ def generate_random_non_target_files(
         else:
             non_target_files.extend(wavs)
     return non_target_files
+
 
 # %%
 
@@ -1107,10 +1242,10 @@ for model_file in os.listdir(model_dest_dir / "models"):
     results = dict(
         target_results=target_results,
         unknown_results=unknown_results,
-        #details=details,
+        # details=details,
         target_word=target_word,
         target_lang=target_lang,
-        #train_files=train_files,
+        # train_files=train_files,
         unknown_words=unknown_lang_words,
         oov_words=oov_lang_words,
         commands=commands,
@@ -1124,9 +1259,6 @@ for model_file in os.listdir(model_dest_dir / "models"):
 
 #%%
 ### SELECT TARGET
-N_SHOTS = 5
-N_NON_TARGETS_PER_CATEGORY = 100  # unknown, oov, command
-N_UTTERANCES_PER_NON_TARGET = 80
 
 
 def results_exist(target, results_dir):
@@ -1142,15 +1274,17 @@ def results_exist(target, results_dir):
     return False
 
 
-for ix in range(1):
-    print(f"::::::::::::::::::::::::::::::{ix}:::::::::::::::::::::::::::::::")
+for ix in range(20):
+    start_word = datetime.datetime.now()
+    print(f":::::::::::::::::::::::::{ix} - {LANG_ISOCODE}:::::::::::::::::::::::::")
 
     has_results = True
     # skip existing results
     while has_results:
         rand_ix = np.random.randint(len(oov_lang_words))
         target_lang, target_word = oov_lang_words[rand_ix]
-        if target_lang not in ["cs", "cy", "eu"]:  # generate for a specific language
+        # if target_lang not in ["cs", "cy", "eu"]:  # generate for a specific language
+        if target_lang not in [LANG_ISOCODE]:  # generate for a specific language
             continue
         has_results = results_exist(target_word, results_dir)
     print("TARGET:", target_lang, target_word)
@@ -1174,6 +1308,12 @@ for ix in range(1):
 
     model_settings = input_data.standard_microspeech_model_settings(label_count=3)
 
+    csvlog_dest = str(
+        model_dest_dir / "models" / f"{target_word}_{target_lang}_trainlog.csv"
+    )
+    if os.path.isfile(csvlog_dest):
+        raise ValueError("overwriting existing file")
+
     # TODO(mmaz): use keras class weights?
     name, model, details = transfer_learning.transfer_learn(
         target=target_word,
@@ -1184,37 +1324,37 @@ for ix in range(1):
         num_batches=1,
         batch_size=64,
         model_settings=model_settings,
+        csvlog_dest=csvlog_dest,
         base_model_path=base_model_path,
         base_model_output="dense_2",
     )
     print("saving", name)
     model.save(model_dest_dir / "models" / name)
 
-    # target="imodoka"
-    # model_path = model_dest_dir / "models" / "xfer_epochs_9_bs_64_nbs_2_val_acc_0.89_target_imodoka"
-    # tf.get_logger().setLevel(logging.ERROR)
-    # model = tf.keras.models.load_model(model_path)
-    # tf.get_logger().setLevel(logging.INFO)
-
-    unknown_sample = generate_random_non_target_files(
+    unknown_sample = generate_random_non_target_files_for_eval(
         target_word=target_word,
         unknown_lang_words=unknown_lang_words,
         oov_lang_words=oov_lang_words,
         commands=commands,
+        frequent_words=frequent_words,
     )
     print("num unknown sample", len(unknown_sample))
 
-    target_results = transfer_learning.evaluate_files(
+    target_results, all_preds_target = transfer_learning.evaluate_files_single_target(
         target_wavs, 2, model, model_settings
     )
-    unknown_results = transfer_learning.evaluate_files(
-        unknown_sample, 1, model, model_settings
+    # note: passing in the _TARGET_ category ID (2) for negative examples too:
+    # we ignore other categories altogether
+    unknown_results, all_preds_unknown = transfer_learning.evaluate_files_single_target(
+        unknown_sample, 2, model, model_settings
     )
 
     # tprs, fprs, thresh_labels = roc_sc(target_results, unknown_results)
     results = dict(
         target_results=target_results,
         unknown_results=unknown_results,
+        all_predictions_targets=all_preds_target,
+        all_predictions_unknown=all_preds_unknown,
         details=details,
         target_word=target_word,
         target_lang=target_lang,
@@ -1229,6 +1369,8 @@ for ix in range(1):
         pickle.dump(results, fh)
 
     tf.keras.backend.clear_session()  # https://keras.io/api/utils/backend_utils/
+    end_word = datetime.datetime.now()
+    print("elapsed time", end_word - start_word)
 
 #%%
 

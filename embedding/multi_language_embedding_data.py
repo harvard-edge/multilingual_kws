@@ -45,6 +45,7 @@ for lang in os.listdir(frequent_words):
 print("num commands", sum([len(v) for v in per_lang.values()]))
 print(per_lang['en'][0])
 plt.bar(per_lang.keys(), [len(v) for v in per_lang.values()])
+print([(kv[0], len(kv[1])) for kv in per_lang.items()])
 
 # %%
 raise ValueError("DUPLICATE WORD ISSUE")

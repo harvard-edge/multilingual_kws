@@ -9,7 +9,7 @@ import sox
 import glob
 
 # local
-LANG_ISOCODE="eu"
+LANG_ISOCODE="fa"
 WORD_CSVS = f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings/*.csv"
 #CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-5.1-2020-06-22/{LANG_ISOCODE}/clips/")
 CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/{LANG_ISOCODE}/clips/")
@@ -60,8 +60,9 @@ def extract_one_second(duration_s: float, start_s: float, end_s: float):
 def extract(csvpath):
     word = os.path.splitext(os.path.basename(csvpath))[0]
     #print(word)
-    if not os.path.exists(OUT_DIR / word):
-        os.mkdir(OUT_DIR / word)
+    if os.path.isdir(OUT_DIR / word):
+        raise ValueError("trying to extract to an existing dir", OUT_DIR / word)
+    os.mkdir(OUT_DIR / word)
 
     with open(csvpath, 'r') as fh:
         reader = csv.reader(fh)
@@ -114,13 +115,27 @@ def main():
         raise ValueError("create outdir and errordir", OUT_DIR, ERRORS_DIR)
     if not os.path.isdir(CV_CLIPS_DIR):
         raise ValueError("data not found")
-    words = glob.glob(WORD_CSVS)
-    print(words)
-    if len(words) == 0:
+    all_csvs = glob.glob(WORD_CSVS)
+    print("num csvs found", len(all_csvs))
+    if len(all_csvs) == 0:
         raise ValueError("no csvs")
 
+    unextracted_csvs = []
+    for csvpath in all_csvs:
+        word = os.path.splitext(os.path.basename(csvpath))[0]
+        wav_dir = OUT_DIR / word
+        if os.path.exists(wav_dir) :
+            print("skipping", wav_dir)
+            continue
+        else:
+            unextracted_csvs.append(csvpath)
+    print("\n\n::::::::::::::::::::")
+    print("unextracted csvs:", unextracted_csvs)
+    print("\n\n--------------------")
+    print("extracting", len(unextracted_csvs), "out of", len(all_csvs))
+
     pool = multiprocessing.Pool()
-    for i, result in enumerate(pool.imap_unordered(extract, words), start=1):
+    for i, result in enumerate(pool.imap_unordered(extract, unextracted_csvs), start=1):
         print("counter: ", i, "word", result)
         if WRITE_PROGRESS:
             with open("finished.txt", 'a') as fh:

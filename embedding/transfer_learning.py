@@ -21,6 +21,7 @@ def transfer_learn(
     num_batches,
     batch_size,
     model_settings,
+    csvlog_dest: os.PathLike,
     base_model_path: os.PathLike,
     base_model_output: str,
     UNKNOWN_PERCENTAGE=50.0,
@@ -67,11 +68,14 @@ def transfer_learn(
     train_ds = train_ds.shuffle(buffer_size=1000).repeat().batch(batch_size)
     val_ds = val_ds.batch(batch_size)
 
+    csvlogger = tf.keras.callbacks.CSVLogger(csvlog_dest, append=False)
+
     history = xfer.fit(
         train_ds,
         validation_data=val_ds,
         steps_per_epoch=batch_size * num_batches,
         epochs=num_epochs,
+        callbacks=[csvlogger],
     )
 
     va = history.history["val_accuracy"][-1]
@@ -175,6 +179,7 @@ def evaluate_fast_multiclass(
         "incorrect": incorrect_confidences,
     }
 
+
 def evaluate_fast_single_target(
     words_to_evaluate: List[str],
     target_id: int,
@@ -194,7 +199,7 @@ def evaluate_fast_single_target(
         specs.extend([input_data.file2spec(model_settings, f) for f in fs])
     specs = np.array(specs)
     preds = model.predict(np.expand_dims(specs, -1))
-    return preds[:, target_id]
+    return preds[:, target_id], preds
 
 
 def evaluate_files_multiclass(
@@ -222,6 +227,7 @@ def evaluate_files_multiclass(
             incorrect_confidences.append(confidence)
     return dict(correct=correct_confidences, incorrect=incorrect_confidences)
 
+
 def evaluate_files_single_target(
     files_to_evaluate: List[os.PathLike],
     target_id: int,
@@ -231,8 +237,7 @@ def evaluate_files_single_target(
     specs = [input_data.file2spec(model_settings, f) for f in files_to_evaluate]
     specs = np.array(specs)
     preds = model.predict(np.expand_dims(specs, -1))
-    return preds[:, target_id]
-
+    return preds[:, target_id], preds
 
 
 def evaluate_and_track(
