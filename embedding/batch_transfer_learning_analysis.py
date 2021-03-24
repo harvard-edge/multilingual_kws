@@ -181,15 +181,29 @@ def run_transfer_learning(td: TargetData):
 #%%
 
 iso2lang = {
-    "en": "English",
-    "fr": "French",
+    "ar": "Arabic",
     "ca": "Catalan",
-    "rw": "Kinyarwanda",
+    "cs": "Czech",
+    "cy": "Welsh",
     "de": "German",
-    "it": "Italian",
-    "nl": "Dutch",
-    "fa": "Persian",
+    "en": "English",
     "es": "Spanish",
+    "et": "Estonian",
+    "eu": "Basque",
+    "fa": "Persian",
+    "fr": "French",
+    "id": "Indonesian",
+    "it": "Italian",
+    "ky": "Kyrgyz",
+    "nl": "Dutch",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "rw": "Kinyarwanda",
+    "ta": "Tamil",
+    "tr": "Turkish",
+    "tt": "Tatar",
+    "uk": "Ukranian",
 }
 
 ###############################################
@@ -210,6 +224,9 @@ base_model_path = (
 )
 
 paper_data = Path("/home/mark/tinyspeech_harvard/paper_data/")
+base_result_dir = paper_data / "ooe_multilang_classification"
+
+assert os.listdir(base_result_dir) == [], f"there are already results in {base_result_dir}"
 
 # only sample unknown words from languages already in multilingual embedding model
 # otherwise eval would be unfair (finetuned model might see more than just
@@ -226,7 +243,7 @@ command_set = set(commands)
 
 #%%
 
-# python embedding/batch_transfer_learning_analysis.py > ~/tinyspeech_harvard/paper_data/multilang_classification_batch_analysis.log
+# python embedding/batch_transfer_learning_analysis.py > ~/tinyspeech_harvard/paper_data/ooe_multilang_classification_batch_analysis.log
 
 N_SHOTS = 5
 NUM_TARGETS_TO_EVAL = 20  # per language
@@ -240,7 +257,7 @@ language_isocodes = os.listdir(frequent_words)
 lang_isos_within_embedding_model = ["en", "fr", "ca", "rw", "de", "it", "nl", "es", "fa"]
 
 # for languages out of embedding
-lang_isos_out_of_embedding = ["cy", "cs", "eu"]
+lang_isos_out_of_embedding = ['ar', 'cs', 'cy', 'et', 'eu', 'id', 'ky', 'pl', 'pt', 'ru', 'tr', 'tt', 'uk']
 # fmt: on
 
 DRY_RUN = False
@@ -248,7 +265,7 @@ DRY_RUN = False
 
 # prepare training data for all targets
 all_lang_targets = []
-for lang_ix, lang_isocode in enumerate(lang_isos_within_embedding_model):
+for lang_ix, lang_isocode in enumerate(lang_isos_out_of_embedding):
     print(
         f":::::::::::::::::::{lang_ix} - {lang_isocode}::::::::::::::::::::::",
         flush=True,
@@ -324,7 +341,7 @@ for lang_ix, lang_isocode in enumerate(lang_isos_within_embedding_model):
             n_utterances_per_non_target=N_UTTERANCES_PER_NON_TARGET,
         )
         # fmt: off
-        model_dest_dir = paper_data / "multilang_classification" / f"multilang_{lang_isocode}"
+        model_dest_dir = base_result_dir / f"multilang_{lang_isocode}"
         # fmt: on
         d = TargetData(
             lang_ix=lang_ix,
@@ -348,12 +365,16 @@ for lang_ix, lang_isocode in enumerate(lang_isos_within_embedding_model):
     all_lang_targets.extend(targets)
 
 # save training data
-all_lang_targets_file = "/home/mark/tinyspeech_harvard/paper_data/multilang_classification_in_embedding_all_lang_targets.pkl"
-assert not os.path.exists(
-    all_lang_targets_file
-), f"{all_lang_targets_file} already exists"
-with open(all_lang_targets_file, "wb") as fh:
-    pickle.dump(all_lang_targets_file, fh)
+# fmt: off
+if not DRY_RUN:
+    all_lang_targets_file = "/home/mark/tinyspeech_harvard/paper_data/ooe_multilang_classification_all_lang_targets.pkl"
+    assert not os.path.exists(all_lang_targets_file), f"{all_lang_targets_file} already exists"
+    with open(all_lang_targets_file, "wb") as fh:
+        pickle.dump(all_lang_targets, fh)
+# fmt: on
+
+# reorder to viz some data for each language in incremental graph script
+np.random.shuffle(all_lang_targets)
 
 # train it!
 n_targets = len(all_lang_targets)

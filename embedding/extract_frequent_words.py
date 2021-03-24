@@ -9,7 +9,8 @@ import sox
 import glob
 
 # local
-LANG_ISOCODE="fa"
+# ['ar', 'cs', 'cy', 'et', 'eu', 'id', 'ky', 'pl', 'pt', 'ru', 'ta', 'tr', 'tt', 'uk']
+LANG_ISOCODE="ky"
 WORD_CSVS = f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings/*.csv"
 #CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-5.1-2020-06-22/{LANG_ISOCODE}/clips/")
 CV_CLIPS_DIR = Path(f"/media/mark/hyperion/common_voice/cv-corpus-6.1-2020-12-11/{LANG_ISOCODE}/clips/")

@@ -73,23 +73,48 @@ fig.set_size_inches(20, 5)
 #  fig.set_size_inches(3,10)
 
 # %%
+iso2lang = {
+    "ar": "Arabic",
+    "ca": "Catalan",
+    "cs": "Czech",
+    "cy": "Welsh",
+    "de": "German",
+    "en": "English",
+    "es": "Spanish",
+    "et": "Estonian",
+    "eu": "Basque",
+    "fa": "Persian",
+    "fr": "French",
+    "id": "Indonesian",
+    "it": "Italian",
+    "ky": "Kyrgyz",
+    "nl": "Dutch",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "rw": "Kinyarwanda",
+    "ta": "Tamil",
+    "tr": "Turkish",
+    "tt": "Tatar",
+    "uk": "Ukranian",
+}
+
+# %%
 # total
-# ['ar', 'ca', 'cs', 'cy', 'de', 'en', 'eu', 'fa', 'fr', 'id', 'it', 'ky', 'nl', 'pl', 'pt', 'ru', 'rw', 'ta', 'tr', 'tt', 'uk']
-# non-embedding:
+# ['ar', 'ca', 'cs', 'cy', 'de', 'en', 'es', 'et', 'eu', 'fa', 'fr', 'id', 'it', 'ky', 'nl', 'pl', 'pt', 'ru', 'rw', 'ta', 'tr', 'tt', 'uk']
+# non-embedding classification:
 # done: cs cy eu
-# todo: pl ru tr ar  id  ky  pt  ru  ta  tr  tt  uk
-# embedding to expand on:
-# done: en fr ca
-# todo: fa
-LANG_ISOCODE = "fa"
+# ['ar', 'cs', 'cy', 'et', 'eu', 'id', 'ky', 'pl', 'pt', 'ru', 'ta', 'tr', 'tt', 'uk']
+LANG_ISOCODE = "uk"
+print("Generating", LANG_ISOCODE, iso2lang[LANG_ISOCODE])
 
 frequent_words_dir = f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}"
 timings_dir = f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/timings"
 errors_dir = f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/errors"
 clips_dir = f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips"
 
-# for dir in [frequent_words_dir, timings_dir, errors_dir, clips_dir]:
-#     os.makedirs(dir)
+for dir in [frequent_words_dir, timings_dir, errors_dir, clips_dir]:
+    os.makedirs(dir)
 for dir in [frequent_words_dir, timings_dir, errors_dir, clips_dir]:
     if not os.path.isdir(dir):
         raise ValueError("need to create", dir)
@@ -113,9 +138,9 @@ counts.most_common(15)
 # %%
 
 # %%
-N_WORDS_TO_SAMPLE = 20
+N_WORDS_TO_SAMPLE = 50
 MIN_CHAR_LEN = 5
-SKIP_FIRST_N = 100
+SKIP_FIRST_N = 20
 
 non_stopwords = counts.copy()
 # get rid of words that are too short
@@ -196,6 +221,7 @@ for word, times in timings.items():
     print(df_dest / (word + ".csv"))
     df.to_csv(df_dest / (word + ".csv"), quoting=csv.QUOTE_MINIMAL, index=False)
 
+# %%
 
 ################################################################
 # now, run extract_frequent_words.py

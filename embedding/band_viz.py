@@ -25,17 +25,30 @@ sns.set_palette("bright")
 # %%
 
 iso2lang = {
-    "en": "English",
-    "fr": "French",
+    "ar": "Arabic",
     "ca": "Catalan",
-    "rw": "Kinyarwanda",
+    "cs": "Czech",
+    "cy": "Welsh",
     "de": "German",
-    "it": "Italian",
-    "nl": "Dutch",
-    "fa": "Persian",
+    "en": "English",
     "es": "Spanish",
+    "et": "Estonian",
+    "eu": "Basque",
+    "fa": "Persian",
+    "fr": "French",
+    "id": "Indonesian",
+    "it": "Italian",
+    "ky": "Kyrgyz",
+    "nl": "Dutch",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "rw": "Kinyarwanda",
+    "ta": "Tamil",
+    "tr": "Turkish",
+    "tt": "Tatar",
+    "uk": "Ukranian",
 }
-
 
 def roc_single_target(target_results, unknown_results):
     # _TARGET_ is class 2, _UNKNOWN_ is class 1
@@ -323,7 +336,8 @@ results = []
 #non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2")
 #all_langs = [non_emb_langs]
 #for model_dest_dir in all_langs:
-base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
+#base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
+base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_multilang_classification/")
 for model_dest_dir in os.listdir(base_dir):
     ix=0
     for pkl_file in os.listdir(base_dir / model_dest_dir / "results"):
@@ -406,7 +420,7 @@ for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_legend().get_te
     item.set_fontsize(20)
 fig.set_size_inches(14,14)
 fig.tight_layout()
-figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/multilang_classification.png"
+figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/ooe_multilang_classification.png"
 fig.savefig(figdest)
 print(figdest)
 

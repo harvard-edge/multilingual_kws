@@ -331,6 +331,42 @@ def find_target_counts(target_word, common_counts):
 
 # TODO(mmaz): choose words + models already trained in paper_data -- exclude mp3file_no_ext in N_SHOTS from timings
 
+paper_data = Path("/home/mark/tinyspeech_harvard/paper_data")
+# in_embedding_mlc_pkl = paper_data / "multilang_classification_in_embedding_all_lang_targets.pkl"
+# with open(in_embedding_mlc_pkl, 'rb') as fh:
+#     in_embedding_mlc = pickle.load(fh)
+# for target_data in in_embedding_mlc:
+#     print(target_data.keys())
+#     break
+data_dir = Path("/home/mark/tinyspeech_harvard/frequent_words")
+target_word_counts = {}
+multilang_results_dir = paper_data / "multilang_classification"
+for lang_results in os.listdir(multilang_results_dir):
+    lang_isocode = lang_results.split("_")[-1]
+    print("lang_isocode", lang_isocode)
+    for result_file in os.listdir(multilang_results_dir / lang_results / "results"):
+        target_word = os.path.splitext(result_file.split("_")[-1])[0]
+        print(lang_isocode, target_word)
+        wav_dir = data_dir / lang_isocode / "clips" / target_word
+        num_wavs = len(glob.glob(str(wav_dir / "*.wav")))
+        target_word_counts[f"{lang_isocode}_{target_word}"] = num_wavs
+print(len(target_word_counts.keys()))
+
+#%%
+# number of target wavs per keyword
+fig,ax = plt.subplots()
+ax.bar(target_word_counts.keys(), target_word_counts.values())
+ax.set_xticklabels(target_word_counts.keys(), rotation=90)
+#  # ax.set_xlabel("language")
+#  # ax.set_ylabel("")
+ax.set_ylim(0,800)
+fig.set_size_inches(30,10)
+
+#%%
+
+#%%
+
+
 base_dir = Path("/home/mark/tinyspeech_harvard/streaming_batch_sentences")
 frequent_words = Path("/home/mark/tinyspeech_harvard/frequent_words")
 for ix in range(3):
