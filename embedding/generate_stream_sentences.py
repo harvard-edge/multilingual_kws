@@ -328,6 +328,9 @@ def find_target_counts(target_word, common_counts):
 
 
 #%%
+
+# TODO(mmaz): choose words + models already trained in paper_data -- exclude mp3file_no_ext in N_SHOTS from timings
+
 base_dir = Path("/home/mark/tinyspeech_harvard/streaming_batch_sentences")
 frequent_words = Path("/home/mark/tinyspeech_harvard/frequent_words")
 for ix in range(3):

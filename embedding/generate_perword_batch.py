@@ -56,6 +56,8 @@ frequent_words = Path("/home/mark/tinyspeech_harvard/frequent_words")
 if os.path.isfile(base_dir / "gen.sh"):
     raise ValueError("already exists")
 
+#TODO(mmaz): copy in models from paper_data instead of retraining
+
 N_SHOTS = 5
 N_VAL = 30
 script_commands = []

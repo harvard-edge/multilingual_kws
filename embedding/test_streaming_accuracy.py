@@ -256,7 +256,7 @@ with open(DESTINATION_RESULTS_PKL, "wb") as fh:
 
 #%%
 ############################################################################
-#    full sentence batch streaming test
+#    batch streaming tests: [full sentence, individual-word]
 ############################################################################
 
 #sse = pathlib.Path("/home/mark/tinyspeech_harvard/streaming_batch_sentences/")

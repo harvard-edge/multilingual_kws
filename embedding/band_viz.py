@@ -323,14 +323,17 @@ results = []
 #non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2")
 #all_langs = [non_emb_langs]
 #for model_dest_dir in all_langs:
-base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_class/")
+base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
 for model_dest_dir in os.listdir(base_dir):
+    ix=0
     for pkl_file in os.listdir(base_dir / model_dest_dir / "results"):
         filename = base_dir / model_dest_dir / "results" / pkl_file
         print(filename)
         with open(filename, "rb") as fh:
             result = pickle.load(fh)
             results.append(result)
+        ix += 1
+    print("------ n results for language:", ix, model_dest_dir)
 print("N words", len(results))
 
 lang2results = {}
@@ -355,11 +358,11 @@ for ix, (lang, results) in enumerate(lang2results.items()):
         # curve_label = f"{target} (e:{ne},b:{nb})"
         # curve_label=target
         tprs, fprs, thresh_labels = roc_single_target(target_results, unknown_results)
-        print("target results mean", np.mean(target_results))
-        print("unknown results mean", np.mean(unknown_results))
+        # print("target results mean", np.mean(target_results))
+        # print("unknown results mean", np.mean(unknown_results))
         all_tprs.append(tprs)
         all_fprs.append(fprs)
-        ax.plot(fprs, tprs, color=color, alpha=0.1)
+        ax.plot(fprs, tprs, color=color, alpha=0.05)
         # ax.plot(fprs, tprs, label=curve_label)
     all_tprs = np.array(all_tprs)
     all_fprs = np.array(all_fprs)
@@ -403,6 +406,8 @@ for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_legend().get_te
     item.set_fontsize(20)
 fig.set_size_inches(14,14)
 fig.tight_layout()
-fig.savefig("/home/mark/tinyspeech_harvard/tinyspeech_images/multilang_classification.png")
+figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/multilang_classification.png"
+fig.savefig(figdest)
+print(figdest)
 
 # %%

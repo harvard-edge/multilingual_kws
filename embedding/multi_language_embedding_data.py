@@ -56,7 +56,7 @@ for lang, words in per_lang.items():
     if not len(commands) == len(commands_set):
         print("error", lang, len(commands))
 print("--------------")
-dup_word = "six"
+dup_word = "entre"
 commands = []
 for lang,commands_worddirs in per_lang.items():
     print(lang)
