@@ -331,7 +331,8 @@ paper_data = Path("/home/mark/tinyspeech_harvard/paper_data")
 data_dir = Path("/home/mark/tinyspeech_harvard/frequent_words")
 target_data = []
 target_word_counts = {}
-multilang_results_dir = paper_data / "multilang_classification"
+#multilang_results_dir = paper_data / "multilang_classification"
+multilang_results_dir = paper_data / "ooe_multilang_classification"
 for multiclass_lang in os.listdir(multilang_results_dir):
     lang_isocode = multiclass_lang.split("_")[-1]
     print("lang_isocode", lang_isocode)
@@ -368,11 +369,14 @@ fig.set_size_inches(30,10)
 #%%
 # use existing models and keywords
 
-base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences")
+#base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences")
+base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences")
 frequent_words = Path("/home/mark/tinyspeech_harvard/frequent_words")
 n_targets = len(target_data)
 for ix, (target_lang, target_word, multilang_class_dir, model_file) in enumerate(target_data):
-    print(f":::::::::::{ix} / {n_targets} ::::::::::: TARGET LANG: {target_lang}")
+    if target_lang == "fr" or target_lang == "rw":
+        continue
+    print(f"\n\n\n:::::::::::{ix} / {n_targets} ::::::::::: TARGET LANG: {target_lang}")
     start_gen = datetime.datetime.now()
 
     counts = word_extraction.wordcounts(f"/home/mark/tinyspeech_harvard/common-voice-forced-alignments/{target_lang}/validated.csv")
@@ -383,11 +387,13 @@ for ix, (target_lang, target_word, multilang_class_dir, model_file) in enumerate
         continue
 
     mp3_to_textgrid, timings = timings_for_target(target_word, target_lang)
-    if len(timings[target_word]) < 100 + 5 + 30: # even though we are not grabbing 5+30 utts
+
+    if len(timings[target_word]) < 45: # even though we already have a trained model 
         print("ERROR: not enough data in timings")
         continue
-
-    sample_data = select_samples(target_word, timings)
+    # fmt:on
+    sample_data = select_samples(target_word, timings, NUM_SAMPLES_FOR_STREAMING_WAV=40, NUM_SHOTS=5, NUM_VAL=0)
+    # fmt:off
 
     n_target_in_stream, n_nontarget_in_stream = count_number_of_non_target_words_in_stream(
         target_word, target_lang, sample_data["wav_data"]
@@ -460,8 +466,15 @@ for ix, (target_lang, target_word, multilang_class_dir, model_file) in enumerate
     print("elapsed time", end_gen - start_gen)
 
 #%%
-
+###############################
+############
+#####
+###
+#
 # generate new streaming data
+###
+#####
+#########
 
 base_dir = Path("/home/mark/tinyspeech_harvard/streaming_batch_sentences")
 frequent_words = Path("/home/mark/tinyspeech_harvard/frequent_words")
