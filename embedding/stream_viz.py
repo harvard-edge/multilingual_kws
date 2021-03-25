@@ -24,6 +24,7 @@ import seaborn as sns
 from sox.file_info import duration
 
 sns.set()
+sns.set_style("white")
 sns.set_palette("bright")
 
 sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
@@ -96,9 +97,8 @@ iso2lang = {
 }
 #%%
 
-def multi_streaming_FRR_FAR_curve(
-    lang2results, is_full_sentence, time_tolerance_ms=1500,
-):
+
+def multi_streaming_FRR_FAR_curve(lang2results, time_tolerance_ms=1500):
     fig, ax = plt.subplots()
     # fmt:off
 
@@ -111,11 +111,10 @@ def multi_streaming_FRR_FAR_curve(
         for (results_for_target, target, num_nontarget_words, duration_s) in all_targets:
             false_rejection_rates, false_accepts_secs, false_accepts_rates, threshs = [], [], [], []
             for ix, (thresh, (stats, found_words, all_found_w_confidences)) in enumerate(results_for_target.items()):
-                if thresh < 0.3 and is_full_sentence:
-                    # at a low threshold, everything triggers a detection
-                    # so ROC curves will loop back on themselves
-                    # (we dont really have traditional pos/neg ROC examples since this is timeseries data)
-                    continue
+                # note: seems like at a low threshold, everything triggers a detection
+                # so ROC curves will loop back on themselves?
+                # (we dont really have traditional pos/neg ROC examples since this is timeseries data)
+
                 groundtruth = stats._gt_occurrence
                 gt_target_times = [t for g, t in groundtruth if g == target]
                 # print("gt target occurences", len(gt_target_times))
@@ -248,23 +247,23 @@ def multi_streaming_FRR_FAR_curve(
                 raise ValueError("frrs not in sorted order -should be decreasing ")
         
         # for false accepts per hour
-        # https://stackoverflow.com/a/43035301
-        x_all = np.unique(np.concatenate(x_all_false_accepts_secs).ravel())
-        y_all = np.empty((x_all.shape[0], len(y_all_false_rejection_rates)))
-        for ix in range(len(x_all_false_accepts_secs)):
-            y_all[:, ix] = np.interp(
-                x_all, x_all_false_accepts_secs[ix], y_all_false_rejection_rates[ix]
-            )
+        # adapted from https://stackoverflow.com/a/43035301 which only works on non ragged data
+        # x_all = np.unique(np.concatenate(x_all_false_accepts_secs).ravel())
+        # y_all = np.empty((x_all.shape[0], len(y_all_false_rejection_rates)))
+        # for ix in range(len(x_all_false_accepts_secs)):
+        #     y_all[:, ix] = np.interp(
+        #         x_all, x_all_false_accepts_secs[ix], y_all_false_rejection_rates[ix]
+        #     )
 
 
         # for false accepts rate
         # adapted from https://stackoverflow.com/a/43035301 which only works on non ragged data
-        # x_all = np.unique(np.concatenate(x_all_false_accepts_rates).ravel())
-        # y_all = np.empty((x_all.shape[0], len(y_all_false_rejection_rates)))
-        # for ix in range(len(x_all_false_accepts_rates)):
-        #     y_all[:, ix] = np.interp(
-        #         x_all, x_all_false_accepts_rates[ix], y_all_false_rejection_rates[ix]
-        #     )
+        x_all = np.unique(np.concatenate(x_all_false_accepts_rates).ravel())
+        y_all = np.empty((x_all.shape[0], len(y_all_false_rejection_rates)))
+        for ix in range(len(x_all_false_accepts_rates)):
+            y_all[:, ix] = np.interp(
+                x_all, x_all_false_accepts_rates[ix], y_all_false_rejection_rates[ix]
+            )
 
 
         # draw bands over min and max:
@@ -283,10 +282,11 @@ def multi_streaming_FRR_FAR_curve(
     ax.legend(loc="upper right", ncol=2)
 
     ax.set_ylabel("False Rejection Rate")
-    ax.set_ylim([0,1])
+    ax.set_ylim([0, 1])
 
     ax.set_xlabel("False Acceptance Rate")
     ax.set_xlim(left=0, right=0.14)
+    # ax.set_xlim(left=0, right=1)
 
     # ax.set_xlabel("False Accepts/Hour")
     # ax.set_xlim(left=0, right=1000)
@@ -298,13 +298,17 @@ def multi_streaming_FRR_FAR_curve(
         + ax.get_xticklabels()
         + ax.get_yticklabels()
     ):
-        item.set_fontsize(30)
+        item.set_fontsize(40)
     # ax.set_title(
     #     f"{target} -> threshold: {threshold:0.2f}, TPR: {tpr}, FPR: {fpr_s}, false positives: {false_positives}, false_negatives: {false_negatives}, groundtruth positives: {len(gt_target_times)}"
     # )
     fig.tight_layout()
-    fig.savefig(f"/home/mark/tinyspeech_harvard/tinyspeech_images/streaming_sentence_roc.png",dpi=300)
+    fig.savefig(
+        f"/home/mark/tinyspeech_harvard/tinyspeech_images/streaming_sentence_roc.png",
+        dpi=300,
+    )
     return fig, ax
+
 
 # %%
 
@@ -320,7 +324,7 @@ with open("/home/mark/tinyspeech_harvard/paper_data/data_ooe_streaming_batch_sen
 print("n in-embedding examples", len(in_embedding_data))
 print("n ooe-embedding examples", len(ooe_embedding_data))
 available_results = []
-#for dat in in_embedding_data:
+# for dat in in_embedding_data:
 for dat in in_embedding_data:
     if os.path.isfile(dat.destination_result_pkl):
         available_results.append((True, dat))
@@ -349,7 +353,7 @@ for ix, (is_in_emedding, r) in enumerate(available_results):
 
     with open(r.destination_result_pkl, "rb") as fh:
         results = pickle.load(fh)
-    
+
     # assumes groundtruth is the same for every threshold
     # stats_for_first_thresh = list(results[r.target_word].items())[0][1][0]
     # groundtruth = stats_for_first_thresh._gt_occurrence
@@ -357,12 +361,20 @@ for ix, (is_in_emedding, r) in enumerate(available_results):
     multi_results.append(
         (results[r.target_word], r.target_word, r.target_lang, n_nontargets, duration_s)
     )
-lang2results = { l : [] for l in set([r[1].target_lang for r in available_results])}
-for (all_target_results, target_word, target_lang, n_nontargets, duration_s) in multi_results:
-    lang2results[target_lang].append((all_target_results, target_word, n_nontargets, duration_s))
+lang2results = {l: [] for l in set([r[1].target_lang for r in available_results])}
+for (
+    all_target_results,
+    target_word,
+    target_lang,
+    n_nontargets,
+    duration_s,
+) in multi_results:
+    lang2results[target_lang].append(
+        (all_target_results, target_word, n_nontargets, duration_s)
+    )
 
 # %%
-multi_streaming_FRR_FAR_curve(lang2results, is_full_sentence=True)
+multi_streaming_FRR_FAR_curve(lang2results)
 
 # %%
 

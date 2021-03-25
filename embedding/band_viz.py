@@ -230,7 +230,6 @@ ax.set_ylim(-0.01, 1)
 
 # %%
 # %%
-"""
 ## Per-Language Embedding Model
 fig, ax = plt.subplots()
 paper_results = Path("/home/mark/tinyspeech_harvard/paper_data/perlang/")
@@ -267,7 +266,7 @@ for i, langdir in enumerate(os.listdir(paper_results)):
         all_tprs.append(tprs)
         all_fprs.append(fprs)
         # plot just the line
-        #ax.plot(fprs, tprs, color=color, alpha=0.05)
+        ax.plot(fprs, tprs, color=color, alpha=0.05)
         # add the label:
         # ax.plot(fprs, tprs, label=curve_label)
     all_tprs = np.array(all_tprs)
@@ -313,7 +312,7 @@ for item in (
     + ax.get_xticklabels()
     + ax.get_yticklabels()
 ):
-    item.set_fontsize(20)
+    item.set_fontsize(40)
 
 fig.set_size_inches(14, 14)
 fig.tight_layout()
@@ -321,7 +320,6 @@ figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/individual_language_emb
 fig.savefig(figdest)
 print(figdest)
 
-"""
 # %%
 
 # %%
@@ -336,8 +334,8 @@ results = []
 #non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2")
 #all_langs = [non_emb_langs]
 #for model_dest_dir in all_langs:
-#base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
-base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_multilang_classification/")
+base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
+#base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_multilang_classification/")
 for model_dest_dir in os.listdir(base_dir):
     ix=0
     for pkl_file in os.listdir(base_dir / model_dest_dir / "results"):
@@ -417,10 +415,11 @@ ax.set_xlabel("False Positive Rate")
 ax.set_ylabel("True Positive Rate")
 for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_legend().get_texts() +
             ax.get_xticklabels() + ax.get_yticklabels()):
-    item.set_fontsize(20)
+    item.set_fontsize(40)
 fig.set_size_inches(14,14)
 fig.tight_layout()
-figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/ooe_multilang_classification.png"
+figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/multilang_classification.png"
+#figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/ooe_multilang_classification.png"
 fig.savefig(figdest)
 print(figdest)
 
