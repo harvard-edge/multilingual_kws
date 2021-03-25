@@ -223,8 +223,8 @@ def batch_streaming_analysis():
     batch_data_to_process = []
 
     # fmt: off
-    sse = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences/")
-    dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_streaming_batch_sentences/")
+    sse = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences/")
+    dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_ooe_streaming_batch_sentences/")
     # fmt: on
 
     for ix, lang_dir in enumerate(os.listdir(sse)):
@@ -265,7 +265,7 @@ def batch_streaming_analysis():
     print("n wavs", n_wavs, flush=True)
 
     batchdata_file = (
-        "/home/mark/tinyspeech_harvard/paper_data/data_streaming_batch_sentences.pkl"
+        "/home/mark/tinyspeech_harvard/paper_data/data_ooe_streaming_batch_sentences.pkl"
     )
     assert not os.path.exists(batchdata_file), f"{batchdata_file} already exists"
     with open(batchdata_file, "wb") as fh:
@@ -293,6 +293,6 @@ def batch_streaming_analysis():
 # %%
 
 # %%
-# python embedding/batch_streaming_analysis.py > /home/mark/tinyspeech_harvard/paper_data/results_multilang_sentence.log
+# python embedding/batch_streaming_analysis.py > /home/mark/tinyspeech_harvard/paper_data/results_ooe_multilang_sentence.log
 if __name__ == "__main__":
     batch_streaming_analysis()

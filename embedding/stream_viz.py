@@ -38,6 +38,34 @@ sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/embedding/")
 import batch_streaming_analysis as sa
 from batch_streaming_analysis import StreamTarget
 
+# %%
+
+# z = np.array(range(20))
+# q = np.array([0,1,2,3,4,5,8,7.99,4,3,5,100])
+# # find first value that is decreasing
+# decreasing = np.argwhere(np.diff(q) < 0)
+# print(decreasing)
+# if decreasing.size == 0:
+#     print("none")
+# else:
+#     first_decreasing = decreasing[0][0]
+#     print(first_decreasing)
+#     q[:first_decreasing]
+
+# a = np.array(range(3))
+# b = np.array(range(5))
+# z = np.array(np.concatenate([a,b]))
+# z, "---", z.shape
+
+# z = np.array([10, 9, 8, 7, 6, 7])
+# np.diff(z)
+# v = np.argwhere(np.diff(z) > 0)
+# z[:v[0][0] + 1]
+
+# z = np.array(range(20))
+# print(np.all(np.diff(z) >=0))
+# q = np.array(list(reversed(range(20))))
+# print(q, np.all(np.diff(q) <=0))
 
 #%%
 
@@ -78,10 +106,10 @@ def multi_streaming_FRR_FAR_curve(
         # aggregate bars for target_lang
         y_all_false_rejection_rates = []
         x_all_false_accepts_secs = []
-        x_all_false_accept_rates = []
+        x_all_false_accepts_rates = []
 
         for (results_for_target, target, num_nontarget_words, duration_s) in all_targets:
-            false_rejection_rates, false_accepts_secs, false_accept_rates, threshs = [], [], [], []
+            false_rejection_rates, false_accepts_secs, false_accepts_rates, threshs = [], [], [], []
             for ix, (thresh, (stats, found_words, all_found_w_confidences)) in enumerate(results_for_target.items()):
                 if thresh < 0.3 and is_full_sentence:
                     # at a low threshold, everything triggers a detection
@@ -152,50 +180,91 @@ def multi_streaming_FRR_FAR_curve(
                 # fpr_s = f"{fpr:0.2f}"
                 threshs.append(thresh)
                 false_accepts_secs.append(false_accepts_per_seconds)
-                false_accept_rates.append(fpr)
+                false_accepts_rates.append(fpr)
                 false_rejection_rates.append(false_rejections_per_instance)
             # draw a roc curve per keyword
             #ax.plot(false_accepts_secs, false_rejection_rates, label=f"{target} ({target_lang})")
+            #ax.plot(false_accepts_secs, false_rejection_rates, alpha=0.05)
+            ax.plot(false_accepts_rates, false_rejection_rates, alpha=0.05)
+
+            # flip data so curves are ordered from big threshold to small thresh (big thresholds are topleft for FRR curve) 
+            false_accepts_rates = np.flip(np.array(false_accepts_rates))
+            false_accepts_secs = np.flip(np.array(false_accepts_secs))
+            false_rejection_rates = np.flip(np.array(false_rejection_rates))
+
+            # remove any fprs that are not monotonically increasing (this can happen due to a too-permissive threshold on 
+            # timeseries data, since ths is not a traditional ROC curve on pos/neg examples - ROC will curl up on itself)
+            far_decreasing = np.argwhere(np.diff(false_accepts_rates) < 0)
+            # fas_decreasing = np.argwhere(np.diff(false_accepts_secs) < 0)
+            if far_decreasing.size != 0:
+                # +1 because np.diff returns an array one element shorter
+                starts_decreasing_ix = far_decreasing[0][0] + 1
+                false_accepts_rates = false_accepts_rates[:starts_decreasing_ix]
+                false_accepts_secs = false_accepts_secs[:starts_decreasing_ix]
+                false_rejection_rates = false_rejection_rates[:starts_decreasing_ix]
+            # also check frr
+            frr_increasing = np.argwhere(np.diff(false_rejection_rates) > 0)
+            if frr_increasing.size != 0:
+                # +1 because np.diff returns an array one element shorter
+                starts_increasing_ix = frr_increasing[0][0] + 1
+                false_accepts_rates = false_accepts_rates[:starts_increasing_ix]
+                false_accepts_secs = false_accepts_secs[:starts_increasing_ix]
+                false_rejection_rates = false_rejection_rates[:starts_increasing_ix]
 
             # collect data for whole language
-            x_all_false_accept_rates.append(false_accept_rates)
+            x_all_false_accepts_rates.append(false_accepts_rates)
             x_all_false_accepts_secs.append(false_accepts_secs)
             y_all_false_rejection_rates.append(false_rejection_rates)
 
-        x_all_false_accept_rates = np.array(x_all_false_accept_rates)
-        x_all_false_accepts_secs = np.array(x_all_false_accepts_secs)
-        y_all_false_rejection_rates = np.array(y_all_false_rejection_rates)
+        # note that these are ragged!
+        # x_all_false_accepts_rates
+        # x_all_false_accepts_secs 
+        # y_all_false_rejection_rates
+
+        # collect data for all languages
+        # x_all_false_accepts_rates = np.array(x_all_false_accepts_rates)
+        # x_all_false_accepts_secs = np.array(x_all_false_accepts_secs)
+        # y_all_false_rejection_rates = np.array(y_all_false_rejection_rates)
 
 
-
-        # make sure all tprs and fprs are monotonically increasing
-        # for ix in range(x_all_false_accept_rates.shape[0]):
-        #     # https://stackoverflow.com/a/47004533
-        #     if not np.all(np.diff(np.flip(x_all_false_accepts_secs[ix,:])) >=0):
-        #         raise ValueError("fprs (time) not in sorted order")
-        #     if not np.all(np.diff(np.flip(y_all_false_rejection_rates[ix,:])) >=0):
-        #         raise ValueError("fprs (rate) not in sorted order")
-        #     if not np.all(np.diff(np.flip(x_all_false_accept_rates[ix,:])) >=0):
-        #         raise ValueError("tprs not in sorted order")
+        # make sure all fprs are monotonically increasing, frrs decreasing
+        for ix in range(len(x_all_false_accepts_rates)):
+            # adapted from https://stackoverflow.com/a/47004533 which only works for non-ragged data
+            if not np.all(np.diff(x_all_false_accepts_secs[ix]) >=0):
+                print(ix)
+                print(x_all_false_accepts_secs[ix])
+                print(x_all_false_accepts_rates[ix])
+                print(y_all_false_rejection_rates[ix])
+                raise ValueError("fprs (time) not in sorted order - should be increasing")
+            if not np.all(np.diff(x_all_false_accepts_rates[ix]) >=0):
+                print(ix)
+                print(x_all_false_accepts_rates[ix])
+                raise ValueError("fprs (rate) not in sorted order - should be increasing")
+            if not np.all(np.diff(y_all_false_rejection_rates[ix]) <=0):
+                print(ix)
+                print(x_all_false_accepts_secs[ix])
+                print(x_all_false_accepts_rates[ix])
+                print(y_all_false_rejection_rates[ix])
+                raise ValueError("frrs not in sorted order -should be decreasing ")
         
-
         # for false accepts per hour
         # https://stackoverflow.com/a/43035301
-        # x_all = np.unique(x_all_false_accepts_secs.ravel())
-        # y_all = np.empty((x_all.shape[0], y_all_false_rejection_rates.shape[0]))
-        # for ix in range(x_all_false_accepts_secs.shape[0]):
-        #     y_all[:, ix] = np.interp(
-        #         x_all, np.flip(x_all_false_accepts_secs[ix, :]), np.flip(y_all_false_rejection_rates[ix, :])
-        #     )
+        x_all = np.unique(np.concatenate(x_all_false_accepts_secs).ravel())
+        y_all = np.empty((x_all.shape[0], len(y_all_false_rejection_rates)))
+        for ix in range(len(x_all_false_accepts_secs)):
+            y_all[:, ix] = np.interp(
+                x_all, x_all_false_accepts_secs[ix], y_all_false_rejection_rates[ix]
+            )
+
 
         # for false accepts rate
-        # https://stackoverflow.com/a/43035301
-        x_all = np.unique(x_all_false_accept_rates.ravel())
-        y_all = np.empty((x_all.shape[0], y_all_false_rejection_rates.shape[0]))
-        for ix in range(x_all_false_accept_rates.shape[0]):
-            y_all[:, ix] = np.interp(
-                x_all, np.flip(x_all_false_accept_rates[ix, :]), np.flip(y_all_false_rejection_rates[ix, :])
-            )
+        # adapted from https://stackoverflow.com/a/43035301 which only works on non ragged data
+        # x_all = np.unique(np.concatenate(x_all_false_accepts_rates).ravel())
+        # y_all = np.empty((x_all.shape[0], len(y_all_false_rejection_rates)))
+        # for ix in range(len(x_all_false_accepts_rates)):
+        #     y_all[:, ix] = np.interp(
+        #         x_all, x_all_false_accepts_rates[ix], y_all_false_rejection_rates[ix]
+        #     )
 
 
         # draw bands over min and max:
@@ -208,19 +277,20 @@ def multi_streaming_FRR_FAR_curve(
         ax.plot(x_all, ymean, alpha=0.7, linewidth=6, label=f"{iso2lang[target_lang]}")
         # draw bands over stdev
         ystdev = y_all.std(axis=1)
-        ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, alpha=0.1)
+        ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, alpha=0.05)
     # fmt:on
 
-    #ax.set_xlim(left=0, right=1000)
-    ax.set_xlim(left=0, right=0.14)
-    ax.set_ylim([0,1])
-    # ax.set_xlim(left=-5, right=200)
-    # ax.set_ylim([-0.001, 0.4])
-    ax.legend(loc="upper right")
-    #ax.set_xlabel("False Accepts/Hour")
-    ax.set_xlabel("False Acceptance Rate")
+    ax.legend(loc="upper right", ncol=2)
+
     ax.set_ylabel("False Rejection Rate")
-    # ax.set_xlim([175000,200000])
+    ax.set_ylim([0,1])
+
+    ax.set_xlabel("False Acceptance Rate")
+    ax.set_xlim(left=0, right=0.14)
+
+    # ax.set_xlabel("False Accepts/Hour")
+    # ax.set_xlim(left=0, right=1000)
+
     fig.set_size_inches(15, 15)
     for item in (
         [ax.title, ax.xaxis.label, ax.yaxis.label]
@@ -228,34 +298,47 @@ def multi_streaming_FRR_FAR_curve(
         + ax.get_xticklabels()
         + ax.get_yticklabels()
     ):
-        item.set_fontsize(20)
+        item.set_fontsize(30)
     # ax.set_title(
     #     f"{target} -> threshold: {threshold:0.2f}, TPR: {tpr}, FPR: {fpr_s}, false positives: {false_positives}, false_negatives: {false_negatives}, groundtruth positives: {len(gt_target_times)}"
     # )
-    # fig.savefig(f"/home/mark/tinyspeech_harvard/tmp/analysis/{target}/{target}_{threshold:0.2f}.png",dpi=300)
+    fig.tight_layout()
+    fig.savefig(f"/home/mark/tinyspeech_harvard/tinyspeech_images/streaming_sentence_roc.png",dpi=300)
     return fig, ax
 
 # %%
 
 # fmt: off
 in_embedding_sentence_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences")
+ooe_embedding_sentence_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences")
 with open("/home/mark/tinyspeech_harvard/paper_data/data_streaming_batch_sentences.pkl", 'rb') as fh:
     in_embedding_data = pickle.load(fh)
+with open("/home/mark/tinyspeech_harvard/paper_data/data_ooe_streaming_batch_sentences.pkl", 'rb') as fh:
+    ooe_embedding_data = pickle.load(fh)
 # fmt: on
 
 print("n in-embedding examples", len(in_embedding_data))
+print("n ooe-embedding examples", len(ooe_embedding_data))
 available_results = []
+#for dat in in_embedding_data:
 for dat in in_embedding_data:
     if os.path.isfile(dat.destination_result_pkl):
         available_results.append((True, dat))
+for dat in ooe_embedding_data:
+    if os.path.isfile(dat.destination_result_pkl):
+        available_results.append((False, dat))
 
 multi_results = []
 for ix, (is_in_emedding, r) in enumerate(available_results):
-    print(ix, "/", len(available_results))
+    if ix % 20 == 0:
+        print(ix, "/", len(available_results))
     # this is a full sentence streaming example, use the transcript
 
     # fmt: off
-    sdata_pkl = in_embedding_sentence_data_dir / f"streaming_{r.target_lang}" / f"streaming_{r.target_word}" / "streaming_test_data.pkl"
+    if is_in_emedding:
+        sdata_pkl = in_embedding_sentence_data_dir / f"streaming_{r.target_lang}" / f"streaming_{r.target_word}" / "streaming_test_data.pkl"
+    else:
+        sdata_pkl = ooe_embedding_sentence_data_dir / f"streaming_{r.target_lang}" / f"streaming_{r.target_word}" / "streaming_test_data.pkl"
     # fmt: on
 
     # dict_keys(['target_word', 'target_lang', 'mp3_to_textgrid', 'timings', 'sample_data', 'num_target_words_in_stream', 'num_non_target_words_in_stream'])
