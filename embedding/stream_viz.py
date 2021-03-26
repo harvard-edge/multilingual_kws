@@ -23,10 +23,6 @@ import plotly.graph_objects as go
 import seaborn as sns
 from sox.file_info import duration
 
-sns.set()
-sns.set_style("white")
-sns.set_palette("bright")
-
 sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
 # import input_data
 from accuracy_utils import StreamingAccuracyStats
@@ -38,6 +34,10 @@ from single_target_recognize_commands import (
 sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/embedding/")
 import batch_streaming_analysis as sa
 from batch_streaming_analysis import StreamTarget
+
+sns.set()
+sns.set_style("white")
+sns.set_palette("bright")
 
 # %%
 
@@ -163,7 +163,7 @@ def multi_streaming_FRR_FAR_curve(
                 #     continue
                 tpr = true_positives / len(gt_target_times)
                 false_rejections_per_instance = false_negatives / len(gt_target_times)
-                print("thresh", thresh, false_rejections_per_instance)
+                #print("thresh", thresh, false_rejections_per_instance)
                 # print("thresh", thresh, "true positives ", true_positives, "TPR:", tpr)
                 # TODO(MMAZ) is there a beter way to calculate false positive rate?
                 # fpr = false_positives / (false_positives + true_negatives)
@@ -279,11 +279,12 @@ def multi_streaming_FRR_FAR_curve(
     ax.legend(loc="upper right", ncol=2)
 
     ax.set_ylabel("False Rejection Rate")
-    ax.set_ylim([-0.001, 1])
+    ax.set_ylim([0, 1])
+    #ax.set_ylim([-0.001, 0.3])
 
     if use_rate:
         ax.set_xlabel("False Acceptance Rate")
-        ax.set_xlim(left=-0.001, right=0.14)
+        ax.set_xlim(left=0, right=0.14)
         #ax.set_xlim(left=0, right=0.14)
         #ax.set_xlim(left=0, right=1)
     else:
@@ -446,6 +447,27 @@ for (
 
 multi_streaming_FRR_FAR_curve(lang2results, figname, use_rate=True)
 
+# %%
+
+lang2wordcount = {}
+lang2wavcount = {}
+freq_words = Path("/home/mark/tinyspeech_harvard/frequent_words/")
+for lang in os.listdir(freq_words):
+    words = os.listdir(freq_words / lang / "clips")
+    print(lang, len(words))
+    n_wavs = 0
+    for w in words:
+        wavs = glob.glob(str(freq_words / lang / "clips" / w / "*.wav"))
+        n_wavs += len(wavs)
+    lang2wordcount[lang] = len(words)
+    lang2wavcount[lang] = n_wavs
+
+# %%
+n_utts = sum(lang2wavcount.values())
+n_kws = sum(lang2wordcount.values())
+print(n_utts / n_kws)
+print(n_utts, n_kws)
+print(len(lang2wordcount.keys()))
 # %%
 """
 in_embedding_results_dir = Path(

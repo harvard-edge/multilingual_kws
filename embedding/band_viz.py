@@ -16,6 +16,9 @@ import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
 
+# verified np.isclose(rtol=0.01) for average=binary
+#from sklearn.metrics import f1_score
+
 sns.set()
 sns.set_style("whitegrid")
 sns.set_palette("bright")
@@ -69,15 +72,39 @@ def roc_single_target(target_results, unknown_results):
     # TPR = TP / (TP + FN)
     # FPR = FP / (FP + TN)
 
-    tprs, fprs = [], []
+    # F1  = TP / (TP + 1/2 (FP + FN))
+    # FNR = FN / P == FN / (TP + FN)
 
-    threshs = np.arange(0, 1.01, 0.01)
+    tprs, fprs = [], []
+    error_rate_to_f1_scores = []
+
+    #threshs = np.arange(0, 1.01, 0.01)
+    threshs = np.arange(0.1, 0.9, 0.01)
     for threshold in threshs:
-        tpr = target_results[target_results > threshold].shape[0] / total_positives
+        # fmt: off
+        false_negatives = target_results[target_results < threshold].shape[0]
+        true_positives = target_results[target_results > threshold].shape[0]
+        false_positives = unknown_results[unknown_results > threshold].shape[0]
+
+        tpr = true_positives / total_positives
         tprs.append(tpr)
-        fpr = unknown_results[unknown_results > threshold].shape[0] / unknown_total
+        fpr = false_positives / unknown_total
         fprs.append(fpr)
-    return tprs, fprs, threshs
+
+        fnr = false_negatives / total_positives
+
+        f1_score = true_positives / (true_positives + 0.5 *( false_positives + false_negatives ))
+        error_rate = np.abs(fnr - fpr)
+        error_rate_to_f1_scores.append([error_rate, threshold, f1_score, fpr, tpr])
+        # fmt: on
+    
+    error_rate_to_f1_scores = np.array(error_rate_to_f1_scores)
+    # find EER https://stackoverflow.com/a/46026962
+    equal_error_rate = np.nanargmin(error_rate_to_f1_scores[:, 0])
+    print(error_rate_to_f1_scores[equal_error_rate])
+    return tprs, fprs, threshs, error_rate_to_f1_scores[equal_error_rate]
+
+
 
 
 def roc_curve_multiclass(target_resuts, unknown_results):
@@ -113,6 +140,7 @@ def roc_curve_multiclass(target_resuts, unknown_results):
 
 
 # %%
+
 # one language roc curves without bands
 """
 LANG_ISOCODE = "it"
@@ -234,6 +262,7 @@ ax.set_ylim(-0.01, 1)
 fig, ax = plt.subplots()
 paper_results = Path("/home/mark/tinyspeech_harvard/paper_data/perlang/")
 # for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
+all_f1_scores = []
 for i, langdir in enumerate(os.listdir(paper_results)):
     lang_isocode = langdir.split("_")[-1]
     color = sns.color_palette("bright")[i % len(sns.color_palette("bright"))]
@@ -253,7 +282,7 @@ for i, langdir in enumerate(os.listdir(paper_results)):
     print("N words", len(results))
 
     # def make_roc(results: List[Dict]):
-    all_tprs, all_fprs = [], []
+    all_tprs, all_fprs, lang_f1_scores = [], [], []
     for ix, res in enumerate(results):
         target_results = res["target_results"]
         unknown_results = res["unknown_results"]
@@ -262,15 +291,23 @@ for i, langdir in enumerate(os.listdir(paper_results)):
         # nb = res["details"]["num_batches"]
         # curve_label = f"{target} (e:{ne},b:{nb})"
         curve_label=target
-        tprs, fprs, thresh_labels = roc_single_target(target_results, unknown_results)
+        tprs, fprs, thresh_labels, eer_info = roc_single_target(target_results, unknown_results)
         all_tprs.append(tprs)
         all_fprs.append(fprs)
         # plot just the line
         ax.plot(fprs, tprs, color=color, alpha=0.05)
         # add the label:
         # ax.plot(fprs, tprs, label=curve_label)
+
+        # eer / f1
+        ax.plot(eer_info[3], eer_info[4], marker='o', markersize=2, color='red')
+        lang_f1_scores.append(eer_info[2])
+
     all_tprs = np.array(all_tprs)
     all_fprs = np.array(all_fprs)
+
+    lang_f1_scores = np.array(lang_f1_scores)
+    all_f1_scores.append(np.mean(lang_f1_scores))
 
     # make sure all tprs and fprs are monotonically increasing
     for ix in range(all_fprs.shape[0]):
@@ -319,6 +356,9 @@ fig.tight_layout()
 figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/individual_language_embedding_models.png"
 fig.savefig(figdest)
 print(figdest)
+
+all_f1_scores = np.array(all_f1_scores)
+print("AVG F1", np.mean(all_f1_scores))
 
 # %%
 
