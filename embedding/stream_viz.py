@@ -98,7 +98,9 @@ iso2lang = {
 #%%
 
 
-def multi_streaming_FRR_FAR_curve(lang2results, time_tolerance_ms=1500):
+def multi_streaming_FRR_FAR_curve(
+    lang2results, figname, use_rate=True, time_tolerance_ms=1500
+):
     fig, ax = plt.subplots()
     # fmt:off
 
@@ -220,11 +222,6 @@ def multi_streaming_FRR_FAR_curve(lang2results, time_tolerance_ms=1500):
         # x_all_false_accepts_secs 
         # y_all_false_rejection_rates
 
-        # collect data for all languages
-        # x_all_false_accepts_rates = np.array(x_all_false_accepts_rates)
-        # x_all_false_accepts_secs = np.array(x_all_false_accepts_secs)
-        # y_all_false_rejection_rates = np.array(y_all_false_rejection_rates)
-
 
         # make sure all fprs are monotonically increasing, frrs decreasing
         for ix in range(len(x_all_false_accepts_rates)):
@@ -246,24 +243,24 @@ def multi_streaming_FRR_FAR_curve(lang2results, time_tolerance_ms=1500):
                 print(y_all_false_rejection_rates[ix])
                 raise ValueError("frrs not in sorted order -should be decreasing ")
         
-        # for false accepts per hour
-        # adapted from https://stackoverflow.com/a/43035301 which only works on non ragged data
-        # x_all = np.unique(np.concatenate(x_all_false_accepts_secs).ravel())
-        # y_all = np.empty((x_all.shape[0], len(y_all_false_rejection_rates)))
-        # for ix in range(len(x_all_false_accepts_secs)):
-        #     y_all[:, ix] = np.interp(
-        #         x_all, x_all_false_accepts_secs[ix], y_all_false_rejection_rates[ix]
-        #     )
-
-
-        # for false accepts rate
-        # adapted from https://stackoverflow.com/a/43035301 which only works on non ragged data
-        x_all = np.unique(np.concatenate(x_all_false_accepts_rates).ravel())
-        y_all = np.empty((x_all.shape[0], len(y_all_false_rejection_rates)))
-        for ix in range(len(x_all_false_accepts_rates)):
-            y_all[:, ix] = np.interp(
-                x_all, x_all_false_accepts_rates[ix], y_all_false_rejection_rates[ix]
-            )
+        if not use_rate:
+            # for false accepts per hour
+            # adapted from https://stackoverflow.com/a/43035301 which only works on non ragged data
+            x_all = np.unique(np.concatenate(x_all_false_accepts_secs).ravel())
+            y_all = np.empty((x_all.shape[0], len(y_all_false_rejection_rates)))
+            for ix in range(len(x_all_false_accepts_secs)):
+                y_all[:, ix] = np.interp(
+                    x_all, x_all_false_accepts_secs[ix], y_all_false_rejection_rates[ix]
+                )
+        else:
+            # for false accepts rate
+            # adapted from https://stackoverflow.com/a/43035301 which only works on non ragged data
+            x_all = np.unique(np.concatenate(x_all_false_accepts_rates).ravel())
+            y_all = np.empty((x_all.shape[0], len(y_all_false_rejection_rates)))
+            for ix in range(len(x_all_false_accepts_rates)):
+                y_all[:, ix] = np.interp(
+                    x_all, x_all_false_accepts_rates[ix], y_all_false_rejection_rates[ix]
+                )
 
 
         # draw bands over min and max:
@@ -282,14 +279,16 @@ def multi_streaming_FRR_FAR_curve(lang2results, time_tolerance_ms=1500):
     ax.legend(loc="upper right", ncol=2)
 
     ax.set_ylabel("False Rejection Rate")
-    ax.set_ylim([0, 1])
+    ax.set_ylim([-0.001, 1])
 
-    ax.set_xlabel("False Acceptance Rate")
-    ax.set_xlim(left=0, right=0.14)
-    # ax.set_xlim(left=0, right=1)
-
-    # ax.set_xlabel("False Accepts/Hour")
-    # ax.set_xlim(left=0, right=1000)
+    if use_rate:
+        ax.set_xlabel("False Acceptance Rate")
+        ax.set_xlim(left=-0.001, right=0.14)
+        #ax.set_xlim(left=0, right=0.14)
+        #ax.set_xlim(left=0, right=1)
+    else:
+        ax.set_xlabel("False Accepts/Hour")
+        ax.set_xlim(left=0, right=100)
 
     fig.set_size_inches(15, 15)
     for item in (
@@ -303,16 +302,24 @@ def multi_streaming_FRR_FAR_curve(lang2results, time_tolerance_ms=1500):
     #     f"{target} -> threshold: {threshold:0.2f}, TPR: {tpr}, FPR: {fpr_s}, false positives: {false_positives}, false_negatives: {false_negatives}, groundtruth positives: {len(gt_target_times)}"
     # )
     fig.tight_layout()
-    fig.savefig(
-        f"/home/mark/tinyspeech_harvard/tinyspeech_images/streaming_sentence_roc.png",
-        dpi=300,
-    )
+    fig.savefig(figname, dpi=300)
     return fig, ax
 
 
 # %%
 
+multi_streaming_FRR_FAR_curve(lang2results, figname, use_rate=True)
+
+# %%
+####################################
+# full sentence streaming analysis
+####################################
+for _ in range(1):
+    raise ValueError("this is for sentence analysis - already done")
+
 # fmt: off
+figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/streaming_sentence_roc.png"
+
 in_embedding_sentence_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences")
 ooe_embedding_sentence_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences")
 with open("/home/mark/tinyspeech_harvard/paper_data/data_streaming_batch_sentences.pkl", 'rb') as fh:
@@ -374,10 +381,70 @@ for (
     )
 
 # %%
-multi_streaming_FRR_FAR_curve(lang2results)
+multi_streaming_FRR_FAR_curve(lang2results, figname, use_rate=True)
 
 # %%
 
+################################
+#################
+######
+# per-word streaming data
+######
+#################
+################################
+
+# fmt: off
+figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/streaming_perword_roc.png"
+
+available_results = []
+
+in_embedding_perword_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_perword")
+with open("/home/mark/tinyspeech_harvard/paper_data/data_streaming_batch_perword.pkl", 'rb') as fh:
+    in_embedding_data = pickle.load(fh)
+print("n in-embedding examples", len(in_embedding_data))
+for dat in in_embedding_data:
+    if os.path.isfile(dat.destination_result_pkl):
+        available_results.append((True, dat))
+
+ooe_embedding_perword_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_perword")
+with open("/home/mark/tinyspeech_harvard/paper_data/data_ooe_streaming_batch_perword.pkl", 'rb') as fh:
+    ooe_embedding_data = pickle.load(fh)
+print("n ooe-embedding examples", len(ooe_embedding_data))
+for dat in ooe_embedding_data:
+    if os.path.isfile(dat.destination_result_pkl):
+        available_results.append((False, dat))
+# fmt: on
+
+multi_results = []
+for ix, (is_in_emedding, r) in enumerate(available_results):
+    if ix % 20 == 0:
+        print(ix, "/", len(available_results))
+
+    # this is a per-word streaming example, must manually count unknowns
+    with open(r.stream_label, "r") as fh:
+        ls = fh.readlines()
+    n_nontargets = [l.split(",")[0] for l in ls].count("_unknown_")
+    duration_s = sox.file_info.duration(r.stream_wav)
+
+    with open(r.destination_result_pkl, "rb") as fh:
+        results = pickle.load(fh)
+
+    multi_results.append(
+        (results[r.target_word], r.target_word, r.target_lang, n_nontargets, duration_s)
+    )
+lang2results = {l: [] for l in set([r[1].target_lang for r in available_results])}
+for (
+    all_target_results,
+    target_word,
+    target_lang,
+    n_nontargets,
+    duration_s,
+) in multi_results:
+    lang2results[target_lang].append(
+        (all_target_results, target_word, n_nontargets, duration_s)
+    )
+
+multi_streaming_FRR_FAR_curve(lang2results, figname, use_rate=True)
 
 # %%
 """
