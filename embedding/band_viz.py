@@ -269,6 +269,11 @@ ax.set_ylim(-0.01, 1)
 # %%
 # %%
 ## Per-Language Embedding Model
+
+#f1_thresh = None
+f1_thresh = 0.8
+# unweighted f1 @ f1_thresh = 0.58
+
 fig, ax = plt.subplots()
 paper_results = Path("/home/mark/tinyspeech_harvard/paper_data/perlang/")
 # for ix, LANG_ISOCODE in enumerate(["de", "rw", "es", "it", "nl"]):
@@ -301,7 +306,7 @@ for i, langdir in enumerate(os.listdir(paper_results)):
         # nb = res["details"]["num_batches"]
         # curve_label = f"{target} (e:{ne},b:{nb})"
         curve_label=target
-        tprs, fprs, thresh_labels, eer_info = roc_single_target(target_results, unknown_results, f1_at_threshold=0.8)
+        tprs, fprs, thresh_labels, er_info = roc_single_target(target_results, unknown_results, f1_at_threshold=f1_thresh)
         all_tprs.append(tprs)
         all_fprs.append(fprs)
         # plot just the line
@@ -310,8 +315,8 @@ for i, langdir in enumerate(os.listdir(paper_results)):
         # ax.plot(fprs, tprs, label=curve_label)
 
         # eer / f1
-        ax.plot(eer_info[3], eer_info[4], marker='o', markersize=2, color='red')
-        lang_f1_scores.append(eer_info[2])
+        ax.plot(er_info[3], er_info[4], marker='o', markersize=2, color='red')
+        lang_f1_scores.append(er_info[2])
 
     all_tprs = np.array(all_tprs)
     all_fprs = np.array(all_fprs)
@@ -384,8 +389,18 @@ results = []
 #non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2")
 #all_langs = [non_emb_langs]
 #for model_dest_dir in all_langs:
-base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
-#base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_multilang_classification/")
+
+#f1_thresh=None # EER
+f1_thresh=0.8
+
+# avg unweighted f1 @ f1_thresh - 0.75
+# base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
+# figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/multilang_classification.png"
+
+# avg unweighted f1 @ f1_thresh - 0.65
+base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_multilang_classification/")
+figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/ooe_multilang_classification.png"
+
 for model_dest_dir in os.listdir(base_dir):
     ix=0
     for pkl_file in os.listdir(base_dir / model_dest_dir / "results"):
@@ -405,11 +420,12 @@ for ix, res in enumerate(results):
         lang2results[target_lang] = []
     lang2results[target_lang].append(res)
 
+all_f1_scores = []
 fig, ax = plt.subplots()
 for ix, (lang, results) in enumerate(lang2results.items()):
     color = sns.color_palette("bright")[ix % len(sns.color_palette("bright"))]
 
-    all_tprs, all_fprs = [], []
+    all_tprs, all_fprs, lang_f1_scores = [], [], []
     for ix, res in enumerate(results):
         target_results = res["target_results"]
         unknown_results = res["unknown_results"]
@@ -419,15 +435,22 @@ for ix, (lang, results) in enumerate(lang2results.items()):
         target_lang = res["target_lang"]
         # curve_label = f"{target} (e:{ne},b:{nb})"
         # curve_label=target
-        tprs, fprs, thresh_labels = roc_single_target(target_results, unknown_results)
+        tprs, fprs, thresh_labels, er_info = roc_single_target(target_results, unknown_results, f1_at_threshold=f1_thresh)
         # print("target results mean", np.mean(target_results))
         # print("unknown results mean", np.mean(unknown_results))
         all_tprs.append(tprs)
         all_fprs.append(fprs)
         ax.plot(fprs, tprs, color=color, alpha=0.05)
         # ax.plot(fprs, tprs, label=curve_label)
+
+        # eer / f1
+        ax.plot(er_info[3], er_info[4], marker='o', markersize=2, color='red')
+        lang_f1_scores.append(er_info[2])
     all_tprs = np.array(all_tprs)
     all_fprs = np.array(all_fprs)
+
+    lang_f1_scores = np.array(lang_f1_scores)
+    all_f1_scores.append(np.mean(lang_f1_scores))
 
     # make sure all tprs and fprs are monotonically increasing
     for ix in range(all_fprs.shape[0]):
@@ -468,9 +491,10 @@ for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_legend().get_te
     item.set_fontsize(40)
 fig.set_size_inches(14,14)
 fig.tight_layout()
-figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/multilang_classification.png"
 #figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/ooe_multilang_classification.png"
 fig.savefig(figdest)
 print(figdest)
 
+all_f1_scores = np.array(all_f1_scores)
+print("AVG F1", np.mean(all_f1_scores))
 # %%
