@@ -315,7 +315,7 @@ for i, langdir in enumerate(os.listdir(paper_results)):
         # ax.plot(fprs, tprs, label=curve_label)
 
         # eer / f1
-        ax.plot(er_info[3], er_info[4], marker='o', markersize=2, color='red')
+        #ax.plot(er_info[3], er_info[4], marker='o', markersize=2, color='red')
         lang_f1_scores.append(er_info[2])
 
     all_tprs = np.array(all_tprs)
@@ -394,12 +394,12 @@ results = []
 f1_thresh=0.8
 
 # avg unweighted f1 @ f1_thresh - 0.75
-# base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
-# figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/multilang_classification.png"
+base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
+figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/multilang_classification.png"
 
 # avg unweighted f1 @ f1_thresh - 0.65
-base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_multilang_classification/")
-figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/ooe_multilang_classification.png"
+# base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_multilang_classification/")
+# figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/ooe_multilang_classification.png"
 
 for model_dest_dir in os.listdir(base_dir):
     ix=0
@@ -444,7 +444,7 @@ for ix, (lang, results) in enumerate(lang2results.items()):
         # ax.plot(fprs, tprs, label=curve_label)
 
         # eer / f1
-        ax.plot(er_info[3], er_info[4], marker='o', markersize=2, color='red')
+        #ax.plot(er_info[3], er_info[4], marker='o', markersize=2, color='red')
         lang_f1_scores.append(er_info[2])
     all_tprs = np.array(all_tprs)
     all_fprs = np.array(all_fprs)

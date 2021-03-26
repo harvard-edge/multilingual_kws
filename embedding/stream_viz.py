@@ -40,6 +40,8 @@ sns.set_style("white")
 sns.set_palette("bright")
 
 # %%
+ACC_THRESH=0.8
+# %%
 
 # z = np.array(range(20))
 # q = np.array([0,1,2,3,4,5,8,7.99,4,3,5,100])
@@ -99,7 +101,7 @@ iso2lang = {
 
 
 def multi_streaming_FRR_FAR_curve(
-    lang2results, figname, use_rate=True, time_tolerance_ms=1500
+    lang2results, figname,  average_accuracy_for, use_rate=True, time_tolerance_ms=1500
 ):
     fig, ax = plt.subplots()
     # fmt:off
@@ -109,9 +111,12 @@ def multi_streaming_FRR_FAR_curve(
         y_all_false_rejection_rates = []
         x_all_false_accepts_secs = []
         x_all_false_accepts_rates = []
+        accuracy_per_lang = []
 
         for (results_for_target, target, num_nontarget_words, duration_s) in all_targets:
             false_rejection_rates, false_accepts_secs, false_accepts_rates, threshs = [], [], [], []
+            accuracy_per_word = []
+
             for ix, (thresh, (stats, found_words, all_found_w_confidences)) in enumerate(results_for_target.items()):
                 # note: seems like at a low threshold, everything triggers a detection
                 # so ROC curves will loop back on themselves?
@@ -183,6 +188,10 @@ def multi_streaming_FRR_FAR_curve(
                 false_accepts_secs.append(false_accepts_per_seconds)
                 false_accepts_rates.append(fpr)
                 false_rejection_rates.append(false_rejections_per_instance)
+                if np.isclose(average_accuracy_for, thresh):
+                    accuracy_per_word.append(np.array([tpr, fpr]))
+            
+            accuracy_per_lang.append(np.mean(accuracy_per_word, axis=0))
             # draw a roc curve per keyword
             #ax.plot(false_accepts_secs, false_rejection_rates, label=f"{target} ({target_lang})")
             #ax.plot(false_accepts_secs, false_rejection_rates, alpha=0.05)
@@ -304,19 +313,23 @@ def multi_streaming_FRR_FAR_curve(
     # )
     fig.tight_layout()
     fig.savefig(figname, dpi=300)
+
+    print("AVG ACCURACY FOR ALL LANGS", np.mean(accuracy_per_lang, axis=0))
     return fig, ax
 
 
 # %%
 
-multi_streaming_FRR_FAR_curve(lang2results, figname, use_rate=True)
+multi_streaming_FRR_FAR_curve(lang2results, figname, average_accuracy_for=ACC_THRESH, use_rate=True)
 
 # %%
 ####################################
 # full sentence streaming analysis
 ####################################
-for _ in range(1):
-    raise ValueError("this is for sentence analysis - already done")
+# AVG ACCURACY FOR ALL LANGS [0.19      0.0018318]
+
+# for _ in range(1):
+#     raise ValueError("this is for sentence analysis - already done")
 
 # fmt: off
 figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/streaming_sentence_roc.png"
@@ -382,7 +395,7 @@ for (
     )
 
 # %%
-multi_streaming_FRR_FAR_curve(lang2results, figname, use_rate=True)
+multi_streaming_FRR_FAR_curve(lang2results, figname, average_accuracy_for=ACC_THRESH, use_rate=True)
 
 # %%
 
@@ -393,6 +406,8 @@ multi_streaming_FRR_FAR_curve(lang2results, figname, use_rate=True)
 ######
 #################
 ################################
+
+# AVG ACCURACY FOR ALL LANGS [0.85250496 0.01230081]
 
 # fmt: off
 figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/streaming_perword_roc.png"
@@ -445,7 +460,9 @@ for (
         (all_target_results, target_word, n_nontargets, duration_s)
     )
 
-multi_streaming_FRR_FAR_curve(lang2results, figname, use_rate=True)
+multi_streaming_FRR_FAR_curve(lang2results, figname, average_accuracy_for=ACC_THRESH, use_rate=True)
+# %%
+multi_streaming_FRR_FAR_curve(lang2results, figname, average_accuracy_for=ACC_THRESH, use_rate=True)
 
 # %%
 
