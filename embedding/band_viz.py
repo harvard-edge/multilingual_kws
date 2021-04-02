@@ -17,7 +17,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # verified np.isclose(rtol=0.01) for average=binary
-#from sklearn.metrics import f1_score
+# from sklearn.metrics import f1_score
 
 sns.set()
 sns.set_style("whitegrid")
@@ -53,6 +53,16 @@ iso2lang = {
     "uk": "Ukranian",
 }
 
+# slightly more than 2 cycles of this color palette
+# reversed: I prefer these colors
+iso2color = {
+    isocode: sns.color_palette("bright")[ix % len(sns.color_palette("bright"))]
+    for ix, isocode in enumerate(reversed(list(iso2lang.keys())))
+}
+iso2color
+
+
+# %%
 def roc_single_target(target_results, unknown_results, f1_at_threshold=None):
     # _TARGET_ is class 2, _UNKNOWN_ is class 1
 
@@ -78,7 +88,7 @@ def roc_single_target(target_results, unknown_results, f1_at_threshold=None):
     tprs, fprs = [], []
     error_rate_to_f1_scores = []
 
-    #threshs = np.arange(0, 1.01, 0.01)
+    # threshs = np.arange(0, 1.01, 0.01)
     threshs = np.arange(0.01, 0.99, 0.01)
     for threshold in threshs:
         # fmt: off
@@ -102,7 +112,7 @@ def roc_single_target(target_results, unknown_results, f1_at_threshold=None):
                 error_rate_to_f1_scores.append([error_rate, threshold, f1_score, fpr, tpr])
 
         # fmt: on
-    
+
     error_rate_to_f1_scores = np.array(error_rate_to_f1_scores)
     if f1_at_threshold is None:
         # find EER https://stackoverflow.com/a/46026962
@@ -113,8 +123,6 @@ def roc_single_target(target_results, unknown_results, f1_at_threshold=None):
         assert error_rate_to_f1_scores.shape[0] == 1
         error_rate_info = error_rate_to_f1_scores[0]
     return tprs, fprs, threshs, error_rate_info
-
-
 
 
 def roc_curve_multiclass(target_resuts, unknown_results):
@@ -270,7 +278,7 @@ ax.set_ylim(-0.01, 1)
 # %%
 ## Per-Language Embedding Model
 
-#f1_thresh = None
+# f1_thresh = None
 f1_thresh = 0.8
 # unweighted f1 @ f1_thresh = 0.58
 
@@ -280,7 +288,7 @@ paper_results = Path("/home/mark/tinyspeech_harvard/paper_data/perlang/")
 all_f1_scores = []
 for i, langdir in enumerate(os.listdir(paper_results)):
     lang_isocode = langdir.split("_")[-1]
-    color = sns.color_palette("bright")[i % len(sns.color_palette("bright"))]
+    # color = sns.color_palette("bright")[i % len(sns.color_palette("bright"))]
 
     # data_dir = Path(f"/home/mark/tinyspeech_harvard/frequent_words/{LANG_ISOCODE}/clips/")
     # traindir = Path(f"/home/mark/tinyspeech_harvard/train_{LANG_ISOCODE}_165/")
@@ -305,17 +313,19 @@ for i, langdir in enumerate(os.listdir(paper_results)):
         # ne = res["details"]["num_epochs"]
         # nb = res["details"]["num_batches"]
         # curve_label = f"{target} (e:{ne},b:{nb})"
-        curve_label=target
-        tprs, fprs, thresh_labels, er_info = roc_single_target(target_results, unknown_results, f1_at_threshold=f1_thresh)
+        curve_label = target
+        tprs, fprs, thresh_labels, er_info = roc_single_target(
+            target_results, unknown_results, f1_at_threshold=f1_thresh
+        )
         all_tprs.append(tprs)
         all_fprs.append(fprs)
         # plot just the line
-        ax.plot(fprs, tprs, color=color, alpha=0.05)
+        ax.plot(fprs, tprs, color=iso2color[lang_isocode], alpha=0.05)
         # add the label:
         # ax.plot(fprs, tprs, label=curve_label)
 
         # eer / f1
-        #ax.plot(er_info[3], er_info[4], marker='o', markersize=2, color='red')
+        # ax.plot(er_info[3], er_info[4], marker='o', markersize=2, color='red')
         lang_f1_scores.append(er_info[2])
 
     all_tprs = np.array(all_tprs)
@@ -347,13 +357,13 @@ for i, langdir in enumerate(os.listdir(paper_results)):
 
     ymean = y_all.mean(axis=1)
     # draw mean
-    ax.plot(x_all, ymean, alpha=0.7, linewidth=6, label=f"{iso2lang[lang_isocode]}")
+    ax.plot(x_all, ymean, alpha=0.7, linewidth=6, color=iso2color[lang_isocode], label=f"{iso2lang[lang_isocode]}")
     # draw bands over stdev
     ystdev = y_all.std(axis=1)
-    ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, alpha=0.1)
+    ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, color=iso2color[lang_isocode], alpha=0.1)
 
-AX_LIM = 0.7
-ax.set_xlim(0, 1-AX_LIM)
+AX_LIM = 0.75
+ax.set_xlim(0, 1 - AX_LIM)
 ax.set_ylim(AX_LIM, 1)
 ax.legend(loc="lower right")
 ax.set_xlabel("False Positive Rate")
@@ -368,7 +378,7 @@ for item in (
 
 fig.set_size_inches(14, 14)
 fig.tight_layout()
-figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/individual_language_embedding_models.png"
+figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/individual_language_embedding_models.png"
 fig.savefig(figdest)
 print(figdest)
 
@@ -383,26 +393,30 @@ print("AVG F1", np.mean(all_f1_scores))
 # openai viz: https://github.com/openai/baselines/blob/master/docs/viz/viz.ipynb
 
 results = []
-#emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis")
-#non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe")
-#all_langs = [emb_langs, non_emb_langs]
-#non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2")
-#all_langs = [non_emb_langs]
-#for model_dest_dir in all_langs:
+# emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis")
+# non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe")
+# all_langs = [emb_langs, non_emb_langs]
+# non_emb_langs = Path("/home/mark/tinyspeech_harvard/multilang_analysis_ooe_v2")
+# all_langs = [non_emb_langs]
+# for model_dest_dir in all_langs:
 
-#f1_thresh=None # EER
-f1_thresh=0.8
+# f1_thresh=None # EER
+f1_thresh = 0.8
+
+# fmt: off
 
 # avg unweighted f1 @ f1_thresh - 0.75
-base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
-figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/multilang_classification.png"
+# base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/multilang_classification/")
+# figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/multilang_classification.png"
 
 # avg unweighted f1 @ f1_thresh - 0.65
-# base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_multilang_classification/")
-# figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/ooe_multilang_classification.png"
+base_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_multilang_classification/")
+figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/ooe_multilang_classification.png"
+
+# fmt: on
 
 for model_dest_dir in os.listdir(base_dir):
-    ix=0
+    ix = 0
     for pkl_file in os.listdir(base_dir / model_dest_dir / "results"):
         filename = base_dir / model_dest_dir / "results" / pkl_file
         print(filename)
@@ -423,7 +437,7 @@ for ix, res in enumerate(results):
 all_f1_scores = []
 fig, ax = plt.subplots()
 for ix, (lang, results) in enumerate(lang2results.items()):
-    color = sns.color_palette("bright")[ix % len(sns.color_palette("bright"))]
+    # color = sns.color_palette("bright")[ix % len(sns.color_palette("bright"))]
 
     all_tprs, all_fprs, lang_f1_scores = [], [], []
     for ix, res in enumerate(results):
@@ -435,16 +449,18 @@ for ix, (lang, results) in enumerate(lang2results.items()):
         target_lang = res["target_lang"]
         # curve_label = f"{target} (e:{ne},b:{nb})"
         # curve_label=target
-        tprs, fprs, thresh_labels, er_info = roc_single_target(target_results, unknown_results, f1_at_threshold=f1_thresh)
+        tprs, fprs, thresh_labels, er_info = roc_single_target(
+            target_results, unknown_results, f1_at_threshold=f1_thresh
+        )
         # print("target results mean", np.mean(target_results))
         # print("unknown results mean", np.mean(unknown_results))
         all_tprs.append(tprs)
         all_fprs.append(fprs)
-        ax.plot(fprs, tprs, color=color, alpha=0.05)
+        ax.plot(fprs, tprs, color=iso2color[lang], alpha=0.05)
         # ax.plot(fprs, tprs, label=curve_label)
 
         # eer / f1
-        #ax.plot(er_info[3], er_info[4], marker='o', markersize=2, color='red')
+        # ax.plot(er_info[3], er_info[4], marker='o', markersize=2, color='red')
         lang_f1_scores.append(er_info[2])
     all_tprs = np.array(all_tprs)
     all_fprs = np.array(all_fprs)
@@ -455,9 +471,9 @@ for ix, (lang, results) in enumerate(lang2results.items()):
     # make sure all tprs and fprs are monotonically increasing
     for ix in range(all_fprs.shape[0]):
         # https://stackoverflow.com/a/47004533
-        if not np.all(np.diff(np.flip(all_fprs[ix,:])) >=0):
+        if not np.all(np.diff(np.flip(all_fprs[ix, :])) >= 0):
             raise ValueError("fprs not in sorted order")
-        if not np.all(np.diff(np.flip(all_tprs[ix,:])) >=0):
+        if not np.all(np.diff(np.flip(all_tprs[ix, :])) >= 0):
             raise ValueError("tprs not in sorted order")
 
     # https://stackoverflow.com/a/43035301
@@ -475,23 +491,26 @@ for ix, (lang, results) in enumerate(lang2results.items()):
 
     ymean = y_all.mean(axis=1)
     # draw mean
-    ax.plot(x_all, ymean, alpha=0.7, linewidth=6, label=f"{iso2lang[lang]}")
+    ax.plot(x_all, ymean, alpha=0.7, color=iso2color[lang], linewidth=6, label=f"{iso2lang[lang]}")
     # draw bands over stdev
     ystdev = y_all.std(axis=1)
-    ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, alpha=0.1)
+    ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, color=iso2color[lang], alpha=0.1)
 
-AX_LIM = 0.7
-ax.set_xlim(0, 1-AX_LIM)
+AX_LIM = 0.75
+ax.set_xlim(0, 1 - AX_LIM)
 ax.set_ylim(AX_LIM, 1)
 ax.legend(loc="lower right")
 ax.set_xlabel("False Positive Rate")
 ax.set_ylabel("True Positive Rate")
-for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_legend().get_texts() +
-            ax.get_xticklabels() + ax.get_yticklabels()):
+for item in (
+    [ax.title, ax.xaxis.label, ax.yaxis.label]
+    + ax.get_legend().get_texts()
+    + ax.get_xticklabels()
+    + ax.get_yticklabels()
+):
     item.set_fontsize(40)
-fig.set_size_inches(14,14)
+fig.set_size_inches(14, 14)
 fig.tight_layout()
-#figdest="/home/mark/tinyspeech_harvard/tinyspeech_images/ooe_multilang_classification.png"
 fig.savefig(figdest)
 print(figdest)
 

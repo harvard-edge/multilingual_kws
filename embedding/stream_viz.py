@@ -97,6 +97,14 @@ iso2lang = {
     "tt": "Tatar",
     "uk": "Ukranian",
 }
+
+# slightly more than 2 cycles of this color palette
+# reversed: I prefer these colors
+iso2color = {
+    isocode: sns.color_palette("bright")[ix % len(sns.color_palette("bright"))]
+    for ix, isocode in enumerate(reversed(list(iso2lang.keys())))
+}
+iso2color
 #%%
 
 
@@ -195,7 +203,7 @@ def multi_streaming_FRR_FAR_curve(
             # draw a roc curve per keyword
             #ax.plot(false_accepts_secs, false_rejection_rates, label=f"{target} ({target_lang})")
             #ax.plot(false_accepts_secs, false_rejection_rates, alpha=0.05)
-            ax.plot(false_accepts_rates, false_rejection_rates, alpha=0.05)
+            ax.plot(false_accepts_rates, false_rejection_rates, color=iso2lang[target_lang], alpha=0.05)
 
             # flip data so curves are ordered from big threshold to small thresh (big thresholds are topleft for FRR curve) 
             false_accepts_rates = np.flip(np.array(false_accepts_rates))
@@ -279,10 +287,10 @@ def multi_streaming_FRR_FAR_curve(
 
         ymean = y_all.mean(axis=1)
         # draw mean
-        ax.plot(x_all, ymean, alpha=0.7, linewidth=6, label=f"{iso2lang[target_lang]}")
+        ax.plot(x_all, ymean, alpha=0.7, linewidth=6, color=iso2lang[target_lang], label=f"{iso2lang[target_lang]}")
         # draw bands over stdev
         ystdev = y_all.std(axis=1)
-        ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, alpha=0.05)
+        ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, color=iso2lang[target_lang], alpha=0.05)
     # fmt:on
 
     ax.legend(loc="upper right", ncol=2)
