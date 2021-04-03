@@ -320,7 +320,8 @@ def multi_streaming_FRR_FAR_curve(
     #     f"{target} -> threshold: {threshold:0.2f}, TPR: {tpr}, FPR: {fpr_s}, false positives: {false_positives}, false_negatives: {false_negatives}, groundtruth positives: {len(gt_target_times)}"
     # )
     fig.tight_layout()
-    fig.savefig(figname, dpi=300)
+    #fig.savefig(figname, dpi=150)
+    fig.savefig(figname)
 
     print("AVG ACCURACY FOR ALL LANGS", np.mean(accuracy_per_lang, axis=0))
     return fig, ax
