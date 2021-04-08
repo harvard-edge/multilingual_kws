@@ -19,17 +19,17 @@ import multiprocessing
 import functools
 
 
-def wordcounts(csvpath):
+def wordcounts(csvpath, skip_header=True, transcript_column=2):
     """count the frequencies of all words in a csv produced by
         https://github.com/mozilla/DeepSpeech/blob/master/bin/import_cv2.py
     """
     all_frequencies = Counter()
     with open(csvpath, "r") as fh:
         reader = csv.reader(fh)
+        if skip_header:
+            next(reader)
         for ix, row in enumerate(reader):
-            if ix == 0:
-                continue  # skips header
-            words = row[2].split()
+            words = row[transcript_column].split()
             for w in words:
                 all_frequencies[w] += 1
     return all_frequencies
