@@ -67,19 +67,20 @@ ax.set_xticklabels([c[0] for c in topn], rotation=70)
 
 # %%
 keyword = "covid"
-wavs = []
+wav_transcript = []
 with open(l_csv, "r") as fh:
     reader = csv.reader(fh)
     for ix, row in enumerate(reader):
         words = row[1].split()
         for w in words:
             if w == keyword:
-                wavs.append(row[0])
+                wav_transcript.append((row[0], row[1]))
+print(len(wav_transcript))
 # %%
 # listen to random samples
-ix = np.random.randint(len(wavs))
-w = l_data / "clips" / wavs[ix]
-print(ix, w)
+ix = np.random.randint(len(wav_transcript))
+w = l_data / "clips" / wav_transcript[ix][0]
+print(ix, w, wav_transcript[ix][1])
 play(pydub.AudioSegment.from_file(w))
 
 # %%
@@ -91,7 +92,7 @@ silence_padded = workdir / "silence_padded"
 fiveshot_dest = workdir / "originals"
 os.makedirs(fiveshot_dest)
 for ix in range(5):
-    w = l_data / "clips" / wavs[ix]
+    w = l_data / "clips" / wav_transcript[ix][0]
     shutil.copy2(w, fiveshot_dest)
 
 # %%
@@ -132,21 +133,31 @@ with open(l_csv, "r") as fh:
             if w == keyword:
                 has_keyword = True
         if not has_keyword:
-            non_targets.append(row[0])
+            non_targets.append((row[0], row[1]))
 # %%
-n_stream_wavs = len(wavs[5:])
+stream_data = wav_transcript[5:]
+n_stream_wavs = len(stream_data)
 print(n_stream_wavs)
-selected_nontargets = np.random.choice(non_targets, n_stream_wavs, replace=False)
+selected_nontargets = np.random.choice(
+    range(len(non_targets)), n_stream_wavs, replace=False
+)
+
 # %%
+stream_info_file = workdir / "stream_info.pkl"
+assert not os.path.isfile(stream_info_file), "already exists"
 # make streaming wav
 intermediate_wavdir = workdir / "intermediate_wavs"
 os.makedirs(intermediate_wavdir)
 
+stream_info = []
 stream_wavs = []
-for ix, (target_wav, nontarget_wav) in enumerate(zip(wavs, selected_nontargets)):
+for ix, ((target_wav, target_transcript), nontarget_ix) in enumerate(
+    zip(stream_data, selected_nontargets)
+):
     tw = l_data / "clips" / target_wav
-    nw = l_data / "clips" / nontarget_wav
+    nw = l_data / "clips" / non_targets[nontarget_ix][0]
 
+    durations_s = []
     # convert all to same samplerate
     for w in [tw, nw]:
         dest = str(intermediate_wavdir / w.name)
@@ -154,7 +165,24 @@ for ix, (target_wav, nontarget_wav) in enumerate(zip(wavs, selected_nontargets))
         transformer.convert(samplerate=16000)  # from 48K mp3s
         transformer.build(str(w), dest)
         stream_wavs.append(dest)
+        durations_s.append(sox.file_info.duration(dest))
 
+    # record transcript info
+    tw_info = dict(
+        ix=2 * ix,
+        wav=target_wav,
+        transcript=target_transcript,
+        duration_s=durations_s[0],
+    )
+    nw_info = dict(
+        ix=2 * ix + 1,
+        wav=non_targets[nontarget_ix][0],
+        transcript=non_targets[nontarget_ix][1],
+        duration_s=durations_s[1],
+    )
+    stream_info.extend([tw_info, nw_info])
+
+assert len(stream_wavs) == n_stream_wavs * 2, "not enough stream data"
 stream_wavfile = str(workdir / "covid_stream.wav")
 
 combiner = sox.Combiner()
@@ -162,7 +190,11 @@ combiner.convert(samplerate=16000, n_channels=1)
 # https://github.com/rabitt/pysox/blob/master/sox/combine.py#L46
 combiner.build(stream_wavs, stream_wavfile, "concatenate")
 
-print(sox.file_info.duration(stream_wavfile), "seconds in length")
+dur_info = sum([d["duration_s"] for d in stream_info])
+print(sox.file_info.duration(stream_wavfile), "seconds in length", dur_info)
+
+with open(stream_info_file, 'wb') as fh:
+    pickle.dump(stream_info, fh)
 
 # %%
 
@@ -226,64 +258,79 @@ print("--")
 
 with np.printoptions(precision=3, suppress=True):
     print(preds)
+
+# %%
+
+# use model above
+# modelpath = model_dest_dir / name
+# or load existing model
+modelpath = workdir / "model" / "xfer_epochs_4_bs_64_nbs_1_val_acc_1.00_target_covid"
+
 # %%
 # run inference
-modelpath = model_dest_dir / name
+os.makedirs(workdir / "results")
 streamwav = workdir / "covid_stream.wav"
+# create empty label file 
+with open(workdir / "empty.txt", 'w'):
+    pass
 empty_gt = workdir / "empty.txt"
 dest_pkl = workdir / "results" / "streaming_results.pkl"
 dest_inf = workdir / "results" / "inferences.npy"
-streamtarget = sa.StreamTarget("lu", "covid", modelpath, streamwav, empty_gt, dest_pkl, dest_inf )
+streamtarget = sa.StreamTarget(
+    "lu", "covid", modelpath, streamwav, empty_gt, dest_pkl, dest_inf
+)
 
 sa.eval_stream_test(streamtarget)
 
 # %%
 # DONE 0.05
-# No ground truth yet, 129false positives
+# No ground truth yet, 151false positives
 # DONE 0.1
-# No ground truth yet, 350false positives
+# No ground truth yet, 374false positives
 # DONE 0.15
-# No ground truth yet, 484false positives
+# No ground truth yet, 478false positives
 # DONE 0.2
-# No ground truth yet, 552false positives
+# No ground truth yet, 535false positives
 # DONE 0.25
-# No ground truth yet, 530false positives
+# No ground truth yet, 505false positives
 # DONE 0.3
-# No ground truth yet, 463false positives
+# No ground truth yet, 440false positives
 # DONE 0.35
-# No ground truth yet, 390false positives
+# No ground truth yet, 365false positives
 # DONE 0.39999999999999997
-# No ground truth yet, 321false positives
+# No ground truth yet, 295false positives
 # DONE 0.44999999999999996
-# No ground truth yet, 255false positives
+# No ground truth yet, 231false positives
 # DONE 0.49999999999999994
-# No ground truth yet, 175false positives
+# No ground truth yet, 171false positives
 # DONE 0.5499999999999999
-# No ground truth yet, 122false positives
+# No ground truth yet, 130false positives
 # DONE 0.6
-# No ground truth yet, 93false positives
+# No ground truth yet, 98false positives
 # DONE 0.65
-# No ground truth yet, 69false positives
+# No ground truth yet, 72false positives
 # DONE 0.7
-# No ground truth yet, 41false positives
+# No ground truth yet, 46false positives
 # DONE 0.75
-# No ground truth yet, 29false positives
+# No ground truth yet, 26false positives
 # DONE 0.7999999999999999
 # No ground truth yet, 15false positives
 # DONE 0.85
-# No ground truth yet, 8false positives
+# No ground truth yet, 6false positives
 # DONE 0.9
-# No ground truth yet, 4false positives
+# No ground truth yet, 1false positives
 # DONE 0.95
 # No ground truth yet, 0false positives
 # DONE 1.0
 # No ground truth yet, 0false positives
 
 # %%
+with open(workdir / "stream_info.pkl", "rb") as fh:
+    stream_info = pickle.load(fh)
 with open(streamtarget.destination_result_pkl, "rb") as fh:
     results = pickle.load(fh)
 # %%
-operating_point = 0.65
+operating_point = 0.7
 for thresh, (_, found_words, all_found_w_confidences) in results[keyword].items():
     if np.isclose(thresh, operating_point):
         break
@@ -293,12 +340,29 @@ print(len(found_words), "targets found")
 stream = pydub.AudioSegment.from_file(streamtarget.stream_wav)
 
 # %%
-ix = np.random.randint(len(found_words))
+ix = 0
+# %%
+# listen one-by-one with transcript, or randomly
+select_random = False
+if select_random:
+    ix = np.random.randint(len(found_words))
 time_ms = found_words[ix][1]
 time_s = time_ms / 1000
 print(ix, time_s)
 context_ms = 1000
-play(stream[time_ms - context_ms: time_ms + context_ms])
+
+current_duration_s = 0
+for si in stream_info:
+    current_duration_s += si["duration_s"]
+    if time_s < current_duration_s:
+        print(si["transcript"])
+        break
+
+play(stream[time_ms - context_ms : time_ms + context_ms])
+
+# %%
+ix += 1
+
 # %%
 # save detections from stream
 extractions = workdir / "extractions"
@@ -306,9 +370,12 @@ os.makedirs(extractions)
 for ix, (_, time_ms) in enumerate(found_words):
     print(time_ms)
 
-    dest_wav = str(extractions / f"{ix:03d}_{keyword}_detection_thresh_{operating_point}_{time_ms}ms.wav")
+    dest_wav = str(
+        extractions
+        / f"{ix:03d}_{keyword}_detection_thresh_{operating_point}_{time_ms}ms.wav"
+    )
     print(dest_wav)
-    time_s = time_ms / 1000.
+    time_s = time_ms / 1000.0
 
     transformer = sox.Transformer()
     transformer.convert(samplerate=16000)  # from 48K mp3s
