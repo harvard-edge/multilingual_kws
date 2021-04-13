@@ -327,9 +327,11 @@ sa.eval_stream_test(streamtarget)
 # %%
 with open(workdir / "stream_info.pkl", "rb") as fh:
     stream_info = pickle.load(fh)
-with open(streamtarget.destination_result_pkl, "rb") as fh:
+#with open(streamtarget.destination_result_pkl, "rb") as fh:
+with open( workdir / "results" / "streaming_results.pkl", "rb") as fh:
     results = pickle.load(fh)
 # %%
+keyword = "covid"
 operating_point = 0.7
 for thresh, (_, found_words, all_found_w_confidences) in results[keyword].items():
     if np.isclose(thresh, operating_point):
@@ -337,7 +339,7 @@ for thresh, (_, found_words, all_found_w_confidences) in results[keyword].items(
 print(len(found_words), "targets found")
 
 # %%
-stream = pydub.AudioSegment.from_file(streamtarget.stream_wav)
+stream = pydub.AudioSegment.from_file(workdir / "covid_stream.wav")
 
 # %%
 ix = 0
@@ -355,13 +357,25 @@ current_duration_s = 0
 for si in stream_info:
     current_duration_s += si["duration_s"]
     if time_s < current_duration_s:
-        print(si["transcript"])
+        print(ix, si["transcript"])
         break
 
 play(stream[time_ms - context_ms : time_ms + context_ms])
 
 # %%
 ix += 1
+
+# %%
+with open(workdir / "tabulate_stream_info.csv", "w") as fh:
+    start_s = 0
+    for si in stream_info:
+        end_s = start_s + si["duration_s"]
+        #fh.write(",", si["transcript"], "\n")
+        result = f"False,0,{start_s:02f},{end_s:02f},{si['transcript']}\n"
+        fh.write(result)
+        start_s = end_s
+
+
 
 # %%
 # save detections from stream
