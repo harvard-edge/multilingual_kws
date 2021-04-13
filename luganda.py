@@ -1,28 +1,20 @@
 #%%
-from input_data import UNKNOWN_WORD_INDEX
 import numpy as np
 import os
 import glob
 import shutil
 import matplotlib.pyplot as plt
-import subprocess
-import seaborn as sns
-from typing import Set, List, Dict, Set
-import functools
 from collections import Counter
 import csv
-import textgrid
 import sox
 import pickle
-from scipy.io import wavfile
 
-# import tensorflow as tf
-# import input_data
 from pathlib import Path
 import pydub
 from pydub.playback import play
 import time
 
+# import tensorflow as tf
 from embedding import word_extraction, transfer_learning
 from embedding import batch_streaming_analysis as sa
 import input_data
