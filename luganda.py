@@ -1,20 +1,19 @@
 #%%
-import numpy as np
 import os
 import glob
 import shutil
-import matplotlib.pyplot as plt
 from collections import Counter
 import csv
-import sox
 import pickle
-
+import datetime
 from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import sox
 import pydub
 from pydub.playback import play
-import time
 
-# import tensorflow as tf
 from embedding import word_extraction, transfer_learning
 from embedding import batch_streaming_analysis as sa
 import input_data
@@ -272,7 +271,11 @@ streamtarget = sa.StreamTarget(
     "lu", "covid", modelpath, streamwav, empty_gt, dest_pkl, dest_inf
 )
 
+# %%
+start = datetime.datetime.now()
 sa.eval_stream_test(streamtarget)
+end = datetime.datetime.now()
+print("time elampsed (for all thresholds)", end - start)
 
 # %%
 # DONE 0.05
