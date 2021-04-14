@@ -67,6 +67,7 @@ with open(l_csv, "r") as fh:
             if w == keyword:
                 wav_transcript.append((row[0], row[1]))
 print(len(wav_transcript))
+
 # %%
 # listen to random samples
 ix = np.random.randint(len(wav_transcript))
@@ -320,6 +321,7 @@ print("time elampsed (for all thresholds)", end - start)
 # No ground truth yet, 0false positives
 
 # %%
+workdir = Path("/home/mark/tinyspeech_harvard/luganda")
 with open(workdir / "stream_info.pkl", "rb") as fh:
     stream_info = pickle.load(fh)
 #with open(streamtarget.destination_result_pkl, "rb") as fh:

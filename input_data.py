@@ -9,10 +9,6 @@ import os
 import glob
 import math
 from dataclasses import dataclass
-from scipy.io.wavfile import write
-from tensorflow.python.types.core import Value
-
-# from tensorflow.python.ops import gen_audio_ops as audio_ops
 
 SILENCE_LABEL = "_silence_"
 SILENCE_INDEX = 0
@@ -555,6 +551,8 @@ def test():
     a = AudioDataset(model_settings, commands, bg_datadir, unknown_words=unknown_words)
 
     # x = a.random_timeshift(x)
+
+    #from scipy.io.wavfile import write
     # write(f"tmp/bg.wav", model_settings["sample_rate"], x.numpy())
 
     # AUTOTUNE = tf.data.experimental.AUTOTUNE
