@@ -7,6 +7,7 @@ import csv
 import pickle
 import datetime
 from pathlib import Path
+import pprint
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,6 +26,7 @@ import input_data
 l_data = Path("/media/mark/hyperion/makerere/luganda/luganda/")
 l_csv = l_data / "data.csv"
 counts = word_extraction.wordcounts(l_csv, skip_header=False, transcript_column=1)
+workdir = Path("/home/mark/tinyspeech_harvard/luganda")
 
 # %%
 # find keywords
@@ -66,6 +68,7 @@ with open(l_csv, "r") as fh:
         for w in words:
             if w == keyword:
                 wav_transcript.append((row[0], row[1]))
+                break  # may contain more than one instance
 print(len(wav_transcript))
 
 # %%
@@ -185,7 +188,7 @@ combiner.build(stream_wavs, stream_wavfile, "concatenate")
 dur_info = sum([d["duration_s"] for d in stream_info])
 print(sox.file_info.duration(stream_wavfile), "seconds in length", dur_info)
 
-with open(stream_info_file, 'wb') as fh:
+with open(stream_info_file, "wb") as fh:
     pickle.dump(stream_info, fh)
 
 # %%
@@ -262,8 +265,8 @@ modelpath = workdir / "model" / "xfer_epochs_4_bs_64_nbs_1_val_acc_1.00_target_c
 # run inference
 os.makedirs(workdir / "results")
 streamwav = workdir / "covid_stream.wav"
-# create empty label file 
-with open(workdir / "empty.txt", 'w'):
+# create empty label file
+with open(workdir / "empty.txt", "w"):
     pass
 empty_gt = workdir / "empty.txt"
 dest_pkl = workdir / "results" / "streaming_results.pkl"
@@ -324,12 +327,12 @@ print("time elampsed (for all thresholds)", end - start)
 workdir = Path("/home/mark/tinyspeech_harvard/luganda")
 with open(workdir / "stream_info.pkl", "rb") as fh:
     stream_info = pickle.load(fh)
-#with open(streamtarget.destination_result_pkl, "rb") as fh:
-with open( workdir / "results" / "streaming_results.pkl", "rb") as fh:
+# with open(streamtarget.destination_result_pkl, "rb") as fh:
+with open(workdir / "results" / "streaming_results.pkl", "rb") as fh:
     results = pickle.load(fh)
 # %%
 keyword = "covid"
-operating_point = 0.7
+operating_point = 0.65
 for thresh, (_, found_words, all_found_w_confidences) in results[keyword].items():
     if np.isclose(thresh, operating_point):
         break
@@ -367,11 +370,10 @@ with open(workdir / "tabulate_stream_info.csv", "w") as fh:
     start_s = 0
     for si in stream_info:
         end_s = start_s + si["duration_s"]
-        #fh.write(",", si["transcript"], "\n")
+        # fh.write(",", si["transcript"], "\n")
         result = f"False,0,{start_s:02f},{end_s:02f},{si['transcript']}\n"
         fh.write(result)
         start_s = end_s
-
 
 
 # %%
@@ -394,3 +396,101 @@ for ix, (_, time_ms) in enumerate(found_words):
     transformer.build(str(streamtarget.stream_wav), dest_wav)
 
 # %%
+timing_csv = workdir / "covid_19_timing.csv"
+covid_timings = {}
+keyword = "covid"
+with open(timing_csv, "r") as fh:
+    reader = csv.reader(fh)
+    next(reader)  # skip header
+    for ix, row in enumerate(reader):
+        wav = row[0]
+        transcript = row[1]
+        start_time_s = row[3]
+        contains_keyword = any([w == keyword for w in transcript.split()])
+        if contains_keyword:
+            covid_timings[wav] = (start_time_s, transcript)
+print(covid_timings)
+
+# %%
+# generate groundtruth timings
+gt_target_times_ms = []
+keyword = "covid"
+cur_time_s = 0.0
+for segment in stream_info:
+    transcript = segment["transcript"]
+    contains_keyword = any([w == keyword for w in transcript.split()])
+    if contains_keyword:
+        wav = segment["wav"]
+        offset_s = float(covid_timings[wav][0])
+        keyword_start_s = cur_time_s + offset_s
+        gt_target_times_ms.append(keyword_start_s * 1000)
+    cur_time_s += segment["duration_s"]
+
+# %%
+
+time_tolerance_ms = 1000
+found_target_times = [t for f, t in found_words if f == keyword]
+
+# find false negatives
+false_negatives = 0
+for time_ms in gt_target_times_ms:
+    latest_time = time_ms + time_tolerance_ms
+    earliest_time = time_ms - time_tolerance_ms
+    potential_match = False
+    for found_time in found_target_times:
+        if found_time > latest_time:
+            break
+        if found_time < earliest_time:
+            continue
+        potential_match = True
+    if not potential_match:
+        false_negatives += 1
+
+# find true/false positives
+false_positives = 0  # no groundtruth match for model-found word
+true_positives = 0
+for word, time in found_words:
+    if word == keyword:
+        # highlight spurious words
+        latest_time = time + time_tolerance_ms
+        earliest_time = time - time_tolerance_ms
+        potential_match = False
+        for gt_time in gt_target_times_ms:
+            if gt_time > latest_time:
+                break
+            if gt_time < earliest_time:
+                continue
+            potential_match = True
+        if not potential_match:
+            false_positives += 1
+        else:
+            true_positives += 1
+if true_positives > len(gt_target_times_ms):
+    print("WARNING: weird timing issue")
+    true_positives = len(gt_target_times_ms)  # if thresh is low -- what causes this?
+#     continue
+tpr = true_positives / len(gt_target_times_ms)
+false_rejections_per_instance = false_negatives / len(gt_target_times_ms)
+false_positives = len(found_target_times) - true_positives
+pp = pprint.PrettyPrinter()
+pp.pprint(
+    dict(
+        tpr=tpr,
+        false_positives=false_positives,
+        false_negatives=false_negatives,
+        false_rejections_per_instance=false_rejections_per_instance,
+    )
+)
+# print("thresh", thresh, false_rejections_per_instance)
+# print("thresh", thresh, "true positives ", true_positives, "TPR:", tpr)
+# TODO(MMAZ) is there a beter way to calculate false positive rate?
+# fpr = false_positives / (false_positives + true_negatives)
+# fpr = false_positives / negatives
+# print(
+#     "false positives (model detection when no groundtruth target is present)",
+#     false_positives,
+# )
+# fpr = false_positives / num_nontarget_words
+# false_accepts_per_seconds = false_positives / (duration_s / (3600))
+# %%
+
