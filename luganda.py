@@ -18,6 +18,7 @@ from pydub.playback import play
 from embedding import word_extraction, transfer_learning
 from embedding import batch_streaming_analysis as sa
 import input_data
+import textgrid
 
 
 # %%
@@ -332,7 +333,7 @@ with open(workdir / "results" / "streaming_results.pkl", "rb") as fh:
     results = pickle.load(fh)
 # %%
 keyword = "covid"
-operating_point = 0.65
+operating_point = 0.7
 for thresh, (_, found_words, all_found_w_confidences) in results[keyword].items():
     if np.isclose(thresh, operating_point):
         break
@@ -492,5 +493,82 @@ pp.pprint(
 # )
 # fpr = false_positives / num_nontarget_words
 # false_accepts_per_seconds = false_positives / (duration_s / (3600))
-# %%
 
+# %%
+# listen to random alignments for covid
+covid_alignments = workdir / "covid_alignments"
+alignment_speakers = os.listdir(covid_alignments)
+
+speaker = np.random.choice(alignment_speakers)
+tgfiles = os.listdir(covid_alignments / speaker)
+tgfile = covid_alignments / speaker / tgfiles[0]
+
+radio_data = Path("/media/mark/hyperion/makerere/uliza-clips")
+wavpath = radio_data / (tgfile.stem + ".wav")
+
+transcript = (
+    Path("/media/mark/hyperion/makerere/alignment/covid_clips")
+    / tgfile.stem
+    / (tgfile.stem + ".lab")
+)
+with open(transcript, 'r') as fh:
+    print(fh.read())
+
+print(tgfile, wav)
+
+tg = textgrid.TextGrid.fromFile(tgfile)
+for interval in tg[0]:
+    if interval.mark != "covid":
+        continue
+    start_s = interval.minTime
+    end_s = interval.maxTime
+
+wav = pydub.AudioSegment.from_file(wavpath)
+play(wav[start_s * 1000 : end_s * 1000])
+
+# %%
+# save out covid alignments
+covid_alignments = workdir / "covid_alignments"
+alignment_speakers = os.listdir(covid_alignments)
+for ix, speaker in enumerate(alignment_speakers):
+    if not os.path.isdir(covid_alignments / speaker):
+        continue #skip unaligned.txt
+    if ix % 100 == 0:
+        print(ix)
+    tgfiles = os.listdir(covid_alignments / speaker)
+    tgfile = covid_alignments / speaker / tgfiles[0]
+
+    radio_data = Path("/media/mark/hyperion/makerere/uliza-clips")
+    wavpath = radio_data / (tgfile.stem + ".wav")
+
+
+
+    tg = textgrid.TextGrid.fromFile(tgfile)
+    for interval in tg[0]:
+        if interval.mark != "covid":
+            continue
+        start_s = interval.minTime
+        end_s = interval.maxTime
+
+    wav = pydub.AudioSegment.from_file(wavpath)
+
+    dest = workdir / "1k_covid_alignments" / (tgfile.stem + ".mp3")
+
+    transformer = sox.Transformer()
+    transformer.convert(samplerate=16000)  # from 48K mp3s
+    transformer.trim(start_s, end_s)
+    if end_s - start_s < 1:
+        pad_amt_s = (1. - (end_s - start_s))/2.
+        transformer.pad(start_duration=pad_amt_s, end_duration=pad_amt_s)
+    transformer.build(str(wavpath), str(dest))
+
+# %%
+# combine
+dest = str(workdir / "all_covid_alignments.mp3")
+mp3s = glob.glob(str(workdir / "1k_covid_alignments" / "*.mp3" ))
+combiner = sox.Combiner()
+combiner.convert(samplerate=16000, n_channels=1)
+# https://github.com/rabitt/pysox/blob/master/sox/combine.py#L46
+combiner.build(mp3s, dest, "concatenate")
+
+# %%
