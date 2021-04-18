@@ -541,8 +541,6 @@ for ix, speaker in enumerate(alignment_speakers):
     radio_data = Path("/media/mark/hyperion/makerere/uliza-clips")
     wavpath = radio_data / (tgfile.stem + ".wav")
 
-
-
     tg = textgrid.TextGrid.fromFile(tgfile)
     for interval in tg[0]:
         if interval.mark != "covid":
@@ -552,7 +550,7 @@ for ix, speaker in enumerate(alignment_speakers):
 
     wav = pydub.AudioSegment.from_file(wavpath)
 
-    dest = workdir / "1k_covid_alignments" / (tgfile.stem + ".mp3")
+    dest = workdir / "1k_covid_alignments" / (tgfile.stem + ".wav")
 
     transformer = sox.Transformer()
     transformer.convert(samplerate=16000)  # from 48K mp3s
@@ -560,6 +558,8 @@ for ix, speaker in enumerate(alignment_speakers):
     if end_s - start_s < 1:
         pad_amt_s = (1. - (end_s - start_s))/2.
         transformer.pad(start_duration=pad_amt_s, end_duration=pad_amt_s)
+    else:
+        raise ValueError("generated extraction longer than 1s")
     transformer.build(str(wavpath), str(dest))
 
 # %%
