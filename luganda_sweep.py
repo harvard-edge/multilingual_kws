@@ -1,4 +1,3 @@
-
 #%%
 from dataclasses import dataclass, asdict
 import os
@@ -25,35 +24,38 @@ from embedding import batch_streaming_analysis as sa
 import input_data
 import textgrid
 
-from sklearn.model_selection import KFold
+import sklearn.model_selection
 
 #%%
-fakedata= []
-for ci in [chr(i+65) for i in range(10)]:
-    for cj in [chr(i+65) for i in range(10)]:
+fakedata = []
+for ci in [chr(i + 65) for i in range(10)]:
+    for cj in [chr(i + 65) for i in range(10)]:
         fakedata.append(ci + cj)
 print(len(fakedata), fakedata[:15])
 
-kf = KFold(n_splits=5)
+print("\n\n\n\n\n")
+kf = sklearn.model_selection.ShuffleSplit(n_splits=10, test_size=0.3)
 for train_ix, test_ix in kf.split(fakedata):
-    print(train_ix, test_ix)
+    print(test_ix, len(test_ix))
     print("--")
+print("\n\n\n\n\n")
 
 # %%
 workdir = Path("/home/mark/tinyspeech_harvard/luganda")
 # %%
 # chooose random extractions from 1k alignments
-all_alignments = glob.glob(str(workdir/"1k_covid_alignments" / "*.wav"))
+all_alignments = glob.glob(str(workdir / "1k_covid_alignments" / "*.wav"))
 selected_alignments = np.random.choice(all_alignments, 100, replace=False)
 # with open(workdir / "hundred_alignments.txt", 'w') as fh:
 #     fh.write("\n".join(selected_alignments))
 # %%
-with open(workdir / "hundred_alignments.txt", 'r') as fh:
+with open(workdir / "hundred_alignments.txt", "r") as fh:
     hundred_alignments = fh.read().splitlines()
 hundred_alignments = np.array(hundred_alignments)
 print(hundred_alignments)
 
 # %%
+
 
 @dataclass(frozen=True)
 class SweepData:
@@ -65,12 +67,15 @@ class SweepData:
     target: str = "covid"
     batch_size: int = 64
 
+
 def sweep_run(sd: SweepData, q):
 
     # load embedding model
     traindir = Path(f"/home/mark/tinyspeech_harvard/multilang_embedding")
     base_model_path = (
-        traindir / "models" / "multilang_resume40_resume05_resume20_resume22.007-0.7981/"
+        traindir
+        / "models"
+        / "multilang_resume40_resume05_resume20_resume22.007-0.7981/"
     )
 
     model_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe/")
@@ -100,7 +105,7 @@ def sweep_run(sd: SweepData, q):
     specs = np.expand_dims(specs, -1)
     preds = model.predict(specs)
     amx = np.argmax(preds, axis=1)
-    #print(amx)
+    # print(amx)
     val_accuracy = amx[amx == 2].shape[0] / preds.shape[0]
     print("VAL ACCURACY", val_accuracy)
     q.put(val_accuracy)
@@ -112,7 +117,7 @@ q = multiprocessing.Queue()
 val_accuracies = []
 sweep_datas = []
 
-kf = KFold(n_splits=10)
+kf = sklearn.model_selection.ShuffleSplit(n_splits=10, test_size=0.5)
 for ix, (train_ixs, val_ixs) in enumerate(kf.split(hundred_alignments)):
 
     mdd = workdir / "hp_sweep" / f"fold_{ix:02d}"
@@ -121,9 +126,11 @@ for ix, (train_ixs, val_ixs) in enumerate(kf.split(hundred_alignments)):
 
     t = hundred_alignments[train_ixs]
     v = hundred_alignments[val_ixs]
-    sd = SweepData(train_files=t, val_files=v, n_batches=4, n_epochs=1, model_dest_dir=mdd)
+    sd = SweepData(
+        train_files=t, val_files=v, n_batches=4, n_epochs=1, model_dest_dir=mdd
+    )
 
-    p = multiprocessing.Process(target=sweep_run, args=(sd,q))
+    p = multiprocessing.Process(target=sweep_run, args=(sd, q))
     p.start()
     p.join()
 
@@ -132,11 +139,9 @@ for ix, (train_ixs, val_ixs) in enumerate(kf.split(hundred_alignments)):
 
     sweep_datas.append(asdict(sd))
 
-    with open(workdir / "sweep_results.pkl", 'wb') as fh:
+    with open(workdir / "sweep_results.pkl", "wb") as fh:
         d = dict(sweep_datas=sweep_datas, val_accuracies=val_accuracies)
         # fh.write(json.dumps(d))
         pickle.dump(d, fh)
 
-# %%
-asdict(sd)
 # %%
