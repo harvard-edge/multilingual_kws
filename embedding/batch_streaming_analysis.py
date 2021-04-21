@@ -150,11 +150,11 @@ def calculate_streaming_accuracy(
                 # print( "{}ms {}:{}{}".format(current_time_ms,recognize_element.founded_command,recognize_element.score,recognition_state,) )
                 # fmt: on
                 # stats.print_accuracy_stats()
-        print("DONE", threshold)
+        print(f"results for {threshold:0.2f}")
         # calculate final stats for full wav file:
         stats.calculate_accuracy_stats(all_found_words, -1, FLAGS.time_tolerance_ms)
         stats.print_accuracy_stats()
-        results[threshold] = (stats, all_found_words, all_found_words_w_confidences)
+        results[threshold] = (all_found_words, all_found_words_w_confidences)
     return results, inferences
 
 
@@ -173,11 +173,13 @@ class StreamTarget:
     destination_result_pkl: os.PathLike
     destination_result_inferences: os.PathLike
 
-
-def eval_stream_test(st: StreamTarget):
-    tf.get_logger().setLevel(logging.ERROR)
-    model = tf.keras.models.load_model(st.model_path)
-    tf.get_logger().setLevel(logging.INFO)
+def eval_stream_test(st: StreamTarget, live_model=None):
+    if live_model is not None:
+        model = live_model
+    else:
+        tf.get_logger().setLevel(logging.ERROR)
+        model = tf.keras.models.load_model(st.model_path)
+        tf.get_logger().setLevel(logging.INFO)
 
     model_settings = input_data.standard_microspeech_model_settings(label_count=3)
 
@@ -209,7 +211,6 @@ def eval_stream_test(st: StreamTarget):
         results[st.target_word], inferences = calculate_streaming_accuracy(
             model, model_settings, flags
         )
-    end = datetime.datetime.now()
 
     with open(st.destination_result_pkl, "wb") as fh:
         pickle.dump(results, fh)

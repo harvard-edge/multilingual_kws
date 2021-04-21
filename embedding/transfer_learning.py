@@ -20,6 +20,9 @@ def transfer_learn(
     num_epochs,
     num_batches,
     batch_size,
+    primary_lr,
+    backprop_into_embedding,
+    embedding_lr,
     model_settings,
     csvlog_dest: os.PathLike,
     base_model_path: os.PathLike,
@@ -46,7 +49,7 @@ def transfer_learn(
     )
 
     xfer.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=primary_lr),
         loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
         metrics=["accuracy"],
     )
@@ -77,6 +80,20 @@ def transfer_learn(
         epochs=num_epochs,
         callbacks=[csvlogger],
     )
+    if backprop_into_embedding:
+        xfer.trainable = True
+        xfer.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=embedding_lr),
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            metrics=["accuracy"],
+        )
+        history = xfer.fit(
+            train_ds,
+            validation_data=val_ds,
+            steps_per_epoch=batch_size * num_batches,
+            epochs=num_epochs,
+            callbacks=[csvlogger],
+        )
 
     va = history.history["val_accuracy"][-1]
     name = f"xfer_epochs_{num_epochs}_bs_{batch_size}_nbs_{num_batches}_val_acc_{va:0.2f}_target_{target}"

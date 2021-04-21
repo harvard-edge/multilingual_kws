@@ -21,7 +21,6 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
 import seaborn as sns
-from sox.file_info import duration
 
 sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
 # import input_data
