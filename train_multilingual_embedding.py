@@ -16,15 +16,14 @@ import input_data
 from pathlib import Path
 import pickle
 
-embedding_model_dir = f"/home/mark/tinyspeech_harvard/multilang_embedding/"
-save_models_dir = f"/home/mark/tinyspeech_harvard/multilang_embedding/context_models/"
+embedding_model_dir = Path("/home/mark/tinyspeech_harvard/multilingual_embedding_wc")
+save_models_dir = embedding_model_dir / "models"
 os.chdir(embedding_model_dir)
 
 if not os.path.isdir(save_models_dir):
     raise ValueError("create model dir")
-#if len(os.listdir(save_models_dir)) > 0:
-#    raise ValueError("models already exist in ", save_models_dir)
 
+# copied from /media/mark/hyperion/multilingual_embedding_data_w_context
 with open("commands.txt", "r") as fh:
     commands = fh.read().splitlines()
 with open("train_files.txt", "r") as fh:
@@ -33,7 +32,7 @@ with open("val_files.txt", "r") as fh:
     val_files = fh.read().splitlines()
 
 model_settings = input_data.standard_microspeech_model_settings(label_count=761)
-bg_datadir = f"/home/mark/tinyspeech_harvard/multilang_embedding/_background_noise_/"
+bg_datadir = embedding_model_dir / "_background_noise_"
 
 if not os.path.isdir(bg_datadir):
     raise ValueError("no bg data at", bg_datadir)
@@ -43,15 +42,16 @@ a = input_data.AudioDataset(
     commands,
     bg_datadir,
     [],
+    silence_percentage=1,
     unknown_percentage=0,
     spec_aug_params=input_data.SpecAugParams(percentage=80),
 )
+
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 train_ds = a.init_from_parent_dir(AUTOTUNE, train_files, is_training=True)
 val_ds = a.init_from_parent_dir(AUTOTUNE, val_files, is_training=False)
-# test_ds = a.init_from_parent_dir(AUTOTUNE, test_files, is_training=False)
 batch_size = 64
-train_ds = train_ds.shuffle(buffer_size=4000).batch(batch_size)
+train_ds = train_ds.shuffle(buffer_size=8000).batch(batch_size)
 val_ds = val_ds.batch(batch_size)
 
 

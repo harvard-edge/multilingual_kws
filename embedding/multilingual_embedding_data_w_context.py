@@ -74,7 +74,7 @@ for lang_isocode in ["ca", "de", "en", "es", "fa", "fr", "it", "nl", "rw"]:
 #            multi_extraction += 1
 #            continue
 #
-#    print(multi_extraction, multi_extraction / len(train_files))
+#    print(multi_extraction, multi_Apr 28, 2021extraction / len(train_files))
 #    # around 3%
 
 # build sister dataset with context surrounding extractions
@@ -106,6 +106,17 @@ def extract_context(training_sample):
 
     dest_dir = dest_base / lang_isocode / "clips" / word
     os.makedirs(dest_dir, exist_ok=True)
+
+    dest_file = dest_dir / wav
+    if os.path.exists(dest_file):
+        return # already generated from a previous run
+    
+    source_mp3 = cv_clipsdir / (wav_noext + ".mp3")
+    if not os.path.exists(source_mp3):
+        print("warning: source mp3 not found", source_mp3)
+        return
+
+
     word_extraction.extract_shot_from_mp3(
         mp3name_no_ext=wav_noext,
         start_s=start_s,
@@ -116,13 +127,8 @@ def extract_context(training_sample):
     )
 
 
-pct = int(len(train_files) / 100)
-
 pool = multiprocessing.Pool()
-
 num_processed = 0
 for _ in pool.imap_unordered(extract_context, train_files + val_files, chunksize=4000):
     num_processed += 1
-    if num_processed % pct == 0:
-        p = num_processed / pct * 100
-        print(num_processed, f"- {p:0.2f}%")
+print(num_processed)

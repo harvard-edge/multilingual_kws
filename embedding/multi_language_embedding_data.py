@@ -195,3 +195,51 @@ for f in val_files:
 print("train gb", t_sz_bytes / 1024 ** 3, "val gb", v_sz_bytes / 1024 ** 3)
 
 # %%
+# create dataset using hyperion with silence padding + context padding
+def find_and_combine(training_sample):
+    result = []
+
+    fw = Path(
+        "/media/mark/hyperion/mercury_backup_april_13_2021/tinyspeech_harvard/frequent_words"
+    )
+    fwwc = Path(
+        "/media/mark/hyperion/multilingual_embedding_data_w_context/frequent_words_w_context"
+    )
+
+    t = Path(training_sample)
+    lang_isocode = t.parts[5]
+    word = t.parts[7]
+    wav = t.parts[8]
+
+    sw = fw / lang_isocode / "clips" / word / wav
+    swwc = fwwc / lang_isocode / "clips" / word / wav
+
+    if os.path.isfile(sw):
+        result.append(str(sw))
+    if os.path.isfile(swwc):
+        result.append(str(swwc))
+
+    return result
+
+
+train_w_context_nested = map(find_and_combine, train_files)
+val_w_context_nested = map(find_and_combine, val_files)
+
+train_w_context = [f for l in train_w_context_nested for f in l]
+val_w_context = [f for l in val_w_context_nested for f in l]
+
+# %%
+print(len(train_w_context))
+print(train_w_context[0])
+# %%
+np.random.shuffle(train_w_context)
+
+# %%
+dest_dir = Path("/media/mark/hyperion/multilingual_embedding_data_w_context")
+# with open(dest_dir / "train_files.txt", "w") as fh:
+#     fh.write("\n".join(train_w_context))
+# with open(dest_dir / "val_files.txt", "w") as fh:
+#     fh.write("\n".join(val_w_context))
+
+
+# %%
