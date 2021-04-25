@@ -81,6 +81,8 @@ def transfer_learn(
         callbacks=[csvlogger],
     )
     if backprop_into_embedding:
+        raise ValueError("consult guide first")
+        # https://keras.io/examples/vision/image_classification_efficientnet_fine_tuning/#transfer-learning-from-pretrained-weights
         xfer.trainable = True
         xfer.compile(
             optimizer=tf.keras.optimizers.Adam(learning_rate=embedding_lr),
