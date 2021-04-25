@@ -599,8 +599,6 @@ combiner.build(mp3s, dest, "concatenate")
 fig, ax = plt.subplots()
 hpsweep = workdir / "hp_sweep"
 for exp in os.listdir(hpsweep):
-    if exp not in ["exp_06"]:
-        continue
     for trial in os.listdir(hpsweep / exp):
         rp = hpsweep / exp / trial / "result.pkl"
         if not os.path.isfile(rp):

@@ -195,6 +195,7 @@ def extract_shot_from_mp3(
     start_s,
     end_s,
     dest_dir,
+    include_context,
     cv_clipsdir=pathlib.Path(
         "/home/mark/tinyspeech_harvard/common_voice/cv-corpus-6.1-2020-12-11/en/clips"
     ),
@@ -204,9 +205,11 @@ def extract_shot_from_mp3(
         raise ValueError("could not find", mp3path)
 
     duration = sox.file_info.duration(mp3path)
-    if end_s - start_s < 1:
+    if end_s - start_s < 1 and not include_context:
         pad_amt_s = (1.0 - (end_s - start_s)) / 2.0
-    else:  # utterance is already longer than 1s, trim instead
+    else:  
+        # either (a) utterance is longer than 1s, trim instead of pad
+        # or (b) include 1s of context
         start_s, end_s = extract_one_second(duration, start_s, end_s)
         pad_amt_s = 0
 
@@ -223,5 +226,6 @@ def extract_shot_from_mp3(
     # use smaller fadein/fadeout since we are capturing just the word
     # TODO(mmaz) is this appropriately sized?
     transformer.fade(fade_in_len=0.025, fade_out_len=0.025)
-    transformer.pad(start_duration=pad_amt_s, end_duration=pad_amt_s)
+    if pad_amt_s > 0:
+        transformer.pad(start_duration=pad_amt_s, end_duration=pad_amt_s)
     transformer.build(str(mp3path), str(dest))

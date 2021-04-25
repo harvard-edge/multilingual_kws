@@ -11,14 +11,13 @@ from tensorflow.keras import models
 
 import sys
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
 import input_data
 
 from pathlib import Path
 import pickle
 
 embedding_model_dir = f"/home/mark/tinyspeech_harvard/multilang_embedding/"
-save_models_dir = f"/home/mark/tinyspeech_harvard/multilang_embedding/models/"
+save_models_dir = f"/home/mark/tinyspeech_harvard/multilang_embedding/context_models/"
 os.chdir(embedding_model_dir)
 
 if not os.path.isdir(save_models_dir):
@@ -64,52 +63,60 @@ assert num_labels == model_settings["label_count"]
 # NEW MODEL
 #
 # https://keras.io/examples/vision/image_classification_efficientnet_fine_tuning/#b0-to-b7-variants-of-efficientnet
-#  base_model = tf.keras.applications.EfficientNetB0(
-#      include_top=False,
-#      weights=None,  # "imagenet",
-#      input_tensor=None,
-#      input_shape=input_shape,
-#      pooling=None,
-#      # classes=1000,
-#      # classifier_activation="softmax",
-#  )
-#  
-#  x = base_model.output
-#  x = layers.GlobalAveragePooling2D()(x)
-#  x = layers.Dense(2048, activation="relu")(x)
-#  # layers.Dropout(0.5)
-#  x = layers.Dense(2048, activation="relu")(x)
-#  x = layers.Dense(1024, kernel_initializer="lecun_normal", activation="selu")(x)
-#  # must use alpha-dropout if dropout is desired with selu
-#  logits = layers.Dense(num_labels)(x)
-#  
-#  model = models.Model(inputs=base_model.input, outputs=logits)
-#  
-#  model.summary()
-#  model.compile(
-#      optimizer=tf.keras.optimizers.Adam(),
-#      loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-#      metrics=["accuracy"],
-#  )
+base_model = tf.keras.applications.EfficientNetB0(
+    include_top=False,
+    weights=None,  # "imagenet",
+    input_tensor=None,
+    input_shape=input_shape,
+    pooling=None,
+    # classes=1000,
+    # classifier_activation="softmax",
+)
+
+x = base_model.output
+x = layers.GlobalAveragePooling2D()(x)
+x = layers.Dense(2048, activation="relu")(x)
+# layers.Dropout(0.5)
+x = layers.Dense(2048, activation="relu")(x)
+x = layers.Dense(1024, kernel_initializer="lecun_normal", activation="selu")(x)
+# must use alpha-dropout if dropout is desired with selu
+logits = layers.Dense(num_labels)(x)
+
+model = models.Model(inputs=base_model.input, outputs=logits)
+
+model.summary()
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(),
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    metrics=["accuracy"],
+)
 
 # TODO(mmaz) class_weight parameter on model.fit
 
 # LOAD PREVIOUS CHECKPOINT
-model_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_embedding/models")
-checkpoint = model_dir / "multilang_resume40_resume05_resume20.022-0.7969"
-model = models.load_model(checkpoint)
-# change learning rate:
-model.compile(
-   #optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), #<-- change learning rate!
-   optimizer=tf.keras.optimizers.Adam(), #<-- change learning rate!
-   loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-   metrics=["accuracy"],
-)
+# model_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_embedding/models")
+# checkpoint = model_dir / "multilang_resume40_resume05_resume20.022-0.7969"
+# model = models.load_model(checkpoint)
+# # change learning rate:
+# model.compile(
+#    #optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), #<-- change learning rate!
+#    optimizer=tf.keras.optimizers.Adam(), #<-- change learning rate!
+#    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+#    metrics=["accuracy"],
+# )
 
 # CHANGE FILENAME
-EPOCHS = 20
+EPOCHS = 60
 os.chdir(save_models_dir)
-checkpoint_filepath = "multilang_resume40_resume05_resume20_resume22.{epoch:03d}-{val_accuracy:.4f}"
+basename="multilingual_context_"
+checkpoint_filepath = basename + ".{epoch:03d}-{val_accuracy:.4f}"
+
+log_idx = 0
+while os.path.isfile(f"{basename}_log_{log_idx}.csv"):
+    log_idx += 1
+csvlog_dest = f"{basename}_log_{log_idx}.csv"
+
+csvlogger = tf.keras.callbacks.CSVLogger(csvlog_dest, append=False)
 
 model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
     filepath=checkpoint_filepath,
@@ -122,7 +129,7 @@ history = model.fit(
     train_ds,
     validation_data=val_ds,
     epochs=EPOCHS,
-    callbacks=[model_checkpoint_callback]
+    callbacks=[csvlogger, model_checkpoint_callback]
     # callbacks=[tf.keras.callbacks.EarlyStopping(verbose=1, patience=4),
     #            tf.keras.callbacks.LearningRateScheduler(scheduler)],
 )

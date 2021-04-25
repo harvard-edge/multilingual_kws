@@ -16,6 +16,7 @@ import textgrid
 import sox
 from pathlib import Path
 import pickle
+import multiprocessing
 
 import word_extraction
 
@@ -25,7 +26,7 @@ sns.set_palette("bright")
 
 # %%
 
-NUM_WAVS=2200
+NUM_WAVS = 2200
 
 per_lang = {}
 
@@ -34,21 +35,23 @@ for lang in os.listdir(frequent_words):
     per_lang[lang] = []
     clips = frequent_words / lang / "clips"
     words = os.listdir(clips)
-    raise ValueError("do we need to make words a set? what caused the bug with duplicate words in commands??")
+    raise ValueError(
+        "do we need to make words a set? what caused the bug with duplicate words in commands??"
+    )
     for word in words:
         wavs = glob.glob(str(clips / word / "*.wav"))
         if len(wavs) > NUM_WAVS:
-            per_lang[lang].append((word, clips/word))
+            per_lang[lang].append((word, clips / word))
 
 
 # %%
 print("num commands", sum([len(v) for v in per_lang.values()]))
-print(per_lang['en'][0])
+print(per_lang["en"][0])
 plt.bar(per_lang.keys(), [len(v) for v in per_lang.values()])
 print([(kv[0], len(kv[1])) for kv in per_lang.items()])
 
 # %%
-raise ValueError("DUPLICATE WORD ISSUE")
+# raise ValueError("DUPLICATE WORD ISSUE")
 for lang, words in per_lang.items():
     print(lang, len(words))
     commands = [w[0] for w in words]
@@ -58,7 +61,7 @@ for lang, words in per_lang.items():
 print("--------------")
 dup_word = "entre"
 commands = []
-for lang,commands_worddirs in per_lang.items():
+for lang, commands_worddirs in per_lang.items():
     print(lang)
     for (command, worddir) in commands_worddirs:
         if command == dup_word:
@@ -74,22 +77,23 @@ print("num commands: set", len())
 # %%
 
 data_dest = Path("/home/mark/tinyspeech_harvard/multilang_embedding/")
-save_model_dir= data_dest / "models"
+save_model_dir = data_dest / "models"
 for d in [data_dest, save_model_dir]:
     if not os.path.isdir(d):
         raise ValueError("missing dir", d)
-with open(data_dest / "per_lang.pkl", 'wb') as fh:
+assert not os.path.isfile(data_dest / "per_lang.pkl"), "file exists"
+with open(data_dest / "per_lang.pkl", "wb") as fh:
     pickle.dump(per_lang, fh)
 os.chdir(data_dest)
 
 # %%
 commands = []
-for lang,commands_worddirs in per_lang.items():
+for lang, commands_worddirs in per_lang.items():
     for (command, worddir) in commands_worddirs:
         commands.append(command)
 
 print("num commands", len(commands))
-with open("commands.txt", 'w') as fh:
+with open("commands.txt", "w") as fh:
     for w in commands:
         fh.write(f"{w}\n")
 # %%
@@ -97,48 +101,54 @@ train_val_data = {}
 
 VALIDATION_FRAC = 0.1
 
-for lang,commands_worddirs in per_lang.items():
+for lang, commands_worddirs in per_lang.items():
     for (command, worddir) in commands_worddirs:
         all_wavs = glob.glob(str(worddir / "*.wav"))
         utterances = np.random.choice(all_wavs, size=NUM_WAVS, replace=False)
-        
+
         n_val = int(VALIDATION_FRAC * len(utterances))
 
         val_utterances = utterances[:n_val]
         train_utterances = utterances[n_val:]
-        
+
         print("val\t", len(val_utterances), "\ttrain\t", len(train_utterances))
         train_val_data[command] = dict(train=train_utterances, val=val_utterances)
 
 # %%
 # inspect
-c,d = list(train_val_data.items())[0]
+c, d = list(train_val_data.items())[0]
 print(c)
 print(d["train"][0])
 
 # %%
-if os.path.isfile("train_val_data.pkl"): 
+if os.path.isfile("train_val_data.pkl"):
     raise ValueError("data exists")
-with open("train_val_data.pkl", 'wb') as fh:
+with open("train_val_data.pkl", "wb") as fh:
     pickle.dump(train_val_data, fh)
 
 # %%
 
-with open("train_val_test_data.pkl", 'rb') as fh:
+with open("train_val_test_data.pkl", "rb") as fh:
     train_val_test_data = pickle.load(fh)
 
 # %%
-train_val_counts = [(w, len(d["train"]), len(d["val"])) for w,d in train_val_data.items()]
+train_val_counts = [
+    (w, len(d["train"]), len(d["val"])) for w, d in train_val_data.items()
+]
 train_val_counts = sorted(train_val_counts, key=lambda c: c[1], reverse=True)
 train_val_counts[:3]
 
 # %%
-fig,ax = plt.subplots()
+fig, ax = plt.subplots()
 btrain = ax.bar([c[0] for c in train_val_counts], [c[1] for c in train_val_counts])
-bval   = ax.bar([c[0] for c in train_val_counts], [c[2] for c in train_val_counts], bottom=[c[1] for c in train_val_counts])
-ax.set_xticklabels([c[0] for c in train_val_counts], rotation=70);
-plt.legend((btrain[0], bval[0]), ('train', 'val'))
-fig.set_size_inches(40,20)
+bval = ax.bar(
+    [c[0] for c in train_val_counts],
+    [c[2] for c in train_val_counts],
+    bottom=[c[1] for c in train_val_counts],
+)
+ax.set_xticklabels([c[0] for c in train_val_counts], rotation=70)
+plt.legend((btrain[0], bval[0]), ("train", "val"))
+fig.set_size_inches(40, 20)
 
 # %%
 train_files = []
@@ -151,20 +161,37 @@ np.random.shuffle(train_files)
 # %%
 
 for fname, data in zip(["train_files.txt", "val_files.txt"], [train_files, val_files]):
-   print(fname)
-   if os.path.isfile(fname):
-       raise ValueError("exists", fname)
-   with open(fname, 'w') as fh:
-       for utterance_path in data:
-           fh.write(f"{utterance_path}\n")
+    print(fname)
+    if os.path.isfile(fname):
+        raise ValueError("exists", fname)
+    with open(fname, "w") as fh:
+        for utterance_path in data:
+            fh.write(f"{utterance_path}\n")
 # %%
 
-with open("train_files.txt", 'r') as fh:
+data_dest = Path("/home/mark/tinyspeech_harvard/multilang_embedding/")
+
+with open(data_dest / "train_files.txt", "r") as fh:
     train_files = fh.read().splitlines()
-with open("val_files.txt", 'r') as fh:
+with open(data_dest / "val_files.txt", "r") as fh:
     val_files = fh.read().splitlines()
+with open(data_dest / "commands.txt", "r") as fh:
+    commands = fh.read().splitlines()
 print(len(train_files), train_files[0])
 print(len(val_files), val_files[0])
-assert set(train_files).intersection(set(val_files)) == set(), "error: overlap between train and val data"
+assert (
+    set(train_files).intersection(set(val_files)) == set()
+), "error: overlap between train and val data"
 print(len(commands))
+
+# %%
+# train / val dataset sizes on disk
+t_sz_bytes = 0
+for f in train_files:
+    t_sz_bytes += Path(f).stat().st_size
+v_sz_bytes = 0
+for f in val_files:
+    v_sz_bytes += Path(f).stat().st_size
+print("train gb", t_sz_bytes / 1024 ** 3, "val gb", v_sz_bytes / 1024 ** 3)
+
 # %%
