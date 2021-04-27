@@ -75,7 +75,7 @@ base_model = tf.keras.applications.EfficientNetB0(
 
 x = base_model.output
 x = layers.GlobalAveragePooling2D()(x)
-x = layers.BatchNormalization()(x)
+#x = layers.BatchNormalization()(x)
 x = layers.Dense(2048, activation="relu")(x)
 # layers.Dropout(0.5)
 x = layers.Dense(2048, activation="relu")(x)
