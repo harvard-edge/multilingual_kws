@@ -93,7 +93,7 @@ assert num_labels == model_settings["label_count"]
 # TODO(mmaz) class_weight parameter on model.fit
 
 # LOAD PREVIOUS CHECKPOINT
-checkpoint = save_models_dir / "multilingual_context_.018-0.7023"
+checkpoint = save_models_dir / "multilingual_context_.020-0.7058"
 model = models.load_model(checkpoint)
 # # change learning rate:
 model.compile(
