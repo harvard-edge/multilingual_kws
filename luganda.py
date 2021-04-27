@@ -628,11 +628,18 @@ for exp in os.listdir(hpsweep):
             lrinfo = f"lr1: {sd.primary_lr} lr2: {sd.embedding_lr}"
         else:
             lrinfo = f"lr1: {sd.primary_lr}"
+        try:
+            if sd.with_context:
+                wc = "t"
+            else:
+                wc = "f"
+        except AttributeError:
+            wc = "f"
 
-        label = f"t: {sd.train_files.shape[0]} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
+        label = f"t: {sd.train_files.shape[0]:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
         ax.plot(all_fprs, all_tprs, label=label, linewidth=3)
 
-AX_LIM = 0.4
+AX_LIM = 0
 ax.set_xlim(0, 1 - AX_LIM)
 ax.set_ylim(AX_LIM, 1.01)
 ax.legend(loc="lower right")
@@ -644,10 +651,10 @@ for item in (
     + ax.get_xticklabels()
     + ax.get_yticklabels()
 ):
-    item.set_fontsize(35)
+    item.set_fontsize(25)
 fig.set_size_inches(14, 14)
 fig.tight_layout()
-figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/lu_sweep.png"
+figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/lu_sweep_wc.png"
 fig.savefig(figdest)
 print(figdest)
 

@@ -65,6 +65,7 @@ class SweepData:
     primary_lr: float
     backprop_into_embedding: bool
     embedding_lr: float
+    with_context: bool
     target: str = "covid"
     batch_size: int = 64
     streamwav: os.PathLike = workdir / "covid_stream.wav"
@@ -74,11 +75,11 @@ class SweepData:
 def sweep_run(sd: SweepData, q):
 
     # load embedding model
-    traindir = Path(f"/home/mark/tinyspeech_harvard/multilang_embedding")
+    traindir = Path(f"/home/mark/tinyspeech_harvard/multilingual_embedding_wc")
     base_model_path = (
         traindir
         / "models"
-        / "multilang_resume40_resume05_resume20_resume22.007-0.7981/"
+        / "multilingual_context_resume20_.005-0.7236"
     )
 
     model_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe/")
@@ -135,7 +136,7 @@ if __name__ == "__main__":
     val_accuracies = []
     sweep_datas = []
 
-    exp_dir = workdir / "hp_sweep" / "exp_08"
+    exp_dir = workdir / "hp_sweep" / "exp_10"
     os.makedirs(exp_dir, exist_ok=False)
 
     kf = sklearn.model_selection.ShuffleSplit(n_splits=1, test_size=0.95)
@@ -157,9 +158,10 @@ if __name__ == "__main__":
             model_dest_dir=mdd,
             dest_pkl=dp,
             dest_inf=di,
-            primary_lr=0.0005,
+            primary_lr=0.001,
             backprop_into_embedding=False,
             embedding_lr=0.00001,
+            with_context=True,
         )
 
         start = datetime.datetime.now()
