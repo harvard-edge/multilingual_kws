@@ -599,6 +599,8 @@ combiner.build(mp3s, dest, "concatenate")
 fig, ax = plt.subplots()
 hpsweep = workdir / "hp_sweep"
 for exp in os.listdir(hpsweep):
+    if int(exp[4:]) < 11:
+        continue
     for trial in os.listdir(hpsweep / exp):
         rp = hpsweep / exp / trial / "result.pkl"
         if not os.path.isfile(rp):
@@ -621,7 +623,8 @@ for exp in os.listdir(hpsweep):
             fpr = analysis["fpr"]
             all_tprs.append(tpr)
             all_fprs.append(fpr)
-            pprint.pprint(analysis)
+            # if exp == "exp_10":
+            #     pprint.pprint(analysis)
 
         sd = sweep_info[0]
         if sd.backprop_into_embedding:
@@ -636,11 +639,12 @@ for exp in os.listdir(hpsweep):
         except AttributeError:
             wc = "f"
 
-        label = f"t: {sd.train_files.shape[0]:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
+        label = f"{exp} t: {sd.train_files.shape[0]:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
         ax.plot(all_fprs, all_tprs, label=label, linewidth=3)
 
 AX_LIM = 0
-ax.set_xlim(0, 1 - AX_LIM)
+#ax.set_xlim(0, 1 - AX_LIM)
+ax.set_xlim(0, 0.05)
 ax.set_ylim(AX_LIM, 1.01)
 ax.legend(loc="lower right")
 ax.set_xlabel("False Positive Rate")

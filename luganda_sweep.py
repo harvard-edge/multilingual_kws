@@ -136,7 +136,7 @@ if __name__ == "__main__":
     val_accuracies = []
     sweep_datas = []
 
-    exp_dir = workdir / "hp_sweep" / "exp_10"
+    exp_dir = workdir / "hp_sweep" / "exp_20"
     os.makedirs(exp_dir, exist_ok=False)
 
     kf = sklearn.model_selection.ShuffleSplit(n_splits=1, test_size=0.95)
@@ -159,7 +159,7 @@ if __name__ == "__main__":
             dest_pkl=dp,
             dest_inf=di,
             primary_lr=0.001,
-            backprop_into_embedding=False,
+            backprop_into_embedding=True,
             embedding_lr=0.00001,
             with_context=True,
         )

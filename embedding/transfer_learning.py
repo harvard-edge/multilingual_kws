@@ -45,7 +45,11 @@ def transfer_learn(
     # dont use softmax unless losses from_logits=False
     CATEGORIES = 3  # silence + unknown + target_keyword
     xfer = tf.keras.models.Sequential(
-        [xfer, tf.keras.layers.Dense(units=CATEGORIES, activation="softmax")]
+        [
+            xfer,
+            tf.keras.layers.Dense(units=12, activation="tanh"),
+            tf.keras.layers.Dense(units=CATEGORIES, activation="softmax"),
+        ]
     )
 
     xfer.compile(
@@ -81,9 +85,12 @@ def transfer_learn(
         callbacks=[csvlogger],
     )
     if backprop_into_embedding:
-        raise ValueError("consult guide first")
         # https://keras.io/examples/vision/image_classification_efficientnet_fine_tuning/#transfer-learning-from-pretrained-weights
-        xfer.trainable = True
+        # We unfreeze the top 20 layers while leaving BatchNorm layers frozen
+        for layer in xfer.layers[-20:]:
+            if not isinstance(layer, tf.keras.layers.BatchNormalization):
+                layer.trainable = True
+
         xfer.compile(
             optimizer=tf.keras.optimizers.Adam(learning_rate=embedding_lr),
             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
