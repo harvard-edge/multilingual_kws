@@ -22,6 +22,7 @@ import textgrid
 from luganda_sweep import SweepData
 
 import seaborn as sns
+
 sns.set()
 sns.set_style("darkgrid")
 sns.set_palette("bright")
@@ -440,11 +441,7 @@ print("nontarget words", num_nontarget_words)
 
 # %%
 def tpr_fpr(
-    keyword,
-    found_words,
-    gt_target_times_ms,
-    num_nontarget_words,
-    time_tolerance_ms=1000,
+    keyword, found_words, gt_target_times_ms, num_nontarget_words, time_tolerance_ms,
 ):
     found_target_times = [t for f, t in found_words if f == keyword]
 
@@ -484,7 +481,7 @@ def tpr_fpr(
                 true_positives += 1
     if true_positives > len(gt_target_times_ms):
         print("WARNING: weird timing issue")
-        true_positives = len(gt_target_times_ms)  
+        true_positives = len(gt_target_times_ms)
         # if thresh is low, mult dets map to single gt (above suppression_ms)
         # single_target_recognize_commands already uses suppression_ms
         # raise suppression value?
@@ -502,7 +499,7 @@ def tpr_fpr(
         false_negatives=false_negatives,
         false_rejections_per_instance=false_rejections_per_instance,
     )
-    #pp.pprint(result)
+    # pp.pprint(result)
     # print("thresh", thresh, false_rejections_per_instance)
     # print("thresh", thresh, "true positives ", true_positives, "TPR:", tpr)
     # TODO(MMAZ) is there a beter way to calculate false positive rate?
@@ -599,12 +596,12 @@ combiner.build(mp3s, dest, "concatenate")
 fig, ax = plt.subplots()
 hpsweep = workdir / "hp_sweep"
 for exp in os.listdir(hpsweep):
-    if int(exp[4:]) < 11:
-        continue
+    # if int(exp[4:]) < 11:
+    #     continue
     for trial in os.listdir(hpsweep / exp):
         rp = hpsweep / exp / trial / "result.pkl"
         if not os.path.isfile(rp):
-            continue # still calculating
+            continue  # still calculating
         with open(rp, "rb") as fh:
             result = pickle.load(fh)
         with open(hpsweep / exp / trial / "sweep_data.pkl", "rb") as fh:
@@ -617,7 +614,11 @@ for exp in os.listdir(hpsweep):
                 continue
             print(thresh)
             analysis = tpr_fpr(
-                "covid", found_words, gt_target_times_ms, num_nontarget_words=num_nontarget_words
+                sweep_info[0].stream_target.target_word,
+                found_words,
+                gt_target_times_ms,
+                num_nontarget_words=num_nontarget_words,
+                time_tolerance_ms=sweep_info[0].stream_target.stream_flags.time_tolerance_ms,
             )
             tpr = analysis["tpr"]
             fpr = analysis["fpr"]
@@ -643,7 +644,7 @@ for exp in os.listdir(hpsweep):
         ax.plot(all_fprs, all_tprs, label=label, linewidth=3)
 
 AX_LIM = 0
-#ax.set_xlim(0, 1 - AX_LIM)
+# ax.set_xlim(0, 1 - AX_LIM)
 ax.set_xlim(0, 0.05)
 ax.set_ylim(AX_LIM, 1.01)
 ax.legend(loc="lower right")

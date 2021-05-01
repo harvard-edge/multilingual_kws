@@ -66,21 +66,16 @@ class SweepData:
     backprop_into_embedding: bool
     embedding_lr: float
     with_context: bool
-    target: str = "covid"
+    target: str
+    stream_target: sa.StreamTarget
     batch_size: int = 64
-    streamwav: os.PathLike = workdir / "covid_stream.wav"
-    gt: os.PathLike = workdir / "empty.txt"
 
 
 def sweep_run(sd: SweepData, q):
 
     # load embedding model
     traindir = Path(f"/home/mark/tinyspeech_harvard/multilingual_embedding_wc")
-    base_model_path = (
-        traindir
-        / "models"
-        / "multilingual_context_resume20_.005-0.7236"
-    )
+    base_model_path = traindir / "models" / "multilingual_context_resume20_.005-0.7236"
 
     model_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe/")
     unknown_collection_path = model_dir / "unknown_collection.pkl"
@@ -119,9 +114,6 @@ def sweep_run(sd: SweepData, q):
     # this should maybe be thresholded also
     print("VAL ACCURACY", val_accuracy)
 
-    streamtarget = sa.StreamTarget(
-        "lu", "covid", modelpath, sd.streamwav, sd.gt, sd.dest_pkl, sd.dest_inf
-    )
     start = datetime.datetime.now()
     sa.eval_stream_test(streamtarget, live_model=model)
     end = datetime.datetime.now()
@@ -136,7 +128,7 @@ if __name__ == "__main__":
     val_accuracies = []
     sweep_datas = []
 
-    exp_dir = workdir / "hp_sweep" / "exp_20"
+    exp_dir = workdir / "hp_sweep" / "exp_01"
     os.makedirs(exp_dir, exist_ok=False)
 
     kf = sklearn.model_selection.ShuffleSplit(n_splits=1, test_size=0.95)
@@ -150,6 +142,31 @@ if __name__ == "__main__":
 
         t = hundred_alignments[train_ixs]
         v = hundred_alignments[val_ixs]
+
+        streamwav: os.PathLike = workdir / "covid_stream.wav"
+        gt: os.PathLike = workdir / "empty.txt"  # no gt
+
+        target_word = "covid"
+        flags = sa.StreamFlags(
+            wav=str(streamwav),
+            ground_truth=str(gt),
+            target_keyword=target_word,
+            detection_thresholds=np.linspace(
+                0.05, 1, 20
+            ).tolist(),  # step threshold 0.05
+            # average_window_duration_ms = 500
+            average_window_duration_ms=100,
+            suppression_ms=500,
+            time_tolerance_ms=750, #only used when graphing
+        )
+        streamtarget = sa.StreamTarget(
+            target_lang="lu",
+            target_word=target_word,
+            model_path=None,  # dont save model
+            destination_result_pkl=dp,
+            destination_result_inferences=di,
+            stream_flags=flags,
+        )
         sd = SweepData(
             train_files=t,
             val_files=v,
@@ -159,9 +176,11 @@ if __name__ == "__main__":
             dest_pkl=dp,
             dest_inf=di,
             primary_lr=0.001,
-            backprop_into_embedding=True,
+            backprop_into_embedding=False,
             embedding_lr=0.00001,
             with_context=True,
+            target=target_word,
+            stream_target=streamtarget,
         )
 
         start = datetime.datetime.now()
@@ -169,7 +188,7 @@ if __name__ == "__main__":
         p.start()
         p.join()
         end = datetime.datetime.now()
-        print("\n\n::::::: experiment run elapsed time", end-start, "\n\n")
+        print("\n\n::::::: experiment run elapsed time", end - start, "\n\n")
 
         val_acc = q.get()
         val_accuracies.append(val_acc)

@@ -47,7 +47,7 @@ def transfer_learn(
     xfer = tf.keras.models.Sequential(
         [
             xfer,
-            tf.keras.layers.Dense(units=12, activation="tanh"),
+            tf.keras.layers.Dense(units=18, activation="tanh"),
             tf.keras.layers.Dense(units=CATEGORIES, activation="softmax"),
         ]
     )

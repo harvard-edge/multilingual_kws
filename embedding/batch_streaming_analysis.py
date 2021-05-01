@@ -38,7 +38,7 @@ from single_target_recognize_commands import (
 
 # %%
 @dataclass(frozen=True)
-class FlagTest:
+class StreamFlags:
     wav: os.PathLike
     ground_truth: os.PathLike
     target_keyword: str
@@ -48,7 +48,7 @@ class FlagTest:
     # average_window_duration_ms: int = 500
     average_window_duration_ms: int = 100
     suppression_ms: int = 500
-    time_tolerance_ms: int = 1500
+    time_tolerance_ms: int = 750
     minimum_count: int = 4
 
     def labels(self) -> List[str]:
@@ -168,10 +168,10 @@ class StreamTarget:
     target_lang: str
     target_word: str
     model_path: os.PathLike
-    stream_wav: os.PathLike
-    stream_label: os.PathLike
     destination_result_pkl: os.PathLike
     destination_result_inferences: os.PathLike
+    stream_flags: StreamFlags
+
 
 def eval_stream_test(st: StreamTarget, live_model=None):
     if live_model is not None:
@@ -182,13 +182,6 @@ def eval_stream_test(st: StreamTarget, live_model=None):
         tf.get_logger().setLevel(logging.INFO)
 
     model_settings = input_data.standard_microspeech_model_settings(label_count=3)
-
-    flags = FlagTest(
-        wav=str(st.stream_wav),
-        ground_truth=str(st.stream_label),
-        target_keyword=st.target_word,
-        detection_thresholds=np.linspace(0.05, 1, 20).tolist(),  # step threshold 0.05
-    )
 
     if os.path.isfile(st.destination_result_pkl):
         print("results already present", st.destination_result_pkl, flush=True)
@@ -205,11 +198,11 @@ def eval_stream_test(st: StreamTarget, live_model=None):
     results = {}
     if inferences_exist:
         results[st.target_word], _ = calculate_streaming_accuracy(
-            model, model_settings, flags, loaded_inferences
+            model, model_settings, st.stream_flags, loaded_inferences
         )
     else:
         results[st.target_word], inferences = calculate_streaming_accuracy(
-            model, model_settings, flags
+            model, model_settings, st.stream_flags
         )
 
     with open(st.destination_result_pkl, "wb") as fh:
@@ -219,6 +212,7 @@ def eval_stream_test(st: StreamTarget, live_model=None):
 
     # https://keras.io/api/utils/backend_utils/
     tf.keras.backend.clear_session()
+
 
 def batch_streaming_analysis():
     batch_data_to_process = []
@@ -237,7 +231,7 @@ def batch_streaming_analysis():
 
     for ix, lang_dir in enumerate(os.listdir(sse)):
         if not os.path.isdir(sse / lang_dir):
-            continue # skip the generator script or the logfile
+            continue  # skip the generator script or the logfile
         target_lang = lang_dir.split("_")[-1]
         for word_dir in os.listdir(sse / lang_dir):
             target_word = word_dir.split("_")[-1]
@@ -258,14 +252,21 @@ def batch_streaming_analysis():
             assert not os.path.isfile(destination_result_pkl) and not os.path.isfile(destination_result_inferences), "result data already present"
             # fmt: on
 
+            flags = StreamFlags(
+                wav=str(stream_wav),
+                ground_truth=str(stream_label),
+                target_keyword=target_word,
+                detection_thresholds=np.linspace(
+                    0.05, 1, 20
+                ).tolist(),  # step threshold 0.05
+            )
             d = StreamTarget(
                 target_lang=target_lang,
                 target_word=target_word,
                 model_path=model_path,
-                stream_wav=stream_wav,
-                stream_label=stream_label,
                 destination_result_pkl=destination_result_pkl,
                 destination_result_inferences=destination_result_inferences,
+                stream_flags=flags,
             )
             batch_data_to_process.append(d)
 
@@ -299,6 +300,7 @@ def batch_streaming_analysis():
 
         end = datetime.datetime.now()
         print("time elapsed", end - start)
+
 
 # %%
 
