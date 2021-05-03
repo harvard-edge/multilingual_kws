@@ -13,45 +13,24 @@ from pathlib import Path
 import pprint
 from typing import List
 
-import matplotlib.pyplot as plt
 import numpy as np
-import sox
-import pydub
-from pydub.playback import play
 
 from embedding import word_extraction, transfer_learning
 from embedding import batch_streaming_analysis as sa
 import input_data
-import textgrid
 
 import sklearn.model_selection
 
-# fakedata = []
-# for ci in [chr(i + 65) for i in range(10)]:
-#     for cj in [chr(i + 65) for i in range(10)]:
-#         fakedata.append(ci + cj)
-# print(len(fakedata), fakedata[:15])
-
-# print("\n\n\n\n\n")
-# kf = sklearn.model_selection.ShuffleSplit(n_splits=10, test_size=0.3)
-# for train_ix, test_ix in kf.split(fakedata):
-#     print(test_ix, len(test_ix))
-#     print("--")
-# print("\n\n\n\n\n")
-
-workdir = Path("/home/mark/tinyspeech_harvard/luganda")
-
-# chooose random extractions from 1k alignments
-# all_alignments = glob.glob(str(workdir / "1k_covid_alignments" / "*.wav"))
-# selected_alignments = np.random.choice(all_alignments, 100, replace=False)
-# with open(workdir / "hundred_alignments.txt", 'w') as fh:
-#     fh.write("\n".join(selected_alignments))
-
-with open(workdir / "hundred_alignments.txt", "r") as fh:
-    hundred_alignments = fh.read().splitlines()
-hundred_alignments = np.array(hundred_alignments)
-print(len(hundred_alignments))
-
+def fakedata_test():
+    fakedata = []
+    for ci in [chr(i + 65) for i in range(10)]:
+        for cj in [chr(i + 65) for i in range(10)]:
+            fakedata.append(ci + cj)
+    print(len(fakedata), fakedata[:15])
+    kf = sklearn.model_selection.ShuffleSplit(n_splits=10, test_size=0.3)
+    for train_ix, test_ix in kf.split(fakedata):
+        print(test_ix, len(test_ix))
+    print("--")
 
 @dataclass(frozen=True)
 class SweepData:
@@ -75,13 +54,10 @@ def sweep_run(sd: SweepData, q):
 
     # load embedding model
     traindir = Path(f"/home/mark/tinyspeech_harvard/multilingual_embedding_wc")
-    base_model_path = traindir / "models" / "multilingual_context_resume20_.005-0.7236"
+    with open(traindir / "unknown_files.txt", "r") as fh:
+        unknown_files = fh.read().splitlines()
 
-    model_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_analysis_ooe/")
-    unknown_collection_path = model_dir / "unknown_collection.pkl"
-    with open(unknown_collection_path, "rb") as fh:
-        unknown_collection = pickle.load(fh)
-    unknown_files = unknown_collection["unknown_files"]
+    base_model_path = traindir / "models" / "multilingual_context_73_0.8011"
 
     model_settings = input_data.standard_microspeech_model_settings(3)
     name, model, details = transfer_learning.transfer_learn(
@@ -124,6 +100,15 @@ def sweep_run(sd: SweepData, q):
 
 # %%
 if __name__ == "__main__":
+
+    workdir = Path("/home/mark/tinyspeech_harvard/luganda")
+    t = []
+    akawuka_shots = workdir / "akawuka_extractions"
+    for f in os.listdir(akawuka_shots):
+        t.append(str(akawuka_shots / f))
+    # reuse train for val
+    v = t
+
     q = multiprocessing.Queue()
     val_accuracies = []
     sweep_datas = []
@@ -131,8 +116,21 @@ if __name__ == "__main__":
     exp_dir = workdir / "hp_sweep" / "exp_01"
     os.makedirs(exp_dir, exist_ok=False)
 
-    kf = sklearn.model_selection.ShuffleSplit(n_splits=1, test_size=0.95)
-    for ix, (train_ixs, val_ixs) in enumerate(kf.split(hundred_alignments)):
+    # chooose random extractions from 1k alignments
+    # all_alignments = glob.glob(str(workdir / "1k_covid_alignments" / "*.wav"))
+    # selected_alignments = np.random.choice(all_alignments, 100, replace=False)
+    # with open(workdir / "hundred_alignments.txt", 'w') as fh:
+    #     fh.write("\n".join(selected_alignments))
+    # with open(workdir / "hundred_alignments.txt", "r") as fh:
+    #     hundred_alignments = fh.read().splitlines()
+    # hundred_alignments = np.array(hundred_alignments)
+    # print(len(hundred_alignments))
+    # kf = sklearn.model_selection.ShuffleSplit(n_splits=1, test_size=0.95)
+    # for ix, (train_ixs, val_ixs) in enumerate(kf.split(hundred_alignments)):
+    #     t = hundred_alignments[train_ixs]
+    #     v = hundred_alignments[val_ixs]
+
+    for ix in range(1):
 
         mdd = exp_dir / f"fold_{ix:02d}"
         dp = mdd / "result.pkl"
@@ -140,13 +138,10 @@ if __name__ == "__main__":
         print(mdd)
         os.makedirs(mdd)
 
-        t = hundred_alignments[train_ixs]
-        v = hundred_alignments[val_ixs]
-
-        streamwav: os.PathLike = workdir / "covid_stream.wav"
+        streamwav: os.PathLike = workdir / "akawuka_stream.wav"
         gt: os.PathLike = workdir / "empty.txt"  # no gt
 
-        target_word = "covid"
+        target_word = "akawuka"
         flags = sa.StreamFlags(
             wav=str(streamwav),
             ground_truth=str(gt),
@@ -165,7 +160,7 @@ if __name__ == "__main__":
             model_path=None,  # dont save model
             destination_result_pkl=dp,
             destination_result_inferences=di,
-            stream_flags=flags,
+            stream_flags=[flags],
         )
         sd = SweepData(
             train_files=t,

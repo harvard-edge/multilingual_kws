@@ -1,4 +1,5 @@
 #%%
+from dataclasses import dataclass, field, asdict
 import os
 import glob
 import shutil
@@ -8,18 +9,18 @@ import pickle
 import datetime
 from pathlib import Path
 import pprint
+from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import sox
 import pydub
 from pydub.playback import play
+import textgrid
 
 from embedding import word_extraction, transfer_learning
 from embedding import batch_streaming_analysis as sa
 import input_data
-import textgrid
-from luganda_sweep import SweepData
 
 import seaborn as sns
 
@@ -440,81 +441,6 @@ print("nontarget words", num_nontarget_words)
 
 
 # %%
-def tpr_fpr(
-    keyword, found_words, gt_target_times_ms, num_nontarget_words, time_tolerance_ms,
-):
-    found_target_times = [t for f, t in found_words if f == keyword]
-
-    # find false negatives
-    false_negatives = 0
-    for time_ms in gt_target_times_ms:
-        latest_time = time_ms + time_tolerance_ms
-        earliest_time = time_ms - time_tolerance_ms
-        potential_match = False
-        for found_time in found_target_times:
-            if found_time > latest_time:
-                break
-            if found_time < earliest_time:
-                continue
-            potential_match = True
-        if not potential_match:
-            false_negatives += 1
-
-    # find true/false positives
-    false_positives = 0  # no groundtruth match for model-found word
-    true_positives = 0
-    for word, time in found_words:
-        if word == keyword:
-            # highlight spurious words
-            latest_time = time + time_tolerance_ms
-            earliest_time = time - time_tolerance_ms
-            potential_match = False
-            for gt_time in gt_target_times_ms:
-                if gt_time > latest_time:
-                    break
-                if gt_time < earliest_time:
-                    continue
-                potential_match = True
-            if not potential_match:
-                false_positives += 1
-            else:
-                true_positives += 1
-    if true_positives > len(gt_target_times_ms):
-        print("WARNING: weird timing issue")
-        true_positives = len(gt_target_times_ms)
-        # if thresh is low, mult dets map to single gt (above suppression_ms)
-        # single_target_recognize_commands already uses suppression_ms
-        # raise suppression value?
-
-    tpr = true_positives / len(gt_target_times_ms)
-    false_rejections_per_instance = false_negatives / len(gt_target_times_ms)
-    false_positives = len(found_target_times) - true_positives
-    fpr = false_positives / num_nontarget_words
-    pp = pprint.PrettyPrinter()
-    result = dict(
-        tpr=tpr,
-        fpr=fpr,
-        true_positives=true_positives,
-        false_positives=false_positives,
-        false_negatives=false_negatives,
-        false_rejections_per_instance=false_rejections_per_instance,
-    )
-    # pp.pprint(result)
-    # print("thresh", thresh, false_rejections_per_instance)
-    # print("thresh", thresh, "true positives ", true_positives, "TPR:", tpr)
-    # TODO(MMAZ) is there a beter way to calculate false positive rate?
-    # fpr = false_positives / (false_positives + true_negatives)
-    # fpr = false_positives / negatives
-    # print(
-    #     "false positives (model detection when no groundtruth target is present)",
-    #     false_positives,
-    # )
-    # fpr = false_positives / num_nontarget_words
-    # false_accepts_per_seconds = false_positives / (duration_s / (3600))
-    return result
-
-
-# %%
 # listen to random alignments for covid
 covid_alignments = workdir / "covid_alignments"
 alignment_speakers = os.listdir(covid_alignments)
@@ -592,75 +518,149 @@ combiner.convert(samplerate=16000, n_channels=1)
 combiner.build(mp3s, dest, "concatenate")
 
 # %%
-# graph hyperparam sweep
-fig, ax = plt.subplots()
-hpsweep = workdir / "hp_sweep"
-for exp in os.listdir(hpsweep):
-    # if int(exp[4:]) < 11:
-    #     continue
-    for trial in os.listdir(hpsweep / exp):
-        rp = hpsweep / exp / trial / "result.pkl"
-        if not os.path.isfile(rp):
-            continue  # still calculating
-        with open(rp, "rb") as fh:
-            result = pickle.load(fh)
-        with open(hpsweep / exp / trial / "sweep_data.pkl", "rb") as fh:
-            sweep_data = pickle.load(fh)
-            sweep_info = sweep_data["sweep_datas"]
-        all_tprs = []
-        all_fprs = []
-        for thresh, (found_words, _) in result["covid"].items():
-            if thresh < 0.3:
-                continue
-            print(thresh)
-            analysis = tpr_fpr(
-                sweep_info[0].stream_target.target_word,
-                found_words,
-                gt_target_times_ms,
-                num_nontarget_words=num_nontarget_words,
-                time_tolerance_ms=sweep_info[0].stream_target.stream_flags.time_tolerance_ms,
-            )
-            tpr = analysis["tpr"]
-            fpr = analysis["fpr"]
-            all_tprs.append(tpr)
-            all_fprs.append(fpr)
-            # if exp == "exp_10":
-            #     pprint.pprint(analysis)
 
-        sd = sweep_info[0]
-        if sd.backprop_into_embedding:
-            lrinfo = f"lr1: {sd.primary_lr} lr2: {sd.embedding_lr}"
-        else:
-            lrinfo = f"lr1: {sd.primary_lr}"
-        try:
-            if sd.with_context:
-                wc = "t"
-            else:
-                wc = "f"
-        except AttributeError:
-            wc = "f"
+l_data = Path("/media/mark/hyperion/makerere/uliza-clips")
+l_csv = l_data / "transcripts.csv"
+l_test = Path("/media/mark/hyperion/makerere/alignment/akawuka/")
+l_clips = l_test / "akawuka_clips"
+l_alignments = l_test / "alignments"
 
-        label = f"{exp} t: {sd.train_files.shape[0]:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
-        ax.plot(all_fprs, all_tprs, label=label, linewidth=3)
+keyword = "akawuka"
 
-AX_LIM = 0
-# ax.set_xlim(0, 1 - AX_LIM)
-ax.set_xlim(0, 0.05)
-ax.set_ylim(AX_LIM, 1.01)
-ax.legend(loc="lower right")
-ax.set_xlabel("False Positive Rate")
-ax.set_ylabel("True Positive Rate")
-for item in (
-    [ax.title, ax.xaxis.label, ax.yaxis.label]
-    + ax.get_legend().get_texts()
-    + ax.get_xticklabels()
-    + ax.get_yticklabels()
-):
-    item.set_fontsize(25)
-fig.set_size_inches(14, 14)
-fig.tight_layout()
-figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/lu_sweep_wc.png"
-fig.savefig(figdest)
-print(figdest)
+# %%
 
+
+@dataclass
+class WavTranscript:
+    wav: os.PathLike
+    transcript: str
+    keyword: Optional[str] = None
+    occurences_s: List[Tuple[float, float]] = field(default_factory=list)
+
+
+# select random wavs without the keyword to intersperse stream with
+non_targets = []
+with open(l_csv, "r") as fh:
+    reader = csv.reader(fh)
+    next(reader)  # skip header [wav_filename,wav_filesize,transcript]
+    for ix, row in enumerate(reader):
+        wav_filename = l_data / row[0]
+        assert os.path.isfile(wav_filename), "wav not found"
+        transcript = row[2]
+        has_kw = any([w == keyword for w in transcript.split()])
+        if not has_kw:
+            non_targets.append(WavTranscript(wav=wav_filename, transcript=transcript))
+
+# assemble wav transcripts with timings from alignments
+# supports multiple keywords in a single wav
+keyword_wav_transcripts = []
+for a in os.listdir(l_alignments):
+    if not os.path.isdir(l_alignments / a):
+        continue  # unaligned.txt
+
+    wav = l_clips / a / f"{a}.wav"
+
+    lab = l_clips / a / f"{a}.lab"
+    with open(lab, "r") as fh:
+        transcript = fh.read()
+
+    tgfile = l_alignments / a / f"{a}.TextGrid"
+    tg = textgrid.TextGrid.fromFile(tgfile)
+
+    occurences_s = []
+
+    for interval in tg[0]:
+        if interval.mark != keyword:
+            continue
+        start_s = interval.minTime
+        end_s = interval.maxTime
+        occurences_s.append((start_s, end_s))
+
+    keyword_wav_transcripts.append(
+        WavTranscript(wav=wav, transcript=transcript, occurences_s=occurences_s)
+    )
+
+# %%
+
+# listen to random samples
+ix = np.random.randint(len(keyword_wav_transcripts))
+w = keyword_wav_transcripts[ix]
+print(ix, w.wav)
+
+
+def decorate(word, keyword):
+    if word == keyword:
+        return f"[::{word}::]"
+    return word
+
+
+decorated = [decorate(word, keyword=keyword) for word in w.transcript.split()]
+print(" ".join(decorated))
+start_s = w.occurences_s[0][0]
+end_s = w.occurences_s[0][1]
+audio = pydub.AudioSegment.from_file(w.wav)
+play(audio[start_s * 1000 : end_s * 1000])
+
+# %%
+# generate stream and groundtruth data
+NUM_TARGETS = 80
+
+workdir = Path("/home/mark/tinyspeech_harvard/luganda")
+dest_wavfile = str(workdir / "akawuka_stream.wav")
+groundtruth_data = workdir / "akawuka_groundtruth.pkl"
+assert not os.path.isfile(dest_wavfile), "already exists"
+assert not os.path.isfile(groundtruth_data), "already exists"
+
+ntlog = set()
+ixs = np.random.choice(range(len(keyword_wav_transcripts)), NUM_TARGETS, replace=False)
+
+total_wav_duration_s = 0.0
+to_combine = []
+groundtruth_target_times_ms = []
+
+stream_data = []
+
+for ix in ixs:
+    target = keyword_wav_transcripts[ix]
+    non_target_ix = np.random.randint(len(non_targets))
+    ntlog.add(non_target_ix)
+    non_target = non_targets[non_target_ix]
+
+    target_duration_s = sox.file_info.duration(target.wav)
+    nontarget_duration_s = sox.file_info.duration(non_target.wav)
+
+    for start_s, _ in target.occurences_s:
+        t_ms = (total_wav_duration_s + start_s) * 1000
+        groundtruth_target_times_ms.append(t_ms)
+
+    total_wav_duration_s += target_duration_s + nontarget_duration_s
+
+    to_combine.extend([str(target.wav), str(non_target.wav)])
+
+    td = asdict(target)
+    td["duration_s"] = target_duration_s
+    nd = asdict(non_target)
+    nd["duration_s"] = nontarget_duration_s
+    stream_data.extend([td, nd])
+
+groundtruth = dict(
+    groundtruth_target_times_ms=groundtruth_target_times_ms, stream_data=stream_data
+)
+
+if len(ntlog) < NUM_TARGETS:
+    print("Warning: used duplicate nontarget wavs", NUM_TARGETS - len(ntlog))
+
+print("duration in minutes", total_wav_duration_s / 60)
+
+combiner = sox.Combiner()
+combiner.convert(samplerate=16000, n_channels=1)
+combiner.build(to_combine, dest_wavfile, "concatenate")
+
+with open(groundtruth_data, "wb") as fh:
+    pickle.dump(groundtruth, fh)
+
+# %% validate data
+t_ms = np.random.choice(groundtruth_target_times_ms)
+audio = pydub.AudioSegment.from_file(dest_wavfile)
+play(audio[t_ms : t_ms + 1000])
 # %%

@@ -12,14 +12,15 @@ import numpy as np
 # %%
 l_data = Path("/media/mark/hyperion/makerere/uliza-clips")
 l_csv = l_data / "transcripts.csv"
-l_dest = Path("/media/mark/hyperion/makerere/alignment/covid_clips")
-l_test = Path("/media/mark/hyperion/makerere/test")
+l_test = Path("/media/mark/hyperion/makerere/alignment/akawuka/")
+l_dest = l_test / "akawuka_clips"
 
 # %%
-keyword = "covid"
+keyword = "akawuka"
 # loosely follows https://git.io/JOG7h
-# but does not separate by speaker
+# but treats each file as a separate speaker
 # see: https://montreal-forced-aligner.readthedocs.io/en/latest/data_prep.html
+written = 0
 with open(l_csv, "r") as fh:
     reader = csv.reader(fh)
     next(reader) # skip header [wav_filename,wav_filesize,transcript]
@@ -37,6 +38,8 @@ with open(l_csv, "r") as fh:
             with open(l_dest / wav_filename.stem / lab_name, 'w', encoding='utf8') as fh:
                 fh.write(transcript)
             shutil.copy2(l_data / wav_filename, l_dest / wav_filename.stem)
+            written += 1
+            print(f"written: {written}")
 
 # %%
 # mini experiment
@@ -57,7 +60,7 @@ for s in sample:
 # %%
 # make lexicon (word followed by spelling)
 # word w o r d
-transcriptions = glob.glob("/media/mark/hyperion/makerere/alignment/covid_clips/**/*.lab")
+transcriptions = glob.glob("/media/mark/hyperion/makerere/alignment/akawuka/akawuka_clips/**/*.lab")
 words = set()
 for t in transcriptions:
     with open(t, 'r') as fh:
@@ -79,4 +82,4 @@ with open(l_test / "lexicon.txt", 'w') as fh:
 # https://montreal-forced-aligner.readthedocs.io/en/latest/aligning.html#align-using-only-the-data-set
 
 # docker run --rm -v $(pwd):/context -w /context -it montreal /bin/bash
-# mfa train --clean covid_clips/ lexicon.txt alignments/ 
+# mfa train --clean akawuka_clips/ lexicon.txt alignments/ 

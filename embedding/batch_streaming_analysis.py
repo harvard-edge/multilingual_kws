@@ -1,34 +1,21 @@
 # based on https://github.com/tensorflow/tensorflow/blob/master/tensorflow/examples/speech_commands/test_streaming_accuracy.py
 
 #%%
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 import logging
-import sox
 import datetime
 import os
 import multiprocessing
-import sys
-import shutil
-import pprint
 import pickle
 import glob
 import subprocess
-import pathlib
 from pathlib import Path
 from typing import List
 
 import numpy as np
 import tensorflow as tf
 
-import matplotlib.pyplot as plt
-import plotly.express as px
-import plotly.graph_objects as go
-import seaborn as sns
 
-sns.set()
-sns.set_palette("bright")
-
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
 import input_data
 from accuracy_utils import StreamingAccuracyStats
 from single_target_recognize_commands import (
@@ -60,9 +47,13 @@ class StreamFlags:
 
 
 def calculate_streaming_accuracy(
-    model, model_settings, FLAGS, existing_inferences=None
+    model, model_settings, flag_list, existing_inferences=None
 ):
-    wav_loader = tf.io.read_file(FLAGS.wav)
+    assert len(set([f.wav for f in flag_list])) == 1, "can only process one wav"
+    assert len(set([f.clip_duration_ms for f in flag_list])) == 1, "cannot vary"
+    assert len(set([f.clip_stride_ms for f in flag_list])) == 1, "cannot vary"
+    wav = flag_list[0].wav
+    wav_loader = tf.io.read_file(wav)
     (audio, sample_rate) = tf.audio.decode_wav(wav_loader, desired_channels=1)
     sample_rate = sample_rate.numpy()
     audio = audio.numpy().flatten()
@@ -71,9 +62,9 @@ def calculate_streaming_accuracy(
     # number of samples in the entire audio file
     data_samples = audio.shape[0]
     # number of samples in one utterance (e.g., a 1 second clip)
-    clip_duration_samples = int(FLAGS.clip_duration_ms * sample_rate / 1000)
+    clip_duration_samples = int(flag_list[0].clip_duration_ms * sample_rate / 1000)
     # number of samples in one stride
-    clip_stride_samples = int(FLAGS.clip_stride_ms * sample_rate / 1000)
+    clip_stride_samples = int(flag_list[0].clip_stride_ms * sample_rate / 1000)
     # leave space for one full clip at end
     audio_data_end = data_samples - clip_duration_samples
 
@@ -104,57 +95,60 @@ def calculate_streaming_accuracy(
         inferences = model.predict(spectrograms[:, :, :, np.newaxis])
         print("inferences complete", flush=True)
 
-    results = {}
-    for threshold in FLAGS.detection_thresholds:
-        stats = StreamingAccuracyStats(target_keyword=FLAGS.target_keyword)
-        stats.read_ground_truth_file(FLAGS.ground_truth)
-        recognize_element = RecognizeResult()
-        recognize_commands = SingleTargetRecognizeCommands(
-            labels=FLAGS.labels(),
-            average_window_duration_ms=FLAGS.average_window_duration_ms,
-            detection_threshold=threshold,
-            suppression_ms=FLAGS.suppression_ms,
-            minimum_count=FLAGS.minimum_count,
-            target_id=2,
-        )
-        all_found_words = []
-        all_found_words_w_confidences = []
-        # calculate statistics using inferences
-        for ix, audio_data_offset in enumerate(
-            range(0, audio_data_end, clip_stride_samples)
-        ):
-            output_softmax = inferences[ix]
-            current_time_ms = int(audio_data_offset * 1000 / sample_rate)
-            recognize_commands.process_latest_result(
-                output_softmax, current_time_ms, recognize_element
+    results = []
+    for FLAGS in flag_list:
+        res_thresh = {}
+        for threshold in FLAGS.detection_thresholds:
+            stats = StreamingAccuracyStats(target_keyword=FLAGS.target_keyword)
+            stats.read_ground_truth_file(FLAGS.ground_truth)
+            recognize_element = RecognizeResult()
+            recognize_commands = SingleTargetRecognizeCommands(
+                labels=FLAGS.labels(),
+                average_window_duration_ms=FLAGS.average_window_duration_ms,
+                detection_threshold=threshold,
+                suppression_ms=FLAGS.suppression_ms,
+                minimum_count=FLAGS.minimum_count,
+                target_id=2,
             )
-            if (
-                recognize_element.is_new_command
-                and recognize_element.found_command != "_silence_"
+            all_found_words = []
+            all_found_words_w_confidences = []
+            # calculate statistics using inferences
+            for ix, audio_data_offset in enumerate(
+                range(0, audio_data_end, clip_stride_samples)
             ):
-                all_found_words.append(
-                    [recognize_element.found_command, current_time_ms]
+                output_softmax = inferences[ix]
+                current_time_ms = int(audio_data_offset * 1000 / sample_rate)
+                recognize_commands.process_latest_result(
+                    output_softmax, current_time_ms, recognize_element
                 )
-                all_found_words_w_confidences.append(
-                    [
-                        recognize_element.found_command,
-                        current_time_ms,
-                        recognize_element.score,
-                    ]
-                )
-                stats.calculate_accuracy_stats(
-                    all_found_words, current_time_ms, FLAGS.time_tolerance_ms
-                )
-                recognition_state = stats.delta()
-                # fmt: off
-                # print( "{}ms {}:{}{}".format(current_time_ms,recognize_element.founded_command,recognize_element.score,recognition_state,) )
-                # fmt: on
-                # stats.print_accuracy_stats()
-        print(f"results for {threshold:0.2f}")
-        # calculate final stats for full wav file:
-        stats.calculate_accuracy_stats(all_found_words, -1, FLAGS.time_tolerance_ms)
-        stats.print_accuracy_stats()
-        results[threshold] = (all_found_words, all_found_words_w_confidences)
+                if (
+                    recognize_element.is_new_command
+                    and recognize_element.found_command != "_silence_"
+                ):
+                    all_found_words.append(
+                        [recognize_element.found_command, current_time_ms]
+                    )
+                    all_found_words_w_confidences.append(
+                        [
+                            recognize_element.found_command,
+                            current_time_ms,
+                            recognize_element.score,
+                        ]
+                    )
+                    stats.calculate_accuracy_stats(
+                        all_found_words, current_time_ms, FLAGS.time_tolerance_ms
+                    )
+                    recognition_state = stats.delta()
+                    # fmt: off
+                    # print( "{}ms {}:{}{}".format(current_time_ms,recognize_element.founded_command,recognize_element.score,recognition_state,) )
+                    # fmt: on
+                    # stats.print_accuracy_stats()
+            print(f"results for {threshold:0.2f}")
+            # calculate final stats for full wav file:
+            stats.calculate_accuracy_stats(all_found_words, -1, FLAGS.time_tolerance_ms)
+            stats.print_accuracy_stats()
+            res_thresh[threshold] = (all_found_words, all_found_words_w_confidences)
+        results.append((FLAGS, res_thresh))
     return results, inferences
 
 
