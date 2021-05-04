@@ -10,6 +10,7 @@ from pathlib import Path
 import pprint
 
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import numpy as np
 import sox
 import pydub
@@ -29,7 +30,7 @@ sns.set_palette("bright")
 
 
 def tpr_fpr(
-    keyword, found_words, gt_target_times_ms, num_nontarget_words, time_tolerance_ms,
+    keyword, thresh, found_words, gt_target_times_ms, num_nontarget_words, time_tolerance_ms,
 ):
     found_target_times = [t for f, t in found_words if f == keyword]
 
@@ -82,6 +83,7 @@ def tpr_fpr(
     result = dict(
         tpr=tpr,
         fpr=fpr,
+        thresh=thresh,
         true_positives=true_positives,
         false_positives=false_positives,
         false_negatives=false_negatives,
@@ -122,9 +124,16 @@ def count_nontarget_words(keyword, groundtruth):
 
 
 num_nontarget_words = count_nontarget_words(keyword=keyword, groundtruth=groundtruth)
+print("num nontarget words", num_nontarget_words)
 
 #%%
-fig, ax = plt.subplots()
+
+use_mpl=False
+
+if use_mpl:
+    fig, ax = plt.subplots()
+else:
+    fig = go.Figure()
 hpsweep = workdir / "hp_sweep"
 for exp in os.listdir(hpsweep):
     # if int(exp[4:]) < 11:
@@ -140,6 +149,7 @@ for exp in os.listdir(hpsweep):
             sweep_info = sweep_data["sweep_datas"]
         all_tprs = []
         all_fprs = []
+        all_threshs = []
         for post_processing_settings, results_per_thresh in result[keyword]:
             for thresh, (found_words, _) in results_per_thresh.items():
                 if thresh < 0.3:
@@ -147,6 +157,7 @@ for exp in os.listdir(hpsweep):
                 print(thresh)
                 analysis = tpr_fpr(
                     keyword,
+                    thresh,
                     found_words,
                     gt_target_times_ms,
                     num_nontarget_words=num_nontarget_words,
@@ -156,8 +167,8 @@ for exp in os.listdir(hpsweep):
                 fpr = analysis["fpr"]
                 all_tprs.append(tpr)
                 all_fprs.append(fpr)
-                # if exp == "exp_10":
-                #     pprint.pprint(analysis)
+                all_threshs.append(thresh)
+                pprint.pprint(analysis)
 
             sd = sweep_info[0]
             if sd.backprop_into_embedding:
@@ -173,24 +184,37 @@ for exp in os.listdir(hpsweep):
             num_train = len(sd.train_files)
 
             label = f"{exp} t: {num_train:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
-            ax.plot(all_fprs, all_tprs, label=label, linewidth=3)
-
-AX_LIM = 0.0
-ax.set_xlim(0, 1 - AX_LIM)
-ax.set_ylim(AX_LIM, 1.01)
-ax.legend(loc="lower right")
-ax.set_xlabel("False Positive Rate")
-ax.set_ylabel("True Positive Rate")
-for item in (
-    [ax.title, ax.xaxis.label, ax.yaxis.label]
-    + ax.get_legend().get_texts()
-    + ax.get_xticklabels()
-    + ax.get_yticklabels()
-):
-    item.set_fontsize(25)
-fig.set_size_inches(14, 14)
-fig.tight_layout()
-# figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/lu_sweep_wc.png"
-# fig.savefig(figdest)
-# print(figdest)
+            if use_mpl:
+                ax.plot(all_fprs, all_tprs, label=label, linewidth=3)
+            else:
+                fig.add_trace(go.Scatter(x=all_fprs, y=all_tprs, text=all_threshs, name=label))
+if not use_mpl:
+    fig.update_layout(
+        xaxis_title="FPR",
+        yaxis_title="TPR",
+        title=f"{keyword} 5-shot classification accuracy",
+    )
+    fig.update_xaxes(range=[0, 1])
+    fig.update_yaxes(range=[0, 1])
+    fig.show()
+else:
+    AX_LIM = 0.0
+    ax.set_xlim(0, 1 - AX_LIM)
+    ax.set_ylim(AX_LIM, 1.01)
+    ax.legend(loc="lower right")
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    for item in (
+        [ax.title, ax.xaxis.label, ax.yaxis.label]
+        + ax.get_legend().get_texts()
+        + ax.get_xticklabels()
+        + ax.get_yticklabels()
+    ):
+        item.set_fontsize(25)
+    fig.set_size_inches(14, 14)
+    fig.tight_layout()
+    figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/lu_sweep_wc.png"
+    fig.savefig(figdest)
+    print(figdest)
 # %%
+

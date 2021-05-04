@@ -3,6 +3,7 @@ from dataclasses import dataclass, field, asdict
 import os
 import glob
 import shutil
+import time
 from collections import Counter
 import csv
 import pickle
@@ -605,6 +606,7 @@ play(audio[start_s * 1000 : end_s * 1000])
 # generate stream and groundtruth data
 NUM_TARGETS = 80
 
+
 workdir = Path("/home/mark/tinyspeech_harvard/luganda")
 dest_wavfile = str(workdir / "akawuka_stream.wav")
 groundtruth_data = workdir / "akawuka_groundtruth.pkl"
@@ -663,4 +665,144 @@ with open(groundtruth_data, "wb") as fh:
 t_ms = np.random.choice(groundtruth_target_times_ms)
 audio = pydub.AudioSegment.from_file(dest_wavfile)
 play(audio[t_ms : t_ms + 1000])
+
+# %%
+# listen to extractions
+keyword = "akawuka"
+workdir = Path("/home/mark/tinyspeech_harvard/luganda")
+pkl = workdir / "hp_sweep" / "exp_01" / "fold_00" / "result.pkl"
+with open(pkl, "rb") as fh:
+    result = pickle.load(fh)
+
+op_point = 0.95
+
+for post_processing_settings, results_per_thresh in result[keyword]:
+    for thresh, (found_words, _) in results_per_thresh.items():
+        if np.isclose(thresh, op_point):
+            break
+
+audio = pydub.AudioSegment.from_file(workdir / "akawuka_stream.wav")
+with open(workdir / "akawuka_groundtruth.pkl", "rb") as fh:
+    gt = pickle.load(fh)
+
+print("detections", len(found_words))
+print("num gt", len(gt["groundtruth_target_times_ms"]))
+
+# %%
+# listen to random detections
+
+
+def decorate(word, keyword):
+    if word == keyword:
+        return f"[::{word}::]"
+    return word
+
+
+def transcript_by_offset(time_ms, groundtruth):
+    offset_ms = 0
+    for w in groundtruth["stream_data"]:
+        duration_ms = w["duration_s"] * 1000
+        if time_ms < offset_ms + duration_ms:
+            offset_in_clip = time_ms - offset_ms
+            pct_in_clip = offset_in_clip / duration_ms
+
+            decorated = [
+                decorate(word, keyword=keyword) for word in w["transcript"].split()
+            ]
+            print(" ".join(decorated))
+            print(f"detection pct {pct_in_clip:0.2f}")
+            if len(w["occurences_s"]) == 0:
+                print("---- CERTAIN FALSE POSITIVE")
+            break
+        offset_ms += duration_ms
+
+
+ix = np.random.randint(len(found_words))
+rand_ms = found_words[ix][1]
+transcript_by_offset(rand_ms, gt)
+play(audio[rand_ms -750: rand_ms + 1000])
+
+# %%
+ix = 0
+# %%
+print(ix)
+detection_ms = found_words[ix][1]
+transcript_by_offset(detection_ms, gt)
+play(audio[detection_ms - 750: detection_ms + 1000])
+false="ffffffffffffffff"
+print(len(false))
+
+# %%
+ix += 1
+
+# %%
+# listen to all detections
+for ix, detection_ms in enumerate([d[1] for d in found_words]):
+    print(ix)
+    transcript_by_offset(detection_ms, gt)
+    play(audio[detection_ms -750 : detection_ms + 1000])
+    time.sleep(1)
+
+# %%
+# create CSV of detection information
+offset_ms = 0
+rows = []
+time_tolerance_ms = 750
+for w in gt["stream_data"]:
+    duration_ms = w["duration_s"] * 1000
+
+    num_ds_for_segment = 0
+    detections = []
+    for detection_ms in [d[1] for d in found_words]:
+        if detection_ms > offset_ms and detection_ms < (offset_ms + duration_ms):
+            num_ds_for_segment += 1
+            detections.append(detection_ms)
+    
+    wav = Path(w["wav"]).name
+    transcript = w["transcript"]
+
+    is_tp = False
+    for d in detections:
+        latest_time = d + time_tolerance_ms
+        earliest_time = d - time_tolerance_ms
+        for gt_time in gt["groundtruth_target_times_ms"]:
+            if gt_time > latest_time:
+                break
+            if gt_time < earliest_time:
+                continue
+            is_tp = True
+
+    has_kw = any([word == keyword for word in transcript.split()])
+    detections_s = "/".join([str((d - offset_ms)/1000) for d in detections])
+    is_fn = has_kw and not is_tp
+    is_fp = len(detections) > 0 and not is_tp
+    
+    row = (detections_s, num_ds_for_segment, has_kw, is_fn, is_fp, is_tp, w["transcript"], wav)
+    rows.append(row)
+    offset_ms += duration_ms
+    
+    
+
+# %%
+fieldnames=["detections (sec)", "num detections", "has keyword", "false negative", "false positive", "true positive", "transcript", "wav"]
+with open(workdir / "akawuka_analysis.csv", 'w') as fh:
+    writer = csv.writer(fh)
+    writer.writerow(fieldnames)
+    writer.writerows(rows)
+
+# %%
+# save extractions
+detections_dest = workdir / "akawuka_detections"
+source = workdir / "akawuka_stream.wav"
+for ix, detection_ms in enumerate([d[1] for d in found_words]):
+
+    dest = detections_dest / f"detection_{ix:03d}_{detection_ms}_ms.wav"
+    transformer = sox.Transformer()
+    transformer.convert(samplerate=16000)  # from 48K mp3s
+    start_s = (detection_ms - 750) / 1000
+    end_s = (detection_ms + 1000) / 1000
+    transformer.trim(start_s, end_s)
+    transformer.build(str(source), str(dest))
+
+
 # %%
