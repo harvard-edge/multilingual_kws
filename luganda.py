@@ -1,6 +1,5 @@
 #%%
-from alignment.reorganize_luganda import levenshteinDistance
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict
 import os
 import glob
 import shutil
@@ -24,6 +23,7 @@ import textgrid
 from embedding import word_extraction, transfer_learning
 from embedding import batch_streaming_analysis as sa
 import input_data
+from luganda_info import WavTranscript
 
 import seaborn as sns
 
@@ -446,7 +446,9 @@ print("nontarget words", num_nontarget_words)
 # %%
 # listen to random alignments for keyword
 covid_alignments = workdir / "covid_alignments"
-alignment_speakers = [d for d in os.listdir(covid_alignments) if os.path.isdir(covid_alignments/d)]
+alignment_speakers = [
+    d for d in os.listdir(covid_alignments) if os.path.isdir(covid_alignments / d)
+]
 
 speaker = np.random.choice(alignment_speakers)
 tgfiles = os.listdir(covid_alignments / speaker)
@@ -521,25 +523,30 @@ combiner.convert(samplerate=16000, n_channels=1)
 combiner.build(mp3s, dest, "concatenate")
 
 # %%
+###########################################
+#########  generate streaming data ########
+###########################################
 
 l_data = Path("/media/mark/hyperion/makerere/uliza-clips")
 l_csv = l_data / "transcripts.csv"
-l_test = Path("/media/mark/hyperion/makerere/alignment/akawuka/")
-l_clips = l_test / "akawuka_clips"
+
+# l_test = Path("/media/mark/hyperion/makerere/alignment/akawuka/")
+# l_clips = l_test / "akawuka_clips"
+
+# l_test = Path("/media/mark/hyperion/makerere/alignment/cs288/")
+# l_clips = l_test / "cs288_clips"
+
+l_test = Path("/media/mark/hyperion/makerere/alignment/covid/")
+l_clips = l_test / "covid_clips"
+
 l_alignments = l_test / "alignments"
 
-keyword = "akawuka"
+# corona  covid  mask  okugema  ssennyiga
+# alt spelling: senyiga
+
+keyword = "covid"
 
 # %%
-
-
-@dataclass
-class WavTranscript:
-    wav: os.PathLike
-    transcript: str
-    keyword: Optional[str] = None
-    occurences_s: List[Tuple[float, float]] = field(default_factory=list)
-
 
 # select random wavs without the keyword to intersperse stream with
 non_targets = []
@@ -567,6 +574,10 @@ for a in os.listdir(l_alignments):
     with open(lab, "r") as fh:
         transcript = fh.read()
 
+    has_kw = any([keyword == w for w in transcript.split()])
+    if not has_kw:
+        continue
+
     tgfile = l_alignments / a / f"{a}.TextGrid"
     tg = textgrid.TextGrid.fromFile(tgfile)
 
@@ -579,12 +590,18 @@ for a in os.listdir(l_alignments):
         end_s = interval.maxTime
         occurences_s.append((start_s, end_s))
 
+    if occurences_s == []:
+        raise ValueError("why did we get here")
+
     keyword_wav_transcripts.append(
-        WavTranscript(wav=wav, transcript=transcript, occurences_s=occurences_s)
+        WavTranscript(
+            wav=wav, transcript=transcript, keyword=keyword, occurences_s=occurences_s
+        )
     )
 
-# %%
+print("data", len(keyword_wav_transcripts), len(non_targets))
 
+# %%
 # listen to random samples
 ix = np.random.randint(len(keyword_wav_transcripts))
 w = keyword_wav_transcripts[ix]
@@ -602,16 +619,16 @@ print(" ".join(decorated))
 start_s = w.occurences_s[0][0]
 end_s = w.occurences_s[0][1]
 audio = pydub.AudioSegment.from_file(w.wav)
-play(audio[start_s * 1000 : end_s * 1000])
+play(audio[start_s * 1000 - 500 : end_s * 1000 + 500])
 
 # %%
 # generate stream and groundtruth data
 NUM_TARGETS = 80
 
-
 workdir = Path("/home/mark/tinyspeech_harvard/luganda")
-dest_wavfile = str(workdir / "akawuka_stream.wav")
-groundtruth_data = workdir / "akawuka_groundtruth.pkl"
+os.makedirs(workdir / "cs288_eval" / keyword, exist_ok=True)
+dest_wavfile = str(workdir / "cs288_eval" / keyword / f"{keyword}_stream.wav")
+groundtruth_data = workdir / "cs288_eval" / keyword / f"{keyword}_groundtruth.pkl"
 assert not os.path.isfile(dest_wavfile), "already exists"
 assert not os.path.isfile(groundtruth_data), "already exists"
 
@@ -648,7 +665,11 @@ for ix in ixs:
     stream_data.extend([td, nd])
 
 groundtruth = dict(
-    groundtruth_target_times_ms=groundtruth_target_times_ms, stream_data=stream_data
+    groundtruth_target_times_ms=groundtruth_target_times_ms,
+    stream_data=stream_data,
+    keyword_wav_transcripts=keyword_wav_transcripts,
+    non_targets=non_targets,
+    ixs=ixs,
 )
 
 if len(ntlog) < NUM_TARGETS:
@@ -669,7 +690,7 @@ audio = pydub.AudioSegment.from_file(dest_wavfile)
 play(audio[t_ms : t_ms + 1000])
 
 # %%
-# listen to detections 
+# listen to detections
 keyword = "akawuka"
 workdir = Path("/home/mark/tinyspeech_harvard/luganda")
 pkl = workdir / "hp_sweep" / "exp_01" / "fold_00" / "result.pkl"
@@ -722,7 +743,7 @@ def transcript_by_offset(time_ms, groundtruth):
 ix = np.random.randint(len(found_words))
 rand_ms = found_words[ix][1]
 transcript_by_offset(rand_ms, gt)
-play(audio[rand_ms -750: rand_ms + 1000])
+play(audio[rand_ms - 750 : rand_ms + 1000])
 
 # %%
 ix = 0
@@ -730,8 +751,8 @@ ix = 0
 print(ix)
 detection_ms = found_words[ix][1]
 transcript_by_offset(detection_ms, gt)
-play(audio[detection_ms - 750: detection_ms + 1000])
-false="ffffffffffffffff"
+play(audio[detection_ms - 750 : detection_ms + 1000])
+false = "ffffffffffffffff"
 print(len(false))
 
 # %%
@@ -742,7 +763,7 @@ ix += 1
 for ix, detection_ms in enumerate([d[1] for d in found_words]):
     print(ix)
     transcript_by_offset(detection_ms, gt)
-    play(audio[detection_ms -750 : detection_ms + 1000])
+    play(audio[detection_ms - 750 : detection_ms + 1000])
     time.sleep(1)
 
 # %%
@@ -759,7 +780,7 @@ for w in gt["stream_data"]:
         if detection_ms > offset_ms and detection_ms < (offset_ms + duration_ms):
             num_ds_for_segment += 1
             detections.append(detection_ms)
-    
+
     wav = Path(w["wav"]).name
     transcript = w["transcript"]
 
@@ -775,19 +796,36 @@ for w in gt["stream_data"]:
             is_tp = True
 
     has_kw = any([word == keyword for word in transcript.split()])
-    detections_s = "/".join([str((d - offset_ms)/1000) for d in detections])
+    detections_s = "/".join([str((d - offset_ms) / 1000) for d in detections])
     is_fn = has_kw and not is_tp
     is_fp = len(detections) > 0 and not is_tp
-    
-    row = (detections_s, num_ds_for_segment, has_kw, is_fn, is_fp, is_tp, w["transcript"], wav)
+
+    row = (
+        detections_s,
+        num_ds_for_segment,
+        has_kw,
+        is_fn,
+        is_fp,
+        is_tp,
+        w["transcript"],
+        wav,
+    )
     rows.append(row)
     offset_ms += duration_ms
-    
-    
+
 
 # %%
-fieldnames=["detections (sec)", "num detections", "has keyword", "false negative", "false positive", "true positive", "transcript", "wav"]
-with open(workdir / "akawuka_analysis.csv", 'w') as fh:
+fieldnames = [
+    "detections (sec)",
+    "num detections",
+    "has keyword",
+    "false negative",
+    "false positive",
+    "true positive",
+    "transcript",
+    "wav",
+]
+with open(workdir / "akawuka_analysis.csv", "w") as fh:
     writer = csv.writer(fh)
     writer.writerow(fieldnames)
     writer.writerows(rows)
@@ -808,22 +846,24 @@ for ix, detection_ms in enumerate([d[1] for d in found_words]):
 
 
 # %%
-keyword = "corona"
+keyword = "senyiga"
 data = Path("/media/mark/hyperion/makerere/alignment/cs288")
 alignments = data / "alignments"
 clips = data / "cs288_clips"
 
 tgs_for_kw = []
-alignment_speakers = [d for d in os.listdir(alignments) if os.path.isdir(alignments/d)]
+alignment_speakers = [
+    d for d in os.listdir(alignments) if os.path.isdir(alignments / d)
+]
 for speaker in alignment_speakers:
     lab = clips / speaker / f"{speaker}.lab"
     wav = clips / speaker / f"{speaker}.wav"
     tgfile = alignments / speaker / f"{speaker}.TextGrid"
-    with open(lab, 'r') as fh:
+    with open(lab, "r") as fh:
         transcript = fh.read()
     if keyword in transcript:
         tgs_for_kw.append((tgfile, transcript, wav))
-print(len(tgs_for_kw))    
+print(len(tgs_for_kw))
 
 # %%
 heard_transcripts = []
@@ -850,21 +890,9 @@ for interval in tg[0]:
     end_s = interval.maxTime
 
 wav = pydub.AudioSegment.from_file(wavpath)
-play(wav[start_s * 1000 - 500: end_s * 1000 + 500])
+play(wav[start_s * 1000 - 500 : end_s * 1000 + 500])
 
 # %%
-dup_transcripts = set()
-for ix, (_, transcript1, _) in enumerate(tgs_for_kw):
-    if ix % int(len(tgs_for_kw) / 10) == 0:
-        print("complete------", ix)
-    for jx, (_, transcript2, _) in enumerate(tgs_for_kw):
-        if ix == jx:
-            continue
-        d = levenshteinDistance(transcript1, transcript2)
-        if d < 30:
-            print(transcript1)
-            print(transcript2)
-            print(ix)
-            dup_transcripts.add(transcript1)
+
 # %%
 

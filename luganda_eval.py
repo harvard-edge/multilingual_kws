@@ -20,7 +20,8 @@ from embedding import word_extraction, transfer_learning
 from embedding import batch_streaming_analysis as sa
 import input_data
 import textgrid
-from luganda_sweep import SweepData
+from luganda_train import SweepData
+from luganda_info import WavTranscript
 
 import seaborn as sns
 
@@ -30,7 +31,12 @@ sns.set_palette("bright")
 
 
 def tpr_fpr(
-    keyword, thresh, found_words, gt_target_times_ms, num_nontarget_words, time_tolerance_ms,
+    keyword,
+    thresh,
+    found_words,
+    gt_target_times_ms,
+    num_nontarget_words,
+    time_tolerance_ms,
 ):
     found_target_times = [t for f, t in found_words if f == keyword]
 
@@ -104,17 +110,6 @@ def tpr_fpr(
     return result
 
 
-# graph hyperparam sweep
-workdir = Path("/home/mark/tinyspeech_harvard/luganda")
-
-keyword = "akawuka"
-
-with open(workdir / "akawuka_groundtruth.pkl", "rb") as fh:
-    groundtruth = pickle.load(fh)
-
-gt_target_times_ms = groundtruth["groundtruth_target_times_ms"]
-
-
 def count_nontarget_words(keyword, groundtruth):
     num_nontarget_words = 0
     for wav in groundtruth["stream_data"]:
@@ -123,17 +118,30 @@ def count_nontarget_words(keyword, groundtruth):
     return num_nontarget_words
 
 
-num_nontarget_words = count_nontarget_words(keyword=keyword, groundtruth=groundtruth)
-print("num nontarget words", num_nontarget_words)
+# graph hyperparam sweep
+workdir = Path("/home/mark/tinyspeech_harvard/luganda")
+evaldir = workdir / "cs288_eval"
+
+eval_data = {}
+for kw in os.listdir(evaldir):
+    with open(evaldir / kw / f"{kw}_groundtruth.pkl", "rb") as fh:
+        groundtruth = pickle.load(fh)
+
+    num_nt = count_nontarget_words(keyword=kw, groundtruth=groundtruth)
+    print(kw, "num nontarget words", num_nt)
+    eval_data[kw] = dict(
+        times=groundtruth["groundtruth_target_times_ms"], num_nt=num_nt
+    )
 
 #%%
 
-use_mpl=False
+use_mpl = True
 
 if use_mpl:
     fig, ax = plt.subplots()
 else:
     fig = go.Figure()
+
 hpsweep = workdir / "hp_sweep"
 for exp in os.listdir(hpsweep):
     # if int(exp[4:]) < 11:
@@ -147,6 +155,9 @@ for exp in os.listdir(hpsweep):
         with open(hpsweep / exp / trial / "sweep_data.pkl", "rb") as fh:
             sweep_data = pickle.load(fh)
             sweep_info = sweep_data["sweep_datas"]
+        
+        keyword = sweep_info[0].target
+
         all_tprs = []
         all_fprs = []
         all_threshs = []
@@ -159,8 +170,8 @@ for exp in os.listdir(hpsweep):
                     keyword,
                     thresh,
                     found_words,
-                    gt_target_times_ms,
-                    num_nontarget_words=num_nontarget_words,
+                    eval_data[keyword]["times"],
+                    num_nontarget_words=eval_data[keyword]["num_nt"],
                     time_tolerance_ms=post_processing_settings.time_tolerance_ms,
                 )
                 tpr = analysis["tpr"]
@@ -183,22 +194,26 @@ for exp in os.listdir(hpsweep):
 
             num_train = len(sd.train_files)
 
-            label = f"{exp} t: {num_train:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
+            # label = f"{exp} t: {num_train:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
+            label = f"{keyword} t: {num_train:02d} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
             if use_mpl:
                 ax.plot(all_fprs, all_tprs, label=label, linewidth=3)
             else:
-                fig.add_trace(go.Scatter(x=all_fprs, y=all_tprs, text=all_threshs, name=label))
+                fig.add_trace(
+                    go.Scatter(x=all_fprs, y=all_tprs, text=all_threshs, name=label)
+                )
+
 if not use_mpl:
     fig.update_layout(
         xaxis_title="FPR",
         yaxis_title="TPR",
-        title=f"{keyword} 5-shot classification accuracy",
+        title=f"streaming accuracy",
     )
     fig.update_xaxes(range=[0, 1])
     fig.update_yaxes(range=[0, 1])
     fig.show()
 else:
-    AX_LIM = 0.0
+    AX_LIM = 0.7
     ax.set_xlim(0, 1 - AX_LIM)
     ax.set_ylim(AX_LIM, 1.01)
     ax.legend(loc="lower right")

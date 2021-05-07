@@ -103,9 +103,20 @@ if __name__ == "__main__":
 
     workdir = Path("/home/mark/tinyspeech_harvard/luganda")
     t = []
-    akawuka_shots = workdir / "akawuka_extractions"
-    for f in os.listdir(akawuka_shots):
-        t.append(str(akawuka_shots / f))
+    # akawuka_shots = workdir / "akawuka_extractions"
+    # for f in os.listdir(akawuka_shots):
+    #     t.append(str(akawuka_shots / f))
+
+    target_word = "covid"
+    n_shots = workdir / "cs288_training" / target_word
+    for f in os.listdir(n_shots):
+        t.append(str(n_shots / f))
+    assert len(t) > 0, "no wavs found"
+    print("---------NUM TRAINING SAMPLES\n", len(t))
+
+    streamwav = workdir / "cs288_eval" / target_word / f"{target_word}_stream.wav"
+    assert os.path.isfile(streamwav), "no stream wav"
+
     # reuse train for val
     v = t
 
@@ -113,7 +124,7 @@ if __name__ == "__main__":
     val_accuracies = []
     sweep_datas = []
 
-    exp_dir = workdir / "hp_sweep" / "exp_01"
+    exp_dir = workdir / "hp_sweep" / "exp_05"
     os.makedirs(exp_dir, exist_ok=False)
 
     # chooose random extractions from 1k alignments
@@ -138,10 +149,8 @@ if __name__ == "__main__":
         print(mdd)
         os.makedirs(mdd)
 
-        streamwav: os.PathLike = workdir / "akawuka_stream.wav"
-        gt: os.PathLike = workdir / "empty.txt"  # no gt
+        gt = workdir / "empty.txt"  # no gt
 
-        target_word = "akawuka"
         flags = sa.StreamFlags(
             wav=str(streamwav),
             ground_truth=str(gt),

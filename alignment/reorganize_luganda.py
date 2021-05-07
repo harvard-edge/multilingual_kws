@@ -103,6 +103,8 @@ for w in train_wavs:
             raise ValueError(w)
 
 # %%
+# find duplicates
+
 # https://stackoverflow.com/a/32558749
 def levenshteinDistance(s1, s2):
     if len(s1) > len(s2):
@@ -121,13 +123,12 @@ def levenshteinDistance(s1, s2):
     return distances[-1]
 
 
-# find duplicates
+keyword = "senyiga"
 #data = Path("/media/mark/hyperion/makerere/alignment/cs288")
 data = Path("/media/mark/hyperion/makerere/alignment/covid")
 alignments = data / "alignments"
 #clips = data / "cs288_clips"
 clips = data / "covid_clips"
-keyword = "covid"
 alignment_speakers = [
     d for d in os.listdir(alignments) if os.path.isdir(alignments / d)
 ]  # skip unaligned.txt
@@ -149,8 +150,8 @@ DISTANCE_THRESHOLD = 30
 original = []
 paths_for_deletion = []
 for ix in range(len(tlist)):
-    if ix % int(len(tlist) / 20) == 0:
-        print("completed----", ix, len(tlist))
+    # if ix % int(len(tlist) / 20) == 0:
+    #     print("completed----", ix, len(tlist))
     transcript1, tgdir1 = tlist[ix]
     for jx in range(ix + 1, len(tlist)):
         transcript2, tgdir2 = tlist[jx]
