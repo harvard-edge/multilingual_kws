@@ -1,8 +1,10 @@
 #%%
+from alignment.reorganize_luganda import levenshteinDistance
 from dataclasses import dataclass, field, asdict
 import os
 import glob
 import shutil
+import subprocess
 import time
 from collections import Counter
 import csv
@@ -442,9 +444,9 @@ print("nontarget words", num_nontarget_words)
 
 
 # %%
-# listen to random alignments for covid
+# listen to random alignments for keyword
 covid_alignments = workdir / "covid_alignments"
-alignment_speakers = os.listdir(covid_alignments)
+alignment_speakers = [d for d in os.listdir(covid_alignments) if os.path.isdir(covid_alignments/d)]
 
 speaker = np.random.choice(alignment_speakers)
 tgfiles = os.listdir(covid_alignments / speaker)
@@ -667,7 +669,7 @@ audio = pydub.AudioSegment.from_file(dest_wavfile)
 play(audio[t_ms : t_ms + 1000])
 
 # %%
-# listen to extractions
+# listen to detections 
 keyword = "akawuka"
 workdir = Path("/home/mark/tinyspeech_harvard/luganda")
 pkl = workdir / "hp_sweep" / "exp_01" / "fold_00" / "result.pkl"
@@ -806,3 +808,63 @@ for ix, detection_ms in enumerate([d[1] for d in found_words]):
 
 
 # %%
+keyword = "corona"
+data = Path("/media/mark/hyperion/makerere/alignment/cs288")
+alignments = data / "alignments"
+clips = data / "cs288_clips"
+
+tgs_for_kw = []
+alignment_speakers = [d for d in os.listdir(alignments) if os.path.isdir(alignments/d)]
+for speaker in alignment_speakers:
+    lab = clips / speaker / f"{speaker}.lab"
+    wav = clips / speaker / f"{speaker}.wav"
+    tgfile = alignments / speaker / f"{speaker}.TextGrid"
+    with open(lab, 'r') as fh:
+        transcript = fh.read()
+    if keyword in transcript:
+        tgs_for_kw.append((tgfile, transcript, wav))
+print(len(tgs_for_kw))    
+
+# %%
+heard_transcripts = []
+# %%
+# listen to random alignment clips for keyword
+rand_ix = np.random.randint(len(tgs_for_kw))
+(tgfile, transcript, wavpath) = tgs_for_kw[rand_ix]
+
+radio_data = Path("/media/mark/hyperion/makerere/uliza-clips")
+
+print("TRANSCRIPT", rand_ix, transcript)
+for t in heard_transcripts:
+    d = levenshteinDistance(transcript, t)
+    if d < 50:
+        print("DUPLICATE", d)
+        print(f"s1 {t}\ns2 {transcript}")
+heard_transcripts.append(transcript)
+
+tg = textgrid.TextGrid.fromFile(tgfile)
+for interval in tg[0]:
+    if interval.mark != keyword:
+        continue
+    start_s = interval.minTime
+    end_s = interval.maxTime
+
+wav = pydub.AudioSegment.from_file(wavpath)
+play(wav[start_s * 1000 - 500: end_s * 1000 + 500])
+
+# %%
+dup_transcripts = set()
+for ix, (_, transcript1, _) in enumerate(tgs_for_kw):
+    if ix % int(len(tgs_for_kw) / 10) == 0:
+        print("complete------", ix)
+    for jx, (_, transcript2, _) in enumerate(tgs_for_kw):
+        if ix == jx:
+            continue
+        d = levenshteinDistance(transcript1, transcript2)
+        if d < 30:
+            print(transcript1)
+            print(transcript2)
+            print(ix)
+            dup_transcripts.add(transcript1)
+# %%
+
