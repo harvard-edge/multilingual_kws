@@ -407,7 +407,6 @@ for ix, (_, time_ms) in enumerate(found_words):
     transformer.build(str(streamtarget.stream_wav), dest_wav)
 
 
-
 # %%
 # listen to random alignments for keyword
 covid_alignments = workdir / "covid_alignments"
@@ -498,23 +497,28 @@ l_csv = l_data / "transcripts.csv"
 # l_test = Path("/media/mark/hyperion/makerere/alignment/akawuka/")
 # l_clips = l_test / "akawuka_clips"
 
-# l_test = Path("/media/mark/hyperion/makerere/alignment/cs288/")
-# l_clips = l_test / "cs288_clips"
+l_test = Path("/media/mark/hyperion/makerere/alignment/cs288/")
+l_clips = l_test / "cs288_clips"
 
-l_test = Path("/media/mark/hyperion/makerere/alignment/covid/")
-l_clips = l_test / "covid_clips"
+# l_test = Path("/media/mark/hyperion/makerere/alignment/covid/")
+# l_clips = l_test / "covid_clips"
 
 l_alignments = l_test / "alignments"
 
 # corona  covid  mask  okugema  ssennyiga
 # alt spelling: senyiga
 
-keyword = "covid"
+keyword = "mask"
 
 # %%
 
 # select random wavs without the keyword to intersperse stream with
 non_targets = []
+keywords_to_exclude = set(
+    # TODO(mmaz): find a better method to exclude variants in spelling/plurals/etc
+    [keyword, "mask", "masiki", "masks"]
+    #[keyword, "corona", "korona", "kolona", "coronavirus"]
+)
 with open(l_csv, "r") as fh:
     reader = csv.reader(fh)
     next(reader)  # skip header [wav_filename,wav_filesize,transcript]
@@ -522,7 +526,7 @@ with open(l_csv, "r") as fh:
         wav_filename = l_data / row[0]
         assert os.path.isfile(wav_filename), "wav not found"
         transcript = row[2]
-        has_kw = any([w == keyword for w in transcript.split()])
+        has_kw = any([w in keywords_to_exclude for w in transcript.split()])
         if not has_kw:
             non_targets.append(WavTranscript(wav=wav_filename, transcript=transcript))
 
@@ -594,6 +598,9 @@ workdir = Path("/home/mark/tinyspeech_harvard/luganda")
 os.makedirs(workdir / "cs288_eval" / keyword, exist_ok=True)
 dest_wavfile = str(workdir / "cs288_eval" / keyword / f"{keyword}_stream.wav")
 groundtruth_data = workdir / "cs288_eval" / keyword / f"{keyword}_groundtruth.pkl"
+# os.makedirs(workdir / "cs288_test" / keyword, exist_ok=True)
+# dest_wavfile = str(workdir / "cs288_test" / keyword / f"{keyword}_stream.wav")
+# groundtruth_data = workdir / "cs288_test" / keyword / f"{keyword}_groundtruth.pkl"
 assert not os.path.isfile(dest_wavfile), "already exists"
 assert not os.path.isfile(groundtruth_data), "already exists"
 

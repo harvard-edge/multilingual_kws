@@ -107,14 +107,16 @@ if __name__ == "__main__":
     # for f in os.listdir(akawuka_shots):
     #     t.append(str(akawuka_shots / f))
 
-    target_word = "covid"
+    target_word = "corona"
     n_shots = workdir / "cs288_training" / target_word
     for f in os.listdir(n_shots):
         t.append(str(n_shots / f))
     assert len(t) > 0, "no wavs found"
     print("---------NUM TRAINING SAMPLES\n", len(t))
 
-    streamwav = workdir / "cs288_eval" / target_word / f"{target_word}_stream.wav"
+    #streamwav = workdir / "cs288_eval" / target_word / f"{target_word}_stream.wav"
+    streamwav = workdir / "cs288_test" / target_word / f"{target_word}_stream.wav"
+    #streamwav = workdir / "cs288_eval" / "nontarget" / "nontarget_stream.wav"
     assert os.path.isfile(streamwav), "no stream wav"
 
     # reuse train for val
@@ -124,7 +126,7 @@ if __name__ == "__main__":
     val_accuracies = []
     sweep_datas = []
 
-    exp_dir = workdir / "pp_sweep" / "exp_01"
+    exp_dir = workdir / "tt_sweep" / "exp_01"
     os.makedirs(exp_dir, exist_ok=False)
 
     # chooose random extractions from 1k alignments
