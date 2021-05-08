@@ -124,7 +124,7 @@ if __name__ == "__main__":
     val_accuracies = []
     sweep_datas = []
 
-    exp_dir = workdir / "hp_sweep" / "exp_05"
+    exp_dir = workdir / "pp_sweep" / "exp_01"
     os.makedirs(exp_dir, exist_ok=False)
 
     # chooose random extractions from 1k alignments

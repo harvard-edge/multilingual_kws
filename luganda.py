@@ -406,41 +406,6 @@ for ix, (_, time_ms) in enumerate(found_words):
     transformer.trim(time_s - 1, time_s + 1)
     transformer.build(str(streamtarget.stream_wav), dest_wav)
 
-# %%
-timing_csv = workdir / "covid_19_timing.csv"
-covid_timings = {}
-keyword = "covid"
-with open(timing_csv, "r") as fh:
-    reader = csv.reader(fh)
-    next(reader)  # skip header
-    for ix, row in enumerate(reader):
-        wav = row[0]
-        transcript = row[1]
-        start_time_s = row[3]
-        contains_keyword = any([w == keyword for w in transcript.split()])
-        if contains_keyword:
-            covid_timings[wav] = (start_time_s, transcript)
-print(covid_timings)
-
-# %%
-# generate groundtruth timings
-gt_target_times_ms = []
-keyword = "covid"
-cur_time_s = 0.0
-for segment in stream_info:
-    transcript = segment["transcript"]
-    contains_keyword = any([w == keyword for w in transcript.split()])
-    if contains_keyword:
-        wav = segment["wav"]
-        offset_s = float(covid_timings[wav][0])
-        keyword_start_s = cur_time_s + offset_s
-        gt_target_times_ms.append(keyword_start_s * 1000)
-    cur_time_s += segment["duration_s"]
-num_nontarget_words = 0
-for segment in stream_info:
-    non_target_words = [w != keyword for w in transcript.split()]
-    num_nontarget_words += len(non_target_words)
-print("nontarget words", num_nontarget_words)
 
 
 # %%

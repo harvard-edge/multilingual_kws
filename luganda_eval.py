@@ -26,7 +26,8 @@ from luganda_info import WavTranscript
 import seaborn as sns
 
 sns.set()
-sns.set_style("darkgrid")
+#sns.set_style("darkgrid")
+sns.set_style("whitegrid")
 sns.set_palette("bright")
 
 
@@ -135,7 +136,7 @@ for kw in os.listdir(evaldir):
 
 #%%
 
-use_mpl = True
+use_mpl = False
 
 if use_mpl:
     fig, ax = plt.subplots()
@@ -194,8 +195,8 @@ for exp in os.listdir(hpsweep):
 
             num_train = len(sd.train_files)
 
-            # label = f"{exp} t: {num_train:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
-            label = f"{keyword} t: {num_train:02d} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
+            # label = f"{exp} s: {num_train:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
+            label = f"{keyword} s: {num_train:02d} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
             if use_mpl:
                 ax.plot(all_fprs, all_tprs, label=label, linewidth=3)
             else:
@@ -203,15 +204,17 @@ for exp in os.listdir(hpsweep):
                     go.Scatter(x=all_fprs, y=all_tprs, text=all_threshs, name=label)
                 )
 
+AX_LIM = 0.0
 if not use_mpl:
+    SIZE=700
     fig.update_layout(
-        xaxis_title="FPR", yaxis_title="TPR", title=f"streaming accuracy",
+        xaxis_title="FPR", yaxis_title="TPR", title=f"streaming accuracy", width=SIZE, height=SIZE
     )
-    fig.update_xaxes(range=[0, 1])
-    fig.update_yaxes(range=[0, 1])
+    fig.update_xaxes(range=[0, 1-AX_LIM])
+    fig.update_yaxes(range=[AX_LIM, 1])
     fig.show()
+    #fig.write_html("/home/mark/tinyspeech_harvard/tinyspeech_images/covid_pp_search.html")
 else:
-    AX_LIM = 0.7
     ax.set_xlim(0, 1 - AX_LIM)
     ax.set_ylim(AX_LIM, 1.01)
     ax.legend(loc="lower right")
@@ -374,9 +377,9 @@ for graphing_context in [True, False]:
     # draw mean
     #ax.plot(x_all, ymean, alpha=0.7, linewidth=6, color=iso2color[lang_isocode], label=f"{iso2lang[lang_isocode]}")
     if graphing_context:
-        gl = "context-padded"
+        gl = "context-padded and\nsilence-padded"
     else:
-        gl = "silence-padded"
+        gl = "silence-padded only"
     ax.plot(x_all, ymean, alpha=0.7, linewidth=6, label=gl)
     # draw bands over stdev
     ystdev = y_all.std(axis=1)
@@ -395,7 +398,7 @@ for item in (
     + ax.get_xticklabels()
     + ax.get_yticklabels()
 ):
-    item.set_fontsize(25)
+    item.set_fontsize(35)
 fig.set_size_inches(14, 14)
 fig.tight_layout()
 figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/context_v_silence.png"
