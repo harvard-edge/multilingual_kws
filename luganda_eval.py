@@ -26,7 +26,7 @@ from luganda_info import WavTranscript
 import seaborn as sns
 
 sns.set()
-#sns.set_style("darkgrid")
+# sns.set_style("darkgrid")
 sns.set_style("whitegrid")
 sns.set_palette("bright")
 
@@ -37,6 +37,7 @@ def tpr_fpr(
     found_words,
     gt_target_times_ms,
     num_nontarget_words,
+    duration_s,
     time_tolerance_ms,
 ):
     found_target_times = [t for f, t in found_words if f == keyword]
@@ -86,6 +87,7 @@ def tpr_fpr(
     false_rejections_per_instance = false_negatives / len(gt_target_times_ms)
     false_positives = len(found_target_times) - true_positives
     fpr = false_positives / num_nontarget_words
+    fah = false_positives / duration_s * 3600  # sec/hr
     pp = pprint.PrettyPrinter()
     result = dict(
         tpr=tpr,
@@ -95,6 +97,7 @@ def tpr_fpr(
         false_positives=false_positives,
         false_negatives=false_negatives,
         false_rejections_per_instance=false_rejections_per_instance,
+        false_accepts_per_hour=fah,
     )
     # pp.pprint(result)
     # print("thresh", thresh, false_rejections_per_instance)
@@ -130,13 +133,17 @@ for kw in os.listdir(evaldir):
 
     num_nt = count_nontarget_words(keyword=kw, groundtruth=groundtruth)
     print(kw, "num nontarget words", num_nt)
+    duration_s = sum([d["duration_s"] for d in groundtruth["stream_data"]])
+    print("Duration (m)", duration_s / 60)
     eval_data[kw] = dict(
-        times=groundtruth["groundtruth_target_times_ms"], num_nt=num_nt
+        times=groundtruth["groundtruth_target_times_ms"],
+        num_nt=num_nt,
+        duration_s=duration_s,
     )
 
 #%%
 
-use_mpl = False
+use_mpl = True
 
 if use_mpl:
     fig, ax = plt.subplots()
@@ -173,10 +180,12 @@ for exp in os.listdir(hpsweep):
                     found_words,
                     eval_data[keyword]["times"],
                     num_nontarget_words=eval_data[keyword]["num_nt"],
+                    duration_s=eval_data[keyword]["duration_s"],
                     time_tolerance_ms=post_processing_settings.time_tolerance_ms,
                 )
                 tpr = analysis["tpr"]
-                fpr = analysis["fpr"]
+                # fpr = analysis["fpr"]
+                fpr = analysis["false_accepts_per_hour"]
                 all_tprs.append(tpr)
                 all_fprs.append(fpr)
                 all_threshs.append(thresh)
@@ -196,7 +205,8 @@ for exp in os.listdir(hpsweep):
             num_train = len(sd.train_files)
 
             # label = f"{exp} s: {num_train:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
-            label = f"{keyword} s: {num_train:02d} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
+            # label = f"{keyword} s: {num_train:02d} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
+            label = f"{keyword} ({num_train}-shot)"
             if use_mpl:
                 ax.plot(all_fprs, all_tprs, label=label, linewidth=3)
             else:
@@ -206,19 +216,33 @@ for exp in os.listdir(hpsweep):
 
 AX_LIM = 0.0
 if not use_mpl:
-    SIZE=700
+    SIZE = 700
     fig.update_layout(
-        xaxis_title="FPR", yaxis_title="TPR", title=f"streaming accuracy", width=SIZE, height=SIZE
+        xaxis_title="FPR",
+        yaxis_title="TPR",
+        title=f"streaming accuracy",
+        width=SIZE,
+        height=SIZE,
     )
-    fig.update_xaxes(range=[0, 1-AX_LIM])
+    fig.update_xaxes(range=[0, 1 - AX_LIM])
     fig.update_yaxes(range=[AX_LIM, 1])
     fig.show()
-    #fig.write_html("/home/mark/tinyspeech_harvard/tinyspeech_images/covid_pp_search.html")
+    # fig.write_html("/home/mark/tinyspeech_harvard/tinyspeech_images/covid_pp_search.html")
 else:
-    ax.set_xlim(0, 1 - AX_LIM)
-    ax.set_ylim(AX_LIM, 1.01)
+    ax.axvline(
+        x=50,
+        label=f"nominal cutoff for false accepts",
+        linestyle="--",
+        color='black',
+    )
+
+    # ax.set_xlim(0, 1 - AX_LIM)
+    ax.set_xlim(0, 800)
+    #ax.set_ylim(AX_LIM, 1.01)
+    ax.set_ylim(0,1)
     ax.legend(loc="lower right")
-    ax.set_xlabel("False Positive Rate")
+    #ax.set_xlabel("False Positive Rate")
+    ax.set_xlabel("False Accepts per Hour")
     ax.set_ylabel("True Positive Rate")
     for item in (
         [ax.title, ax.xaxis.label, ax.yaxis.label]
@@ -229,7 +253,7 @@ else:
         item.set_fontsize(25)
     fig.set_size_inches(14, 14)
     fig.tight_layout()
-    figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/lu_sweep_wc.png"
+    figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/luganda_5_keywords.png"
     fig.savefig(figdest)
     print(figdest)
 
@@ -297,7 +321,7 @@ for graphing_context in [True, False]:
                     wc = "f"
             except AttributeError:
                 wc = "f"
-            
+
             if graphing_context and wc == "f":
                 # print("SKIPPING")
                 continue
@@ -326,22 +350,19 @@ for graphing_context in [True, False]:
                 tprs.append(tpr)
                 fprs.append(fpr)
                 threshs.append(thresh)
-                #pprint.pprint(analysis)
+                # pprint.pprint(analysis)
 
             if sd.backprop_into_embedding:
                 lrinfo = f"lr1: {sd.primary_lr} lr2: {sd.embedding_lr}"
             else:
                 lrinfo = f"lr1: {sd.primary_lr}"
 
-
             num_train = len(sd.train_files)
 
             # label = f"{exp} t: {num_train:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
-            label = (
-                f"{keyword} t: {num_train:02d} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
-            )
-            #ax.plot(fprs,tprs, label=label, linewidth=1)
-            #print(len(tprs))
+            label = f"{keyword} t: {num_train:02d} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
+            # ax.plot(fprs,tprs, label=label, linewidth=1)
+            # print(len(tprs))
             all_tprs.append(np.array(tprs))
             all_fprs.append(np.array(fprs))
 
@@ -375,7 +396,7 @@ for graphing_context in [True, False]:
 
     ymean = y_all.mean(axis=1)
     # draw mean
-    #ax.plot(x_all, ymean, alpha=0.7, linewidth=6, color=iso2color[lang_isocode], label=f"{iso2lang[lang_isocode]}")
+    # ax.plot(x_all, ymean, alpha=0.7, linewidth=6, color=iso2color[lang_isocode], label=f"{iso2lang[lang_isocode]}")
     if graphing_context:
         gl = "context-padded and\nsilence-padded"
     else:
@@ -383,7 +404,7 @@ for graphing_context in [True, False]:
     ax.plot(x_all, ymean, alpha=0.7, linewidth=6, label=gl)
     # draw bands over stdev
     ystdev = y_all.std(axis=1)
-    #ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, color=iso2color[lang_isocode], alpha=0.1)
+    # ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, color=iso2color[lang_isocode], alpha=0.1)
     ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, alpha=0.4)
 
 AX_LIM = 0.6
