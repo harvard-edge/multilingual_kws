@@ -865,6 +865,3 @@ wav = pydub.AudioSegment.from_file(wavpath)
 play(wav[start_s * 1000 - 500 : end_s * 1000 + 500])
 
 # %%
-
-# %%
-

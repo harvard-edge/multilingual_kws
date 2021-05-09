@@ -38,7 +38,7 @@ with open("val_files.txt", "r") as fh:
     val_files = fh.read().splitlines()
 
 # %%
-len(set(commands))
+print(len(set(commands)), len(commands))
 # %%
 dup_commands = []
 sc = set()
@@ -83,7 +83,7 @@ for f in  val_files:
 print(langs)
 
 # %%
-base_model_path = save_models_dir  / "multilang_resume40_resume05_resume20_resume22.007-0.7981"
+base_model_path = save_models_dir  / "multilingual_context_73_0.8011"
 tf.get_logger().setLevel(logging.ERROR)
 model = tf.keras.models.load_model(base_model_path)
 tf.get_logger().setLevel(logging.INFO)
@@ -92,11 +92,20 @@ tf.get_logger().setLevel(logging.INFO)
 
 iso2lang = {"en": "English", "fr": "French", "ca" : "Catalan", "rw" : "Kinyarwanda", "de" : "German", "it" : "Italian", "nl":"Dutch", "fa" : "Persian", "es":"Spanish"}
 print(len(iso2lang.keys()))
+
+# %%
+for ix,f in enumerate(train_files):
+    #lang = f[45:47] # for silence padded
+    offset=84
+    print(f[offset:offset+2], f)
+    break
+
 # %%
 iso2count_utts_train = { k : 0 for k in iso2lang.keys()}
 iso2count_words_train = { k : set() for k in iso2lang.keys()}
 for ix,f in enumerate(train_files):
-    lang = f[45:47]
+    offset=84 # for multilingual w context
+    lang = f[offset:offset+2]
     word = f.split("/")[-2]
     #print(lang, word)
     iso2count_utts_train[lang] += 1
@@ -106,7 +115,8 @@ print(iso2count_utts_train)
 iso2count_utts_val = { k : 0 for k in iso2lang.keys()}
 iso2count_words_val = { k : set() for k in iso2lang.keys()}
 for ix,f in enumerate(val_files):
-    lang = f[45:47]
+    offset=84 # for multilingual w context
+    lang = f[offset:offset+2]
     word = f.split("/")[-2]
     #print(lang, word)
     iso2count_utts_val[lang] += 1
@@ -115,7 +125,6 @@ print(iso2count_utts_val)
 
 #%%
 
-#iso2valacc = {k : 0 for k in iso2lang.keys()}
 
 
 # %%
@@ -159,7 +168,7 @@ total_val = sum([kv[1] for kv in iso2count_utts_val.items()])
 total_words = sum(len(kv[1]) for kv in iso2count_words_train.items())
 #total_wordsv = sum(len(kv[1]) for kv in iso2count_words_val.items())
 total_words = 760
-df.loc[ix + 1] = ["Total", "760*", total_train, total_val, 79.81]
+df.loc[ix + 1] = ["Total", "760", total_train, total_val, 80.11]
 df
 
 # %%
@@ -167,11 +176,13 @@ print(df.to_latex(header=True, index=False, float_format="%.2f", label="tab:emba
 # %%
 iso2val_files = {k : [] for k in iso2lang.keys()}
 for ix,f in enumerate(val_files):
-    lang = f[45:47]
+    offset=84 # for multilingual w context
+    lang = f[offset:offset+2]
     #word = f.split("/")[-2]
     iso2val_files[lang].append(f)
 # %%
 # calculate val accuracy per language
+iso2valacc = {k : 0 for k in iso2lang.keys()}
 model_settings = input_data.standard_microspeech_model_settings(label_count=len(commands) + 1) # add silence
 for lang_isocode, vfs in iso2val_files.items():
     val_audio = []
