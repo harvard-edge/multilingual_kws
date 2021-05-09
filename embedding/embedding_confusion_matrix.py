@@ -24,8 +24,10 @@ import plotly.graph_objects as go
 sns.set()
 
 # %%
-embedding_model_dir = f"/home/mark/tinyspeech_harvard/multilang_embedding/"
-save_models_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_embedding/models/")
+# embedding_model_dir = f"/home/mark/tinyspeech_harvard/multilang_embedding/"
+# save_models_dir = Path(f"/home/mark/tinyspeech_harvard/multilang_embedding/models/")
+embedding_model_dir = Path(f"/home/mark/tinyspeech_harvard/multilingual_embedding_wc")
+save_models_dir = embedding_model_dir / "models"
 os.chdir(embedding_model_dir)
 
 with open("commands.txt", "r") as fh:

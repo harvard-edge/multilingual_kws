@@ -105,6 +105,7 @@ for stream_segment in groundtruth["stream_data"]:
             raise ValueError("keyword present", transcript)
 
 # %%
+# NONTARGET DATA
 # corona:
 # results for 0.80
 # No ground truth yet, 52false positives
@@ -128,3 +129,121 @@ for stream_segment in groundtruth["stream_data"]:
 # No ground truth yet, 3false positives
 # results for 1.00
 # No ground truth yet, 0false positives
+#
+# --------------------------------------------------------
+# TARGET DATA
+# corona:
+# results for 0.60
+# No ground truth yet, 211false positives
+# results for 0.65
+# No ground truth yet, 173false positives
+# results for 0.70
+# No ground truth yet, 145false positives
+# results for 0.75
+# No ground truth yet, 115false positives
+# results for 0.80
+# No ground truth yet, 95false positives
+# results for 0.85
+# No ground truth yet, 78false positives
+# results for 0.90
+# No ground truth yet, 45false positives
+# results for 0.95
+# No ground truth yet, 20false positives
+# results for 1.00
+# No ground truth yet, 0false positives
+# 0.7999999999999999
+# {'false_accepts_per_hour': 117.74101540216778,
+#  'false_negatives': 31,
+#  'false_positives': 43,
+#  'false_rejections_per_instance': 0.37349397590361444,
+#  'fpr': 0.014266755142667552,
+#  'groundtruth_positives': 83,
+#  'thresh': 0.7999999999999999,
+#  'tpr': 0.6265060240963856,
+#  'true_positives': 52}
+# 0.85
+# {'false_accepts_per_hour': 82.14489446662867,
+#  'false_negatives': 35,
+#  'false_positives': 30,
+#  'false_rejections_per_instance': 0.42168674698795183,
+#  'fpr': 0.009953550099535502,
+#  'groundtruth_positives': 83,
+#  'thresh': 0.85,
+#  'tpr': 0.5783132530120482,
+#  'true_positives': 48}
+# 0.9
+# {'false_accepts_per_hour': 38.33428408442672,
+#  'false_negatives': 52,
+#  'false_positives': 14,
+#  'false_rejections_per_instance': 0.6265060240963856,
+#  'fpr': 0.0046449900464499,
+#  'groundtruth_positives': 83,
+#  'thresh': 0.9,
+#  'tpr': 0.37349397590361444,
+#  'true_positives': 31}
+# 0.95
+# {'false_accepts_per_hour': 8.214489446662867,
+#  'false_negatives': 66,
+#  'false_positives': 3,
+#  'false_rejections_per_instance': 0.7951807228915663,
+#  'fpr': 0.0009953550099535502,
+#  'groundtruth_positives': 83,
+#  'thresh': 0.95,
+#  'tpr': 0.20481927710843373,
+#  'true_positives': 17}
+#
+# mask:
+# results for 0.70
+# No ground truth yet, 122false positives
+# results for 0.75
+# No ground truth yet, 108false positives
+# results for 0.80
+# No ground truth yet, 93false positives
+# results for 0.85
+# No ground truth yet, 75false positives
+# results for 0.90
+# No ground truth yet, 64false positives
+# results for 0.95
+# No ground truth yet, 44false positives
+# results for 1.00
+# No ground truth yet, 0false positives
+# 0.7999999999999999
+# {'false_accepts_per_hour': 66.7943180300129,
+#  'false_negatives': 24,
+#  'false_positives': 25,
+#  'false_rejections_per_instance': 0.26373626373626374,
+#  'fpr': 0.008015389547932029,
+#  'groundtruth_positives': 91,
+#  'thresh': 0.7999999999999999,
+#  'tpr': 0.7472527472527473,
+#  'true_positives': 68}
+# 0.85
+# {'false_accepts_per_hour': 42.74836353920826,
+#  'false_negatives': 32,
+#  'false_positives': 16,
+#  'false_rejections_per_instance': 0.3516483516483517,
+#  'fpr': 0.005129849310676499,
+#  'groundtruth_positives': 91,
+#  'thresh': 0.85,
+#  'tpr': 0.6483516483516484,
+#  'true_positives': 59}
+# 0.9
+# {'false_accepts_per_hour': 24.045954490804647,
+#  'false_negatives': 36,
+#  'false_positives': 9,
+#  'false_rejections_per_instance': 0.3956043956043956,
+#  'fpr': 0.0028855402372555306,
+#  'groundtruth_positives': 91,
+#  'thresh': 0.9,
+#  'tpr': 0.6043956043956044,
+#  'true_positives': 55}
+# 0.95
+# {'false_accepts_per_hour': 2.6717727212005165,
+#  'false_negatives': 48,
+#  'false_positives': 1,
+#  'false_rejections_per_instance': 0.5274725274725275,
+#  'fpr': 0.0003206155819172812,
+#  'groundtruth_positives': 91,
+#  'thresh': 0.95,
+#  'tpr': 0.4725274725274725,
+#  'true_positives': 43}

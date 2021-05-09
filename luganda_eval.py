@@ -98,6 +98,7 @@ def tpr_fpr(
         false_negatives=false_negatives,
         false_rejections_per_instance=false_rejections_per_instance,
         false_accepts_per_hour=fah,
+        groundtruth_positives=len(gt_target_times_ms),
     )
     # pp.pprint(result)
     # print("thresh", thresh, false_rejections_per_instance)
@@ -125,6 +126,9 @@ def count_nontarget_words(keyword, groundtruth):
 # graph hyperparam sweep
 workdir = Path("/home/mark/tinyspeech_harvard/luganda")
 evaldir = workdir / "cs288_eval"
+hpsweep = workdir / "hp_sweep"
+# evaldir = workdir / "cs288_test"
+# hpsweep = workdir / "tt_sweep"
 
 eval_data = {}
 for kw in os.listdir(evaldir):
@@ -143,6 +147,14 @@ for kw in os.listdir(evaldir):
 
 #%%
 
+lugandamap = {
+    "corona": "kolona",
+    "okugema": "okugema",
+    "covid": "covid",
+    "mask": "masiki",
+    "akawuka": "akawuka",
+}
+
 use_mpl = True
 
 if use_mpl:
@@ -150,7 +162,6 @@ if use_mpl:
 else:
     fig = go.Figure()
 
-hpsweep = workdir / "hp_sweep"
 for exp in os.listdir(hpsweep):
     # if int(exp[4:]) < 11:
     #     continue
@@ -173,7 +184,7 @@ for exp in os.listdir(hpsweep):
             for thresh, (found_words, _) in results_per_thresh.items():
                 if thresh < 0.3:
                     continue
-                print(thresh)
+                #print(thresh)
                 analysis = tpr_fpr(
                     keyword,
                     thresh,
@@ -189,7 +200,8 @@ for exp in os.listdir(hpsweep):
                 all_tprs.append(tpr)
                 all_fprs.append(fpr)
                 all_threshs.append(thresh)
-                pprint.pprint(analysis)
+                if np.isclose(thresh, 0.85):
+                    pprint.pprint(analysis)
 
             sd = sweep_info[0]
             if sd.backprop_into_embedding:
@@ -206,7 +218,7 @@ for exp in os.listdir(hpsweep):
 
             # label = f"{exp} s: {num_train:02d} c: {wc} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
             # label = f"{keyword} s: {num_train:02d} e: {sd.n_epochs} b: {sd.n_batches} {lrinfo}"
-            label = f"{keyword} ({num_train}-shot)"
+            label = f"{lugandamap[keyword]} ({num_train}-shot)"
             if use_mpl:
                 ax.plot(all_fprs, all_tprs, label=label, linewidth=3)
             else:
@@ -230,18 +242,15 @@ if not use_mpl:
     # fig.write_html("/home/mark/tinyspeech_harvard/tinyspeech_images/covid_pp_search.html")
 else:
     ax.axvline(
-        x=50,
-        label=f"nominal cutoff for false accepts",
-        linestyle="--",
-        color='black',
+        x=50, label=f"nominal cutoff for false accepts", linestyle="--", color="black",
     )
 
     # ax.set_xlim(0, 1 - AX_LIM)
     ax.set_xlim(0, 800)
-    #ax.set_ylim(AX_LIM, 1.01)
-    ax.set_ylim(0,1)
+    # ax.set_ylim(AX_LIM, 1.01)
+    ax.set_ylim(0, 1)
     ax.legend(loc="lower right")
-    #ax.set_xlabel("False Positive Rate")
+    # ax.set_xlabel("False Positive Rate")
     ax.set_xlabel("False Accepts per Hour")
     ax.set_ylabel("True Positive Rate")
     for item in (
@@ -423,6 +432,44 @@ for item in (
 fig.set_size_inches(14, 14)
 fig.tight_layout()
 figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/context_v_silence.png"
+fig.savefig(figdest)
+print(figdest)
+# %%
+
+# %%
+
+fig, ax = plt.subplots()
+
+kws = [
+    "0 targets [mask]",
+    "91 targets [mask]",
+    "0 targets [corona]",
+    "83 targets [corona]",
+]
+ax.bar(
+    kws,
+    [0, 16 + 59, 0, 30 + 48],
+    label="true positives",
+    color=sns.color_palette("bright")[2],
+)
+ax.bar(
+    kws, [11, 16, 33, 30], label="false positives", color=sns.color_palette("bright")[3]
+)
+ax.set_xticklabels(kws, rotation=50)
+ax.legend(loc="lower right")
+ax.set_ylabel("detections")
+
+
+for item in (
+    [ax.title, ax.xaxis.label, ax.yaxis.label]
+    + ax.get_legend().get_texts()
+    + ax.get_xticklabels()
+    + ax.get_yticklabels()
+):
+    item.set_fontsize(25)
+fig.set_size_inches(10, 10)
+fig.tight_layout()
+figdest = "/home/mark/tinyspeech_harvard/tinyspeech_images/testing_data.png"
 fig.savefig(figdest)
 print(figdest)
 # %%

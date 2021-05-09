@@ -107,7 +107,7 @@ if __name__ == "__main__":
     # for f in os.listdir(akawuka_shots):
     #     t.append(str(akawuka_shots / f))
 
-    target_word = "corona"
+    target_word = "mask"
     n_shots = workdir / "cs288_training" / target_word
     for f in os.listdir(n_shots):
         t.append(str(n_shots / f))
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     val_accuracies = []
     sweep_datas = []
 
-    exp_dir = workdir / "tt_sweep" / "exp_01"
+    exp_dir = workdir / "tt_sweep" / "exp_02"
     os.makedirs(exp_dir, exist_ok=False)
 
     # chooose random extractions from 1k alignments
