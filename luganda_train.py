@@ -79,7 +79,7 @@ def sweep_run(sd: SweepData, q):
     print("saving", name)
     modelpath = sd.model_dest_dir / name
     # skip saving model for now, slow
-    # model.save(modelpath)
+    model.save(modelpath)
 
     specs = [input_data.file2spec(model_settings, f) for f in sd.val_files]
     specs = np.expand_dims(specs, -1)
@@ -114,8 +114,8 @@ if __name__ == "__main__":
     assert len(t) > 0, "no wavs found"
     print("---------NUM TRAINING SAMPLES\n", len(t))
 
-    #streamwav = workdir / "cs288_eval" / target_word / f"{target_word}_stream.wav"
-    streamwav = workdir / "cs288_test" / target_word / f"{target_word}_stream.wav"
+    streamwav = workdir / "cs288_eval" / target_word / f"{target_word}_stream.wav"
+    #streamwav = workdir / "cs288_test" / target_word / f"{target_word}_stream.wav"
     #streamwav = workdir / "cs288_eval" / "nontarget" / "nontarget_stream.wav"
     assert os.path.isfile(streamwav), "no stream wav"
 
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     val_accuracies = []
     sweep_datas = []
 
-    exp_dir = workdir / "tt_sweep" / "exp_02"
+    exp_dir = workdir / "export" / "exp_01"
     os.makedirs(exp_dir, exist_ok=False)
 
     # chooose random extractions from 1k alignments

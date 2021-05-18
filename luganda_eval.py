@@ -90,6 +90,7 @@ def tpr_fpr(
     fah = false_positives / duration_s * 3600  # sec/hr
     pp = pprint.PrettyPrinter()
     result = dict(
+        keyword=keyword,
         tpr=tpr,
         fpr=fpr,
         thresh=thresh,
@@ -127,6 +128,7 @@ def count_nontarget_words(keyword, groundtruth):
 workdir = Path("/home/mark/tinyspeech_harvard/luganda")
 evaldir = workdir / "cs288_eval"
 hpsweep = workdir / "hp_sweep"
+#hpsweep = workdir / "export"
 # evaldir = workdir / "cs288_test"
 # hpsweep = workdir / "tt_sweep"
 
@@ -230,23 +232,25 @@ AX_LIM = 0.0
 if not use_mpl:
     SIZE = 700
     fig.update_layout(
-        xaxis_title="FPR",
+        #xaxis_title="FPR",
+        xaxis_title="False accepts/hour",
         yaxis_title="TPR",
         title=f"streaming accuracy",
         width=SIZE,
         height=SIZE,
     )
-    fig.update_xaxes(range=[0, 1 - AX_LIM])
+    #fig.update_xaxes(range=[0, 1 - AX_LIM])
+    fig.update_xaxes(range=[0, 400])
     fig.update_yaxes(range=[AX_LIM, 1])
     fig.show()
-    # fig.write_html("/home/mark/tinyspeech_harvard/tinyspeech_images/covid_pp_search.html")
+    #fig.write_html("/home/mark/tinyspeech_harvard/tinyspeech_images/mask_search.html")
 else:
     ax.axvline(
         x=50, label=f"nominal cutoff for false accepts", linestyle="--", color="black",
     )
 
     # ax.set_xlim(0, 1 - AX_LIM)
-    ax.set_xlim(0, 800)
+    ax.set_xlim(0, 200)
     # ax.set_ylim(AX_LIM, 1.01)
     ax.set_ylim(0, 1)
     ax.legend(loc="lower right")
