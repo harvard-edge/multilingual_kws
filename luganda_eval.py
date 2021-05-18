@@ -148,6 +148,8 @@ for kw in os.listdir(evaldir):
     )
 
 #%%
+eval_data["mask"]["times"]
+#%%
 
 lugandamap = {
     "corona": "kolona",
@@ -202,7 +204,7 @@ for exp in os.listdir(hpsweep):
                 all_tprs.append(tpr)
                 all_fprs.append(fpr)
                 all_threshs.append(thresh)
-                if np.isclose(thresh, 0.85):
+                if np.isclose(thresh, 0.90):
                     pprint.pprint(analysis)
 
             sd = sweep_info[0]
