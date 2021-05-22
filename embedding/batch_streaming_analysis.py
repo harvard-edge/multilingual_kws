@@ -38,6 +38,8 @@ class StreamFlags:
     time_tolerance_ms: int = 750
     minimum_count: int = 4
 
+    max_chunk_length: int = 1200 #max chunk length is 1200 seconds (20 minutes) by default
+
     def labels(self) -> List[str]:
         return [
             input_data.SILENCE_LABEL,
@@ -68,32 +70,56 @@ def calculate_streaming_accuracy(
     # leave space for one full clip at end
     audio_data_end = data_samples - clip_duration_samples
 
+    chunks = []
+    max_chunk_len_samples = flag_list[0].max_chunk_length * sample_rate #max chunk length in samples
+
+    if data_samples < max_chunk_len_samples: #this check might be unnecessary
+        chunks.append(audio)
+    else:
+        for ind, offset in enumerate(range(0, data_samples, max_chunk_len_samples)):
+            if (offset+max_chunk_len_samples > data_samples): #add extra check to make sure last chunk isn't too short?
+                chunks.append(audio[offset:offset+max_chunk_len_samples])
+            else:
+                chunks.append(audio[offset:])
+
     if existing_inferences is not None:
         inferences = existing_inferences
     else:
-        # num spectrograms: in the range expression below, if there is a remainder
-        # in audio_data_end/clip_stride_samples, we need one additional slot
-        # for a spectrogram
-        spectrograms = np.zeros(
-            (
-                int(np.ceil(audio_data_end / clip_stride_samples)),
-                model_settings["spectrogram_length"],
-                model_settings["fingerprint_width"],
-            )
-        )
-        print("building spectrograms", flush=True)
-        # Inference along audio stream.
-        for ix, audio_data_offset in enumerate(
-            range(0, audio_data_end, clip_stride_samples)
-        ):
-            input_start = audio_data_offset
-            input_end = audio_data_offset + clip_duration_samples
-            spectrograms[ix] = input_data.to_micro_spectrogram(
-                model_settings, audio[input_start:input_end]
-            )
+        inferences = []
 
-        inferences = model.predict(spectrograms[:, :, :, np.newaxis])
-        print("inferences complete", flush=True)
+        start = True
+        for chunk in chunks:
+            chunk_len = chunk.shape[0]
+            chunk_data_end = chunk_len - clip_duration_samples
+
+            # num spectrograms: in the range expression below, if there is a remainder
+            # in audio_data_end/clip_stride_samples, we need one additional slot
+            # for a spectrogram
+            spectrograms = np.zeros(
+                (
+                    int(np.ceil(chunk_data_end / clip_stride_samples)),
+                    model_settings["spectrogram_length"],
+                    model_settings["fingerprint_width"],
+                )
+            )
+            print("building spectrograms", flush=True)
+            # Inference along audio stream.
+            for ix, audio_data_offset in enumerate(
+                range(0, chunk_data_end, clip_stride_samples)
+            ):
+                input_start = audio_data_offset
+                input_end = audio_data_offset + clip_duration_samples
+                spectrograms[ix] = input_data.to_micro_spectrogram(
+                    model_settings, chunk[input_start:input_end]
+                )
+
+            inferences_ = model.predict(spectrograms[:, :, :, np.newaxis])
+
+            if start:
+                inferences = inferences_
+                start = False
+            else:
+                inferences = np.concatenate((inferences,inferences_))
 
     results = []
     for FLAGS in flag_list:
