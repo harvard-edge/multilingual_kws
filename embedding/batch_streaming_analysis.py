@@ -85,8 +85,6 @@ def calculate_streaming_accuracy(
     if existing_inferences is not None:
         inferences = existing_inferences
     else:
-        inferences = []
-
         start = True
         for chunk in chunks:
             chunk_len = chunk.shape[0]
