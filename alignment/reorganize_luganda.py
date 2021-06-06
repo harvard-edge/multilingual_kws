@@ -185,3 +185,36 @@ for d in paths_for_deletion:
     #subprocess.run(cmd, shell=True)
 
 # %%
+# repackage unknown files
+
+with open("/home/mark/tinyspeech_harvard/multilingual_embedding_wc/unknown_files.txt", 'r') as fh:
+    unknown_files = fh.read().splitlines()
+
+
+# %%
+fwbase = Path("/media/mark/hyperion/kws_data/frequent_words/")
+uwbase = Path("/media/mark/hyperion/kws_data/unknown_words/")
+unknown_list = []
+for f in unknown_files:
+    p = Path(f[45:])
+    source = fwbase / p
+    dest = uwbase / p.parent
+    # os.makedirs(dest, exist_ok=True)
+    # shutil.copy2(source, dest)
+    unknown = Path("unknown_words") / p
+    unknown_list.append(unknown)
+
+f = "/media/mark/hyperion/kws_data/unknown_files.txt"
+assert not os.path.exists(f), "already present"
+with open(f, 'w') as fh:
+    for w in unknown_list:
+        fh.write(str(w) + "\n")
+
+# %%
+with open("/media/mark/hyperion/kws_data/unknown_files.txt", 'r') as fh:
+    unknown_files = fh.read().splitlines()
+for f in unknown_files:
+    if not os.path.exists("/media/mark/hyperion/kws_data/" + f):
+        raise ValueError(f)
+
+# %%
