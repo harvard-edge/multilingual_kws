@@ -340,7 +340,7 @@ multi_streaming_FRR_FAR_curve(lang2results, figname, average_accuracy_for=ACC_TH
 #     raise ValueError("this is for sentence analysis - already done")
 
 # fmt: off
-figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/streaming_sentence_roc.png"
+figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/context_streaming_sentence_roc.png"
 
 in_embedding_sentence_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences")
 ooe_embedding_sentence_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences")
@@ -418,7 +418,7 @@ multi_streaming_FRR_FAR_curve(lang2results, figname, average_accuracy_for=ACC_TH
 # AVG ACCURACY FOR ALL LANGS [0.85250496 0.01230081]
 
 # fmt: off
-figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/streaming_perword_roc.png"
+figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/context_streaming_perword_roc.png"
 
 available_results = []
 

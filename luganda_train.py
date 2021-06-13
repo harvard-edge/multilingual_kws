@@ -54,9 +54,14 @@ def sweep_run(sd: SweepData, q):
 
     # load embedding model
     traindir = Path(f"/home/mark/tinyspeech_harvard/multilingual_embedding_wc")
-    with open(traindir / "unknown_files.txt", "r") as fh:
-        unknown_files = fh.read().splitlines()
 
+    # with open(traindir / "unknown_files.txt", "r") as fh:
+    #     unknown_files = fh.read().splitlines()
+    unknown_files = []
+    unknown_files_dir = Path("/home/mark/tinyspeech_harvard/unknown_files/")
+    with open(unknown_files_dir / "unknown_files.txt", 'r') as fh:
+        for w in fh.read().splitlines():
+            unknown_files.append(str(unknown_files_dir / w))
     base_model_path = traindir / "models" / "multilingual_context_73_0.8011"
 
     model_settings = input_data.standard_microspeech_model_settings(3)
@@ -78,7 +83,6 @@ def sweep_run(sd: SweepData, q):
     )
     print("saving", name)
     modelpath = sd.model_dest_dir / name
-    # skip saving model for now, slow
     model.save(modelpath)
 
     specs = [input_data.file2spec(model_settings, f) for f in sd.val_files]

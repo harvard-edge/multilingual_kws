@@ -239,17 +239,24 @@ def batch_streaming_analysis():
     #sse = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences/")
     #sse = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences/")
     #sse = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_perword/")
-    sse = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_perword/")
+    #sse = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_perword/")
 
+    # for silence-padded data:
     #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_streaming_batch_sentences/")
     #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_ooe_streaming_batch_sentences/")
     #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_streaming_batch_perword/")
-    dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_ooe_streaming_batch_perword/")
+    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_ooe_streaming_batch_perword/")
+
+    # for context-padded data:
+    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_streaming_batch_sentences/")
+    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_ooe_streaming_batch_sentences/")
+    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_streaming_batch_perword/")
+    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_ooe_streaming_batch_perword/")
     # fmt: on
 
     for ix, lang_dir in enumerate(os.listdir(sse)):
         if not os.path.isdir(sse / lang_dir):
-            continue  # skip the generator script or the logfile
+            continue  # skip the data generator shellscript and the logfiles
         target_lang = lang_dir.split("_")[-1]
         for word_dir in os.listdir(sse / lang_dir):
             target_word = word_dir.split("_")[-1]
