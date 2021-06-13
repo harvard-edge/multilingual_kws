@@ -39,7 +39,13 @@ class TLData:
 
 
 def train_process(d: TLData):
-    print("----", d.train_files[0])
+    print("\n\n----starting \n", d.train_files[0], "\n\n")
+
+    # check if this has been processed already
+    for t in d.stream_targets:
+        if os.path.isfile(t.destination_result_pkl):
+            print("results already present", t.destination_result_pkl, flush=True)
+            return
 
     traindir = Path(f"/home/mark/tinyspeech_harvard/multilingual_embedding_wc")
 
@@ -78,8 +84,8 @@ def train_process(d: TLData):
 
 
 # %%
-if __name__ == "__main__":
 
+def generate_and_run():
     # fmt: off
     ine_sentences = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences/")
     ooe_sentences = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences/")
@@ -198,3 +204,21 @@ if __name__ == "__main__":
         p.join()
         end = datetime.datetime.now()
         print(f"\n\n::::::: {ix} / {total} elapsed time", end - start, "\n\n")
+
+
+def resume_run():
+    batchdata_file = "/home/mark/tinyspeech_harvard/paper_data/context_batchdata.pkl"
+    with open(batchdata_file, "rb") as fh:
+        train_targets = pickle.load(fh)
+
+    total = len(train_targets)
+    for ix, d in enumerate(train_targets):
+        start = datetime.datetime.now()
+        p = multiprocessing.Process(target=train_process, args=(d,))
+        p.start()
+        p.join()
+        end = datetime.datetime.now()
+        print(f"\n\n::::::: {ix} / {total} elapsed time", end - start, "\n\n")
+
+if __name__ == "__main__":
+    resume_run()

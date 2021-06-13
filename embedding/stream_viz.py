@@ -33,6 +33,7 @@ from single_target_recognize_commands import (
 sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/embedding/")
 import batch_streaming_analysis as sa
 from batch_streaming_analysis import StreamTarget
+from batch_transfer_learn_streaming import TLData
 
 sns.set()
 sns.set_style("white")
@@ -108,7 +109,7 @@ iso2color
 
 
 def multi_streaming_FRR_FAR_curve(
-    lang2results, figname,  average_accuracy_for, use_rate=True, time_tolerance_ms=1500
+    lang2results, figname, average_accuracy_for, use_rate=True, time_tolerance_ms=1500
 ):
     fig, ax = plt.subplots()
     # fmt:off
@@ -120,16 +121,15 @@ def multi_streaming_FRR_FAR_curve(
         x_all_false_accepts_rates = []
         accuracy_per_lang = []
 
-        for (results_for_target, target, num_nontarget_words, duration_s) in all_targets:
+        for (results_for_target, target, groundtruth, num_nontarget_words, duration_s) in all_targets:
             false_rejection_rates, false_accepts_secs, false_accepts_rates, threshs = [], [], [], []
             accuracy_per_word = []
 
-            for ix, (thresh, (stats, found_words, all_found_w_confidences)) in enumerate(results_for_target.items()):
+            for ix, (thresh, (found_words, all_found_w_confidences)) in enumerate(results_for_target.items()):
                 # note: seems like at a low threshold, everything triggers a detection
                 # so ROC curves will loop back on themselves?
                 # (we dont really have traditional pos/neg ROC examples since this is timeseries data)
 
-                groundtruth = stats._gt_occurrence
                 gt_target_times = [t for g, t in groundtruth if g == target]
                 # print("gt target occurences", len(gt_target_times))
                 found_target_times = [t for f, t in found_words if f == target]
@@ -328,19 +328,91 @@ def multi_streaming_FRR_FAR_curve(
 
 # %%
 
+# %%
+###########################################
+# ----------CONTEXT ------------
+# full sentence streaming analysis
+###########################################
+figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/silence_streaming_sentence_roc.png"
+with open("/home/mark/tinyspeech_harvard/paper_data/context_batchdata.pkl", 'rb') as fh:
+    context_batchdata = pickle.load(fh)
+
+@dataclass(frozen=True)
+class CResult:
+    result: os.PathLike
+    target: sa.StreamTarget
+    is_in_embedding: bool
+
+full_sentence_results = []
+for d in context_batchdata:
+    for t in d.stream_targets:
+        result = t.destination_result_pkl
+        if os.path.isfile(result):
+            if "ooe_sentences" in str(result): 
+                full_sentence_results.append(CResult(result=result, target=t, is_in_embedding=False))
+            elif "ine_sentences" in str(result):
+                full_sentence_results.append(CResult(result=result, target=t, is_in_embedding=True))
+
+in_embedding_sentence_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences")
+ooe_embedding_sentence_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences")
+multi_results = []
+for r in full_sentence_results:
+    # fmt: off
+    if r.is_in_embedding:
+        sdata_pkl = in_embedding_sentence_data_dir / f"streaming_{r.target.target_lang}" / f"streaming_{r.target.target_word}" / "streaming_test_data.pkl"
+    else:
+        sdata_pkl = ooe_embedding_sentence_data_dir / f"streaming_{r.target.target_lang}" / f"streaming_{r.target.target_word}" / "streaming_test_data.pkl"
+    # fmt: on
+    with open(sdata_pkl, "rb") as fh:
+        sdata = pickle.load(fh)
+    n_nontargets = sdata["num_non_target_words_in_stream"]
+    duration_s = sox.file_info.duration(r.target.stream_flags[0].wav)
+    groundtruth_file = r.target.stream_flags[0].ground_truth
+
+    groundtruth = []
+    with open(groundtruth_file, 'r') as fh:
+        for l in fh.read().splitlines():
+            w, time_ms = l.split(",")
+            groundtruth.append((w, float(time_ms)))
+
+
+    with open(r.result, "rb") as fh:
+        results = pickle.load(fh)
+
+    # assume 1 streamflag was passed in
+    (flag, results_for_flag) = results[r.target.target_word][0]
+    multi_results.append(
+        (results_for_flag, r.target.target_word, r.target.target_lang, groundtruth, n_nontargets, duration_s)
+    )
+
+# reorganize by language for plotting
+lang2results = {l: [] for l in set([r[2] for r in multi_results])}
+for (
+    all_target_results,
+    target_word,
+    target_lang,
+    groundtruth,
+    n_nontargets,
+    duration_s,
+) in multi_results:
+    lang2results[target_lang].append(
+        (all_target_results, target_word, groundtruth, n_nontargets, duration_s)
+    )
 multi_streaming_FRR_FAR_curve(lang2results, figname, average_accuracy_for=ACC_THRESH, use_rate=True)
 
 # %%
-####################################
-# full sentence streaming analysis
-####################################
-# AVG ACCURACY FOR ALL LANGS [0.19      0.0018318]
+##########################################
+# full sentence silence streaming analysis
+###########################################
+for _ in range(1):
+    raise ValueError("from preprint")
+# SILENCE PADDED AVG ACCURACY FOR ALL LANGS [0.19      0.0018318]
 
 # for _ in range(1):
 #     raise ValueError("this is for sentence analysis - already done")
 
 # fmt: off
-figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/context_streaming_sentence_roc.png"
+figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/silence_streaming_sentence_roc.png"
 
 in_embedding_sentence_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences")
 ooe_embedding_sentence_data_dir = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences")
@@ -377,6 +449,13 @@ for ix, (is_in_emedding, r) in enumerate(available_results):
     # dict_keys(['target_word', 'target_lang', 'mp3_to_textgrid', 'timings', 'sample_data', 'num_target_words_in_stream', 'num_non_target_words_in_stream'])
     with open(sdata_pkl, "rb") as fh:
         sdata = pickle.load(fh)
+
+    groundtruth_file = None
+    groundtruth = []
+    with open(groundtruth_file, 'r') as fh:
+        for l in fh.read().splitlines():
+            w, time_ms = l.split(",")
+            groundtruth.append((w, float(time_ms)))
     n_nontargets = sdata["num_non_target_words_in_stream"]
     duration_s = sox.file_info.duration(r.stream_wav)
 
@@ -388,21 +467,89 @@ for ix, (is_in_emedding, r) in enumerate(available_results):
     # groundtruth = stats_for_first_thresh._gt_occurrence
 
     multi_results.append(
-        (results[r.target_word], r.target_word, r.target_lang, n_nontargets, duration_s)
+        (results[r.target_word], r.target_word, r.target_lang, groundtruth, n_nontargets, duration_s)
     )
+# reorganize by language for plotting
 lang2results = {l: [] for l in set([r[1].target_lang for r in available_results])}
 for (
     all_target_results,
     target_word,
     target_lang,
+    groundtruth,
     n_nontargets,
     duration_s,
 ) in multi_results:
     lang2results[target_lang].append(
-        (all_target_results, target_word, n_nontargets, duration_s)
+        (all_target_results, target_word, groundtruth, n_nontargets, duration_s)
     )
 
 # %%
+
+################################
+#################
+######
+#  WITH CONTEXT per-word streaming data
+######
+#################
+################################
+figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/context_streaming_perword_roc.png"
+
+with open("/home/mark/tinyspeech_harvard/paper_data/context_batchdata.pkl", 'rb') as fh:
+    context_batchdata = pickle.load(fh)
+
+@dataclass(frozen=True)
+class CResult:
+    result: os.PathLike
+    target: sa.StreamTarget
+    is_in_embedding: bool
+
+perword_results = []
+for d in context_batchdata:
+    for t in d.stream_targets:
+        result = t.destination_result_pkl
+        if os.path.isfile(result):
+            if "ooe_perword" in str(result): 
+                perword_results.append(CResult(result=result, target=t, is_in_embedding=False))
+            elif "ine_perword" in str(result):
+                perword_results.append(CResult(result=result, target=t, is_in_embedding=True))
+
+multi_results = []
+for r in perword_results:
+
+    duration_s = sox.file_info.duration(r.target.stream_flags[0].wav)
+    groundtruth_file = r.target.stream_flags[0].ground_truth
+
+    groundtruth = []
+    with open(groundtruth_file, 'r') as fh:
+        lines = fh.read().splitlines()
+        for l in lines:
+            w, time_ms = l.split(",")
+            groundtruth.append((w, float(time_ms)))
+        # this is a per-word streaming example, must manually count unknowns
+        n_nontargets = [l.split(",")[0] for l in lines].count("_unknown_")
+
+    with open(r.result, "rb") as fh:
+        results = pickle.load(fh)
+
+    # assume 1 streamflag was passed in
+    (flag, results_for_flag) = results[r.target.target_word][0]
+    multi_results.append(
+        (results_for_flag, r.target.target_word, r.target.target_lang, groundtruth, n_nontargets, duration_s)
+    )
+
+# reorganize by language for plotting
+lang2results = {l: [] for l in set([r[2] for r in multi_results])}
+for (
+    all_target_results,
+    target_word,
+    target_lang,
+    groundtruth,
+    n_nontargets,
+    duration_s,
+) in multi_results:
+    lang2results[target_lang].append(
+        (all_target_results, target_word, groundtruth, n_nontargets, duration_s)
+    )
 multi_streaming_FRR_FAR_curve(lang2results, figname, average_accuracy_for=ACC_THRESH, use_rate=True)
 
 # %%
@@ -415,10 +562,12 @@ multi_streaming_FRR_FAR_curve(lang2results, figname, average_accuracy_for=ACC_TH
 #################
 ################################
 
-# AVG ACCURACY FOR ALL LANGS [0.85250496 0.01230081]
+for _ in range(1):
+    raise ValueError("from preprint")
+# SILENCE PADDED AVG ACCURACY FOR ALL LANGS [0.85250496 0.01230081]
 
 # fmt: off
-figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/context_streaming_perword_roc.png"
+figname = "/home/mark/tinyspeech_harvard/tinyspeech_images/silence_streaming_perword_roc.png"
 
 available_results = []
 
