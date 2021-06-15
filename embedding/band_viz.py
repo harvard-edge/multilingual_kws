@@ -24,42 +24,9 @@ sns.set_style("whitegrid")
 sns.set_palette("bright")
 # sns.set(font_scale=1.6)
 
+from viz_colors import iso2lang, iso2color, iso2line
 
 # %%
-
-iso2lang = {
-    "ar": "Arabic",
-    "ca": "Catalan",
-    "cs": "Czech",
-    "cy": "Welsh",
-    "de": "German",
-    "en": "English",
-    "es": "Spanish",
-    "et": "Estonian",
-    "eu": "Basque",
-    "fa": "Persian",
-    "fr": "French",
-    "id": "Indonesian",
-    "it": "Italian",
-    "ky": "Kyrgyz",
-    "nl": "Dutch",
-    "pl": "Polish",
-    "pt": "Portuguese",
-    "ru": "Russian",
-    "rw": "Kinyarwanda",
-    "ta": "Tamil",
-    "tr": "Turkish",
-    "tt": "Tatar",
-    "uk": "Ukranian",
-}
-
-# slightly more than 2 cycles of this color palette
-# reversed: I prefer these colors
-iso2color = {
-    isocode: sns.color_palette("bright")[ix % len(sns.color_palette("bright"))]
-    for ix, isocode in enumerate(reversed(list(iso2lang.keys())))
-}
-iso2color
 
 
 # %%
@@ -320,7 +287,7 @@ for i, langdir in enumerate(os.listdir(paper_results)):
         all_tprs.append(tprs)
         all_fprs.append(fprs)
         # plot just the line
-        ax.plot(fprs, tprs, color=iso2color[lang_isocode], alpha=0.05)
+        ax.plot(fprs, tprs, color=iso2color(lang_isocode), alpha=0.05)
         # add the label:
         # ax.plot(fprs, tprs, label=curve_label)
 
@@ -357,10 +324,10 @@ for i, langdir in enumerate(os.listdir(paper_results)):
 
     ymean = y_all.mean(axis=1)
     # draw mean
-    ax.plot(x_all, ymean, alpha=0.7, linewidth=6, color=iso2color[lang_isocode], label=f"{iso2lang[lang_isocode]}")
+    ax.plot(x_all, ymean, alpha=0.7, linewidth=6, color=iso2color(lang_isocode), label=f"{iso2lang[lang_isocode]}")
     # draw bands over stdev
     ystdev = y_all.std(axis=1)
-    ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, color=iso2color[lang_isocode], alpha=0.1)
+    ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, color=iso2color(lang_isocode), alpha=0.1)
 
 AX_LIM = 0.75
 ax.set_xlim(0, 1 - AX_LIM)
@@ -456,7 +423,7 @@ for ix, (lang, results) in enumerate(lang2results.items()):
         # print("unknown results mean", np.mean(unknown_results))
         all_tprs.append(tprs)
         all_fprs.append(fprs)
-        ax.plot(fprs, tprs, color=iso2color[lang], alpha=0.05)
+        ax.plot(fprs, tprs, color=iso2color(lang), alpha=0.05)
         # ax.plot(fprs, tprs, label=curve_label)
 
         # eer / f1
@@ -491,10 +458,10 @@ for ix, (lang, results) in enumerate(lang2results.items()):
 
     ymean = y_all.mean(axis=1)
     # draw mean
-    ax.plot(x_all, ymean, alpha=0.7, color=iso2color[lang], linewidth=6, label=f"{iso2lang[lang]}")
+    ax.plot(x_all, ymean, alpha=0.7, color=iso2color(lang), linewidth=6, label=f"{iso2lang[lang]}")
     # draw bands over stdev
     ystdev = y_all.std(axis=1)
-    ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, color=iso2color[lang], alpha=0.1)
+    ax.fill_between(x_all, ymean - ystdev, ymean + ystdev, color=iso2color(lang), alpha=0.1)
 
 AX_LIM = 0.75
 ax.set_xlim(0, 1 - AX_LIM)
