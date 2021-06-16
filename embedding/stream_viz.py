@@ -404,6 +404,11 @@ multi_streaming_FRR_FAR_curve(
 )
 
 # %%
+# multi_streaming_FRR_FAR_curve(
+#     lang2results, figname, average_accuracy_for=0.85, use_rate=True
+# )
+
+# %%
 
 ################################
 #################
@@ -490,6 +495,13 @@ for (
 multi_streaming_FRR_FAR_curve(
     lang2results, figname, average_accuracy_for=ACC_THRESH, use_rate=True
 )
+
+# %%
+# AVG ACCURACY FOR ALL LANGS @ 0.85: [0.83168964 0.02605731] (22, 2)
+# AVG ACCURACY FOR ALL LANGS @ 0.75: [0.90131883 0.06243559] (22, 2)
+# multi_streaming_FRR_FAR_curve(
+#     lang2results, figname, average_accuracy_for=0.75, use_rate=True
+# )
 
 
 # %%
