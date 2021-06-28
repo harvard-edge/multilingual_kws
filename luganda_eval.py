@@ -30,15 +30,14 @@ sns.set()
 sns.set_style("whitegrid")
 sns.set_palette("bright")
 
-
 def tpr_fpr(
     keyword,
     thresh,
     found_words,
     gt_target_times_ms,
-    num_nontarget_words,
     duration_s,
     time_tolerance_ms,
+    num_nontarget_words=None,
 ):
     found_target_times = [t for f, t in found_words if f == keyword]
 
@@ -86,13 +85,11 @@ def tpr_fpr(
     tpr = true_positives / len(gt_target_times_ms)
     false_rejections_per_instance = false_negatives / len(gt_target_times_ms)
     false_positives = len(found_target_times) - true_positives
-    fpr = false_positives / num_nontarget_words
+
     fah = false_positives / duration_s * 3600  # sec/hr
-    pp = pprint.PrettyPrinter()
     result = dict(
         keyword=keyword,
         tpr=tpr,
-        fpr=fpr,
         thresh=thresh,
         true_positives=true_positives,
         false_positives=false_positives,
@@ -101,18 +98,13 @@ def tpr_fpr(
         false_accepts_per_hour=fah,
         groundtruth_positives=len(gt_target_times_ms),
     )
-    # pp.pprint(result)
-    # print("thresh", thresh, false_rejections_per_instance)
-    # print("thresh", thresh, "true positives ", true_positives, "TPR:", tpr)
-    # TODO(MMAZ) is there a beter way to calculate false positive rate?
-    # fpr = false_positives / (false_positives + true_negatives)
-    # fpr = false_positives / negatives
-    # print(
-    #     "false positives (model detection when no groundtruth target is present)",
-    #     false_positives,
-    # )
-    # fpr = false_positives / num_nontarget_words
     # false_accepts_per_seconds = false_positives / (duration_s / (3600))
+
+    # TODO(mmaz) does this hold true across multiple time_tolerance_ms values?
+    # fpr = false_positives / gt_negatives == false_positives / (false_positives + true_negatives)
+    if num_nontarget_words is not None:
+        result["fpr"] = false_positives / num_nontarget_words
+
     return result
 
 
@@ -194,9 +186,9 @@ for exp in os.listdir(hpsweep):
                     thresh,
                     found_words,
                     eval_data[keyword]["times"],
-                    num_nontarget_words=eval_data[keyword]["num_nt"],
                     duration_s=eval_data[keyword]["duration_s"],
                     time_tolerance_ms=post_processing_settings.time_tolerance_ms,
+                    num_nontarget_words=eval_data[keyword]["num_nt"],
                 )
                 tpr = analysis["tpr"]
                 # fpr = analysis["fpr"]
@@ -357,8 +349,8 @@ for graphing_context in [True, False]:
                     thresh,
                     found_words,
                     gt_target_times_ms,
-                    num_nontarget_words=num_nontarget_words,
                     time_tolerance_ms=post_processing_settings.time_tolerance_ms,
+                    num_nontarget_words=num_nontarget_words,
                 )
                 tpr = analysis["tpr"]
                 fpr = analysis["fpr"]
