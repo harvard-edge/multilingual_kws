@@ -1,18 +1,19 @@
 import glob
-import pydub
-from pydub.playback import play
-import pandas as pd
 import sys
 import tty
 import termios
+from pathlib import Path
 
-WAVS = "./micro_dataset/extractions_deepspeech/down/*.wav"
-CSVS = "./counts/*.csv"
+import pydub
+import pydub.playback
+import pydub.effects
+import pandas as pd
+import numpy as np
+
 
 # https://stackoverflow.com/a/510364
 class _GetchUnix:
     def __call__(self):
-        import sys, tty, termios
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
@@ -22,48 +23,49 @@ class _GetchUnix:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
 
-def label():
-    outfile_name = "_".join(WAVS.split('/')[-3:-1])
-    wavs = pd.Series(glob.glob(WAVS))
 
-    df = pd.DataFrame(wavs, columns=["clips"])
-    df["usable"] = False
+TARGET = "story"
+en_words_dir = Path.home() / "tinyspeech_harvard/frequent_words/silence_padded/en/clips"
+N_CLIPS=100
+
+def label():
+
+    clips = glob.glob(str(en_words_dir / TARGET / "*.wav"))
+    clips.sort()
+    rng = np.random.RandomState(123)
+    rng.shuffle(clips)
+
     getch = _GetchUnix()
 
-    usage = "good: g, bad: b, play again: a"
+    results = []
 
-    for ix, r in df.iterrows():
-        path = r.clips
-        clip = pydub.AudioSegment.from_wav(path)
+    for c in clips[:N_CLIPS]:
+        print(Path(c).name)
         while True:
-            print()
-            print(ix, path)
-            play(clip)
-            print(usage)
-            #choice = sys.stdin.read(1)
+            print("-")
+            wav = pydub.AudioSegment.from_file(c)
+            wav = pydub.effects.normalize(wav)
+            pydub.playback.play(wav)
+
             choice = getch()
-            if choice == 'g':
+            if choice == "g":
                 usable = True
                 break
-            elif choice == 'b':
+            elif choice == "b":
                 usable = False
                 break
-            elif choice == 'q':
+            elif choice == "q":
                 sys.exit()
-        df.at[ix, "usable"] = usable
-        print(usable)
-
-    df.to_csv("counts/" + outfile_name + ".csv", index=False)
-
-def count():
-    csvs = glob.glob(CSVS)
-    for c in csvs:
-        print(c)
-        df = pd.read_csv(c)
-        good = df.usable.value_counts().loc[True]
-        bad = df.usable.value_counts().loc[False]
-        print("Good:", good, "Bad:", bad)
+        
+        result = "good" if usable else "bad"
+        row = f"{Path(c).name},{result}"
+        print(row)
+        results.append(row)
+    
+    csv = Path.cwd() / "tmp" / f"{TARGET}.csv"
+    with open(csv, 'w') as fh:
+        fh.write("\n".join(results))
 
 
 if __name__ == "__main__":
-    count()
+    label()
