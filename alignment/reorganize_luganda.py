@@ -92,7 +92,7 @@ with open(l_test / "lexicon.txt", "w") as fh:
 
 # %%
 # ensure all audacity extractions conform to model settings
-checks = ["16000 samples", "75 CDDA sectors", "16000"]
+checks = ["16000 samples", "75 CDDA sectors"]
 train_wavs = glob.glob("/home/mark/tinyspeech_harvard/luganda/cs288_training/**/*.wav")
 for w in train_wavs:
     res = subprocess.run(f"soxi {w}", shell=True, capture_output=True)
