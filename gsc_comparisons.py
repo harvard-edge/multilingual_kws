@@ -88,7 +88,7 @@ cv_keyword_data.sort()
 print("CV:", len(cv_keyword_data))
 
 #%%
-def train(train_files, val_files, model_settings):
+def train(train_files, val_files, model_settings, verbose=0):
     embedding_model_dir = Path.home() / "tinyspeech_harvard/multilingual_embedding_wc"
     unknown_files = []
     unknown_files_dir = Path.home() / "tinyspeech_harvard/unknown_files"
@@ -112,33 +112,23 @@ def train(train_files, val_files, model_settings):
         base_model_path=base_model_path,
         base_model_output="dense_2",
         csvlog_dest=None,
-        verbose=0,
+        verbose=verbose,
     )
     return model
 
 
 # %%
 def cross_compare(
-    train_dataset,
-    test_dataset=None,
+    train_files,
+    val_files,
+    test_files,
     cross_testset=None,
-    N_TRAIN=5,
-    N_VAL=20,
     unknown_test=None,
-    seed=123,
+    verbose=0,
 ):
-    rng = np.random.RandomState(seed)
-    dataset = rng.permutation(train_dataset)
-    train_files = dataset[:N_TRAIN]
-    # only for visualization of training performance
-    val_files = dataset[N_TRAIN : N_TRAIN + N_VAL]
     model_settings = input_data.standard_microspeech_model_settings(3)
-    model = train(train_files, val_files, model_settings)
+    model = train(train_files, val_files, model_settings, verbose)
 
-    if test_dataset is None:
-        test_files = dataset[N_TRAIN + N_VAL :]
-    else:
-        test_files = test_dataset
     specs = [input_data.file2spec(model_settings, f) for f in test_files]
     specs = np.expand_dims(specs, -1)
     preds = model.predict(specs)
@@ -176,26 +166,46 @@ cv_sorted, _ = ef.cluster_and_sort(cv_keyword_data, embedding)
 cv_best = cv_sorted[: int(len(cv_sorted) * 0.9)]
 print("best 90% of evaluated clips", len(cv_best), f"from {len(cv_keyword_data)}")
 
-# %%
 # estimate unknown accuracy (w fixed seed for now)
 unknown_files = np.random.RandomState(123).choice(gsc_unknown, 1000, replace=False)
+
+N_TRAIN = 5
+N_VAL = 20
+
 seed = 10
+rng = np.random.RandomState(seed)
+# cv_train_files = cv_best[:N_TRAIN]
+# rest = rng.permutation(cv_best[N_TRAIN:])
+# cv_val_files = rest[:N_VAL]
+# cv_test_files = rest[N_VAL:]
+cv_dataset = rng.permutation(cv_best)
+cv_train_files = cv_dataset[:N_TRAIN]
+cv_val_files = cv_dataset[N_TRAIN:N_TRAIN+N_VAL]
+cv_test_files = cv_dataset[N_TRAIN+N_VAL:]
+
+gsc_train_files = np.random.RandomState(seed).choice(gsc_train, N_TRAIN, replace=False)
+
+
+# %%
+
 print("seed:", seed)
 print("___Train on CV, cross-compare on GSC___")
 cross_compare(
-    cv_best,
-    test_dataset=None,
+    train_files=cv_train_files,
+    val_files=cv_val_files,
+    test_files=cv_test_files,
     cross_testset=gsc_test,
     unknown_test=unknown_files,
-    seed=seed,
 )
+
+
 print("___Train on GSC, cross-compare on CV___")
 cross_compare(
-    gsc_train,
-    test_dataset=gsc_test,
+    train_files=gsc_train_files,
+    val_files=gsc_val,
+    test_files=gsc_test,
     cross_testset=cv_best,
     unknown_test=unknown_files,
-    seed=seed,
 )
 
 
