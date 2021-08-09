@@ -30,7 +30,6 @@ def transfer_learn(
     bg_datadir: os.PathLike = "/home/mark/tinyspeech_harvard/speech_commands/_background_noise_/",
     csvlog_dest: Optional[os.PathLike] = None,
     verbose=1,
-
 ):
     """this only words for single-target models: see audio_dataset and CATEGORIES"""
 
@@ -71,8 +70,12 @@ def transfer_learn(
     )
 
     AUTOTUNE = tf.data.experimental.AUTOTUNE
-    init_train_ds = audio_dataset.init_single_target(AUTOTUNE, train_files, is_training=True)
-    init_val_ds = audio_dataset.init_single_target(AUTOTUNE, val_files, is_training=False)
+    init_train_ds = audio_dataset.init_single_target(
+        AUTOTUNE, train_files, is_training=True
+    )
+    init_val_ds = audio_dataset.init_single_target(
+        AUTOTUNE, val_files, is_training=False
+    )
     train_ds = init_train_ds.shuffle(buffer_size=1000).repeat().batch(batch_size)
     val_ds = init_val_ds.batch(batch_size)
 
