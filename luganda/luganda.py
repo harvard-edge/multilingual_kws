@@ -607,6 +607,7 @@ NUM_TARGETS = 80
 workdir = Path("/home/mark/tinyspeech_harvard/luganda/demo_eval") / keyword
 os.makedirs(workdir, exist_ok=True)
 dest_wavfile = str(workdir / f"{keyword}_stream.wav")
+dest_mp3 = str(workdir / f"{keyword}_stream.mp3")
 groundtruth_data = workdir / f"{keyword}_groundtruth.pkl"
 full_transcript_file = workdir / f"{keyword}_full_transcript.json"
 groundtruth_txt = workdir / f"{keyword}_groundtruth_labels.txt"
@@ -614,6 +615,7 @@ groundtruth_txt = workdir / f"{keyword}_groundtruth_labels.txt"
 # dest_wavfile = str(workdir / "cs288_test" / keyword / f"{keyword}_stream.wav")
 # groundtruth_data = workdir / "cs288_test" / keyword / f"{keyword}_groundtruth.pkl"
 assert not os.path.isfile(dest_wavfile), "already exists"
+assert not os.path.isfile(dest_mp3), "already exists"
 assert not os.path.isfile(groundtruth_data), "already exists"
 assert not os.path.isfile(full_transcript_file), "already exists"
 assert not os.path.isfile(groundtruth_txt), "already exists"
@@ -647,9 +649,22 @@ for ix in ixs:
         dict(word=w, start=start + total_wav_duration_s, end=end + total_wav_duration_s)
         for (w, start, end) in target_transcription
     ]
-    transcript.append(dict(transcript_type="target", transcript=target_transcription))
     transcript.append(
-        dict(trancript_type="nontarget", transcript=non_target.transcript)
+        dict(
+            transcript_type="target",
+            transcript=target.transcript,
+            start=total_wav_duration_s,
+            end=total_wav_duration_s + target_duration_s,
+            transcript_perword=target_transcription,
+        )
+    )
+    transcript.append(
+        dict(
+            trancript_type="nontarget",
+            transcript=non_target.transcript,
+            start=(total_wav_duration_s + target_duration_s),
+            end=(total_wav_duration_s + target_duration_s + nontarget_duration_s),
+        )
     )
 
     total_wav_duration_s += target_duration_s + nontarget_duration_s
@@ -678,6 +693,10 @@ print("duration in minutes", total_wav_duration_s / 60)
 combiner = sox.Combiner()
 combiner.convert(samplerate=16000, n_channels=1)
 combiner.build(to_combine, dest_wavfile, "concatenate")
+
+combiner = sox.Combiner()
+combiner.convert(samplerate=16000, n_channels=1)
+combiner.build(to_combine, dest_mp3, "concatenate")
 
 with open(groundtruth_data, "wb") as fh:
     pickle.dump(groundtruth, fh)
