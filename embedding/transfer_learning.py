@@ -29,6 +29,8 @@ def transfer_learn(
     UNKNOWN_PERCENTAGE: float = 50.0,
     bg_datadir: os.PathLike = "/home/mark/tinyspeech_harvard/speech_commands/_background_noise_/",
     csvlog_dest: Optional[os.PathLike] = None,
+    verbose=1,
+
 ):
     """this only words for single-target models: see audio_dataset and CATEGORIES"""
 
@@ -85,6 +87,7 @@ def transfer_learn(
         steps_per_epoch=batch_size * num_batches,
         epochs=num_epochs,
         callbacks=callbacks,
+        verbose=verbose,
     )
     if backprop_into_embedding:
         # https://keras.io/examples/vision/image_classification_efficientnet_fine_tuning/#transfer-learning-from-pretrained-weights

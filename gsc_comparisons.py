@@ -27,6 +27,7 @@ import sys
 
 import input_data
 import embedding.transfer_learning as tl
+import embedding.distance_filtering as ef
 
 sns.set()
 sns.set_style("white")
@@ -111,9 +112,8 @@ def train(train_files, val_files, model_settings):
         base_model_path=base_model_path,
         base_model_output="dense_2",
         csvlog_dest=None,
+        verbose=0,
     )
-    # modelpath = model_dest_dir / name
-    # model.save(modelpath)
     return model
 
 
@@ -125,8 +125,9 @@ def cross_compare(
     N_TRAIN=5,
     N_VAL=20,
     unknown_test=None,
+    seed=123,
 ):
-    rng = np.random.RandomState(123)
+    rng = np.random.RandomState(seed)
     dataset = rng.permutation(train_dataset)
     train_files = dataset[:N_TRAIN]
     # only for visualization of training performance
@@ -135,7 +136,7 @@ def cross_compare(
     model = train(train_files, val_files, model_settings)
 
     if test_dataset is None:
-        test_files = dataset[N_TRAIN+N_VAL:]
+        test_files = dataset[N_TRAIN + N_VAL :]
     else:
         test_files = test_dataset
     specs = [input_data.file2spec(model_settings, f) for f in test_files]
@@ -169,20 +170,32 @@ def cross_compare(
 # %%
 # filter CV extractions by embedding distance clusters
 
-# %%
-# estimate unknown accuracy
-unknown_files = np.random.RandomState(123).choice(gsc_unknown, 1000, replace=False)
+embedding = ef.embedding_model()
+cv_sorted, _ = ef.cluster_and_sort(cv_keyword_data, embedding)
 
-print("Train on CV, cross-compare on GSC:")
+cv_best = cv_sorted[: int(len(cv_sorted) * 0.9)]
+print("best 90% of evaluated clips", len(cv_best), f"from {len(cv_keyword_data)}")
+
+# %%
+# estimate unknown accuracy (w fixed seed for now)
+unknown_files = np.random.RandomState(123).choice(gsc_unknown, 1000, replace=False)
+seed = 10
+print("seed:", seed)
+print("___Train on CV, cross-compare on GSC___")
 cross_compare(
-    cv_keyword_data,
+    cv_best,
     test_dataset=None,
     cross_testset=gsc_test,
     unknown_test=unknown_files,
+    seed=seed,
 )
-print("Train on GSC, cross-compare on CV:")
+print("___Train on GSC, cross-compare on CV___")
 cross_compare(
-    gsc_train, test_dataset=gsc_test, cross_testset=cv_keyword_data, unknown_test=unknown_files
+    gsc_train,
+    test_dataset=gsc_test,
+    cross_testset=cv_best,
+    unknown_test=unknown_files,
+    seed=seed,
 )
 
 
