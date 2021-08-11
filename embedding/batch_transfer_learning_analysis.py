@@ -14,9 +14,9 @@ import multiprocessing
 
 import sys
 
-import input_data
+import embedding.input_data as input_data
 
-import transfer_learning
+import embedding.transfer_learning as transfer_learning
 
 
 #%%

@@ -23,15 +23,14 @@ import pydub
 import pydub.playback
 import pydub.effects
 
-import sys
-
-import input_data
+import embedding.input_data as input_data
 import embedding.transfer_learning as tl
 import embedding.distance_filtering as ef
 
 sns.set()
 sns.set_style("white")
 sns.set_palette("bright")
+
 
 # %%
 def which_set(filename, validation_percentage, testing_percentage):
@@ -163,7 +162,7 @@ def cross_compare(
 embedding = ef.embedding_model()
 cv_sorted, _ = ef.cluster_and_sort(cv_keyword_data, embedding)
 
-cv_best = cv_sorted[: int(len(cv_sorted) * 0.9)]
+cv_best = cv_sorted[: int(len(cv_sorted) * 0.5)]
 print("best 90% of evaluated clips", len(cv_best), f"from {len(cv_keyword_data)}")
 
 # estimate unknown accuracy (w fixed seed for now)
@@ -174,21 +173,25 @@ N_VAL = 20
 
 seed = 10
 rng = np.random.RandomState(seed)
+
+# train using the 5 best examples
 # cv_train_files = cv_best[:N_TRAIN]
 # rest = rng.permutation(cv_best[N_TRAIN:])
 # cv_val_files = rest[:N_VAL]
 # cv_test_files = rest[N_VAL:]
+
+# train on random splits of the dataset
 cv_dataset = rng.permutation(cv_best)
 cv_train_files = cv_dataset[:N_TRAIN]
-cv_val_files = cv_dataset[N_TRAIN:N_TRAIN+N_VAL]
-cv_test_files = cv_dataset[N_TRAIN+N_VAL:]
+cv_val_files = cv_dataset[N_TRAIN : N_TRAIN + N_VAL]
+cv_test_files = cv_dataset[N_TRAIN + N_VAL :]
 
 gsc_train_files = np.random.RandomState(seed).choice(gsc_train, N_TRAIN, replace=False)
 
 
 # %%
-
 print("seed:", seed)
+verbose = 1
 print("___Train on CV, cross-compare on GSC___")
 cross_compare(
     train_files=cv_train_files,
@@ -196,6 +199,7 @@ cross_compare(
     test_files=cv_test_files,
     cross_testset=gsc_test,
     unknown_test=unknown_files,
+    verbose=verbose,
 )
 
 
@@ -206,6 +210,7 @@ cross_compare(
     test_files=gsc_test,
     cross_testset=cv_best,
     unknown_test=unknown_files,
+    verbose=verbose,
 )
 
 

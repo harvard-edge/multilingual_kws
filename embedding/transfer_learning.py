@@ -8,7 +8,7 @@ import tensorflow as tf
 
 import sys
 
-import input_data
+import embedding.input_data as input_data
 
 
 def transfer_learn(
