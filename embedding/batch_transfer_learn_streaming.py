@@ -14,7 +14,6 @@ import sys
 import numpy as np
 import tensorflow as tf
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
 import input_data
 import transfer_learning
 import batch_streaming_analysis as sa

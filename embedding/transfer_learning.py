@@ -8,7 +8,6 @@ import tensorflow as tf
 
 import sys
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
 import input_data
 
 

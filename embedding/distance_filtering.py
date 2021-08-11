@@ -8,7 +8,6 @@ import sklearn.cluster
 
 import sys
 
-sys.path.insert(0, str(Path.home() / "tinyspeech_harvard/tinyspeech/"))
 import input_data
 
 

@@ -11,8 +11,6 @@ import sox
 
 import sys
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
-# import input_data
 from accuracy_utils import StreamingAccuracyStats
 
 #%%
