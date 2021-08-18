@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow_io as tfio
 from tensorflow.lite.experimental.microfrontend.python.ops import (
     audio_microfrontend_op as frontend_op,
 )
@@ -8,6 +9,7 @@ import numpy as np  # TODO(mmaz) tf2.4 np from tf.experimental
 import os
 import glob
 import math
+from pathlib import Path
 from dataclasses import dataclass
 
 SILENCE_LABEL = "_silence_"
@@ -38,11 +40,19 @@ def to_micro_spectrogram(model_settings, audio):
 def file2spec(model_settings, filepath):
     """there's a version of this that adds bg noise in AudioDataset"""
     audio_binary = tf.io.read_file(filepath)
-    audio, _ = tf.audio.decode_wav(
-        audio_binary,
-        desired_channels=1,
-        desired_samples=model_settings["desired_samples"],
-    )
+    extension = Path(filepath).suffix
+    if extension == ".wav":
+        audio, _ = tf.audio.decode_wav(
+            audio_binary,
+            desired_channels=1,
+            desired_samples=model_settings["desired_samples"],
+        )
+    elif extension == ".mp3":
+        audio, _ = tfio.audio.decode_mp3(
+            audio_binary
+        )
+    else:
+        raise ValueError(f"extension {extension} not supported")
     audio = tf.squeeze(audio, axis=-1)
     return to_micro_spectrogram(model_settings, audio)
 

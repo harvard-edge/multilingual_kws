@@ -19,9 +19,10 @@ import pydub
 import pydub.playback
 import pydub.effects
 
-import distance_filtering
-import input_data
-
+import sys
+sys.path.insert(0, str(Path.cwd().parents[0]))
+import embedding.input_data as input_data
+import embedding.distance_filtering as distance_filtering
 
 sns.set()
 sns.set_style("white")
@@ -31,6 +32,20 @@ sns.set_palette("bright")
 embedding_model_dir = Path.home() / "tinyspeech_harvard/multilingual_embedding_wc"
 with open(embedding_model_dir / "commands.txt", "r") as fh:
     commands = fh.read().splitlines()
+
+em = distance_filtering.embedding_model()
+# %%
+#words_dir = Path.home() / "tinyspeech_harvard/distance_sorting/cv7_extractions/listening_data"
+words_dir = Path.home() / "tinyspeech_harvard/frequent_words/silence_padded/en/clips"
+word = "doing"
+clips = glob.glob(str(words_dir / word / "*.wav"))
+clips.sort()
+print(len(clips))
+
+# %%
+
+results = distance_filtering.cluster_and_sort(clips, em)
+print(len(results["sorted_clips"])) # will be 50 less than above
 
 
 # %%
@@ -44,44 +59,25 @@ print("non-embedding words", len(en_non_embedding_words))
 print(en_non_embedding_words)
 
 # %%
-query_word = "doing"
-query_clips = glob.glob(str(en_words_dir / query_word / "*.wav"))
-query_clips.sort()
-print(len(query_clips))
-
-em = distance_filtering.embedding_model()
-
-sorted_clips, cluster_centers = distance_filtering.cluster_and_sort(query_clips, em)
-print(len(sorted_clips)) # will be 40 less than above
 
 # %%
-model_settings = input_data.standard_microspeech_model_settings(761)
-
-train_spectrograms = np.array(
-    [input_data.file2spec(model_settings, fp) for fp in sorted_clips]
-)
-feature_vectors = em.predict(train_spectrograms)
-
-l2_distances = np.linalg.norm(
-   feature_vectors[:, np.newaxis] - cluster_centers[np.newaxis], axis=-1
-)
-max_l2 = np.max(l2_distances, axis=1)
-
+distances = results["distances"]
 
 fig, ax = plt.subplots(ncols=2, dpi=150)
-ax[0].plot(np.arange(max_l2.shape[0]), max_l2)
+ax[0].plot(np.arange(distances.shape[0]), distances)
 ax[0].set_xlabel("sorted index of training sample")
-ax[0].set_ylabel(f"max L2 distance to cluster centroids (K=6)")
-ax[0].set_title(f"sorted max(L2) distances for {query_word}")
-ax[1].hist(max_l2)
-ax[1].set_title("max(L2) distances histogram")
+ax[0].set_ylabel(f"L2 distance to nearest cluster centroids (K=5)")
+ax[0].set_title(f"sorted distances for {word}")
+ax[1].hist(distances)
+ax[1].set_title("distances histogram")
 fig.set_size_inches(8, 4)
 
 
 # %%
 # "worst" clips
-for ix, (f,dist) in enumerate(reversed(list(zip(sorted_clips, max_l2)))):
-    if ix > 5:
+sorted_clips = results["sorted_clips"]
+for ix, (f,dist) in enumerate(reversed(list(zip(sorted_clips, distances)))):
+    if ix > 10:
         break
     print(Path(f).name, dist)
     wav = pydub.AudioSegment.from_file(f)
@@ -90,7 +86,7 @@ for ix, (f,dist) in enumerate(reversed(list(zip(sorted_clips, max_l2)))):
 
 # %%
 # "best" clips (closest)
-for ix, (f,dist) in enumerate(list(zip(sorted_clips, max_l2))):
+for ix, (f,dist) in enumerate(list(zip(sorted_clips, distances))):
     if ix > 5:
         break
     print(Path(f).name, dist)
