@@ -8,6 +8,7 @@ import csv
 import time
 import shutil
 import pprint
+import multiprocessing
 
 import numpy as np
 import tensorflow as tf
@@ -34,19 +35,19 @@ with open(embedding_model_dir / "commands.txt", "r") as fh:
     commands = fh.read().splitlines()
 
 em = distance_filtering.embedding_model()
+print("loaded model")
+
 # %%
 #words_dir = Path.home() / "tinyspeech_harvard/distance_sorting/cv7_extractions/listening_data"
 words_dir = Path.home() / "tinyspeech_harvard/frequent_words/silence_padded/en/clips"
-word = "doing"
+word = "left"
 clips = glob.glob(str(words_dir / word / "*.wav"))
 clips.sort()
 print(len(clips))
 
 # %%
-
-results = distance_filtering.cluster_and_sort(clips, em)
+results = distance_filtering.cluster_and_sort(clips, em, n_clusters=2)
 print(len(results["sorted_clips"])) # will be 50 less than above
-
 
 # %%
 en_words_dir = Path.home() / "tinyspeech_harvard/frequent_words/silence_padded/en/clips"
@@ -59,18 +60,30 @@ print("non-embedding words", len(en_non_embedding_words))
 print(en_non_embedding_words)
 
 # %%
-
-# %%
+print(results["cluster_centers"])
 distances = results["distances"]
-
+k = results["cluster_centers"].shape[0]
 fig, ax = plt.subplots(ncols=2, dpi=150)
 ax[0].plot(np.arange(distances.shape[0]), distances)
-ax[0].set_xlabel("sorted index of training sample")
-ax[0].set_ylabel(f"L2 distance to nearest cluster centroids (K=5)")
+ax[0].set_xlabel("sorted index of eval sample")
+ax[0].set_ylabel(f"L2 distance to nearest cluster centroids (K={k})")
 ax[0].set_title(f"sorted distances for {word}")
 ax[1].hist(distances)
 ax[1].set_title("distances histogram")
 fig.set_size_inches(8, 4)
+
+# %%
+ms = input_data.standard_microspeech_model_settings(761)
+spec = input_data.file2spec(ms, results["sorted_clips"][10])
+vec = em.predict(spec[np.newaxis])
+
+fig,ax=plt.subplots(dpi=150)
+ax.plot(vec.squeeze())
+ax.plot(results["cluster_centers"][1])
+fig.set_size_inches(10,10)
+
+l = results["cluster_centers"][1] - vec.squeeze()
+np.linalg.norm(l)
 
 
 # %%

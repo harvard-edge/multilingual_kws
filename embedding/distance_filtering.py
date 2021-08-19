@@ -6,8 +6,6 @@ import numpy as np
 import tensorflow as tf
 import sklearn.cluster
 
-import sys
-
 import embedding.input_data as input_data
 
 
@@ -54,22 +52,29 @@ def cluster_and_sort(
     train_spectrograms = np.array(
         [input_data.file2spec(model_settings, fp) for fp in train_clips]
     )
-    feature_vectors = embedding_model.predict(train_spectrograms)
+    feature_vectors = embedding_model.predict(train_spectrograms).numpy()
 
     kmeans = sklearn.cluster.KMeans(n_clusters=n_clusters, random_state=seed).fit(
         feature_vectors
     )
 
-    print(f"featurizing {len(eval_clips)} clips...")
-    eval_vectors = embedding_model.predict(
-        np.array([input_data.file2spec(model_settings, fp) for fp in eval_clips])
-    )
+    print(f"generating spectrograms for {len(eval_clips)} clips...")
+    eval_specs = []
+    for ix, filepath in enumerate(eval_clips):
+        if ix % int(len(eval_clips) / 20) == 0:
+            print(f"{ix + 1}/{len(eval_clips)}")
+        eval_specs.append(input_data.file2spec(model_settings, filepath))
+    eval_specs = tf.convert_to_tensor(eval_specs)
+    print("featurizing...")
+    eval_vectors = embedding_model.predict(eval_specs)
 
-    print(f"evaluating...")
-    l2_distances = np.linalg.norm(
-        kmeans.cluster_centers_[np.newaxis] - eval_vectors[:, np.newaxis], axis=-1
+    print("evaluating...")
+    l2_distances = tf.linalg.norm(
+        tf.convert_to_tensor(kmeans.cluster_centers_)[tf.newaxis]
+        - eval_vectors[:, tf.newaxis],
+        axis=-1,
     )
-    l2_from_closest_cluster = np.min(l2_distances, axis=1)
+    l2_from_closest_cluster = tf.reduce_min(l2_distances, axis=1).numpy()
 
     sorting = np.argsort(l2_from_closest_cluster)
     return dict(
