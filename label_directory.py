@@ -9,7 +9,6 @@ import os
 import pydub
 import pydub.playback
 import pydub.effects
-import numpy as np
 
 
 class _GetchUnix:
