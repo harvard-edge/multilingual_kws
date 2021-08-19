@@ -25,4 +25,6 @@ def convert_16k_wav(word):
 with multiprocessing.Pool() as p:
     for i in p.imap_unordered(convert_16k_wav, os.listdir(original)):
         print(i)
+print("done")
 # %%
+

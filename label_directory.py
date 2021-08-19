@@ -3,16 +3,18 @@ import sys
 import tty
 import termios
 from pathlib import Path
+import csv
+import os
 
 import pydub
 import pydub.playback
 import pydub.effects
-import pandas as pd
 import numpy as np
 
 
-# https://stackoverflow.com/a/510364
 class _GetchUnix:
+    """https://stackoverflow.com/a/510364"""
+
     def __call__(self):
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
@@ -24,26 +26,40 @@ class _GetchUnix:
         return ch
 
 
-TARGET = "story"
-en_words_dir = Path.home() / "tinyspeech_harvard/frequent_words/silence_padded/en/clips"
-N_CLIPS=100
+class Modes:
+    CLOSEST = "closest"
+    FARTHEST = "farthest"
+
+
+######## change these:
+CLOSEST_FARTHEST_DIR = (
+    Path.home() / "tinyspeech_harvard/distance_sorting/closest_farthest/"
+)
+WORD = "reading"
+MODE = Modes.FARTHEST
+###### //////////////
+
 
 def label():
 
-    clips = glob.glob(str(en_words_dir / TARGET / "*.wav"))
-    clips.sort()
-    rng = np.random.RandomState(123)
-    rng.shuffle(clips)
+    in_csv = CLOSEST_FARTHEST_DIR / WORD / MODE / f"{WORD}_{MODE}_50_input.csv"
+    assert os.path.isfile(in_csv), f"{in_csv} not found"
+    clips = []
+    with open(in_csv, "r") as fh:
+        reader = csv.reader(fh)
+        for r in reader:
+            clips.append([r[0], float(r[1])])
 
     getch = _GetchUnix()
 
     results = []
 
-    for c in clips[:N_CLIPS]:
-        print(Path(c).name)
+    for ix,(clip, dist) in enumerate(clips):
+        print(f":::::: CLIP # {ix} :::", clip)
+        fpath = str(CLOSEST_FARTHEST_DIR / WORD / MODE / clip)
         while True:
             print("-")
-            wav = pydub.AudioSegment.from_file(c)
+            wav = pydub.AudioSegment.from_file(fpath)
             wav = pydub.effects.normalize(wav)
             pydub.playback.play(wav)
 
@@ -56,15 +72,21 @@ def label():
                 break
             elif choice == "q":
                 sys.exit()
-        
+
         result = "good" if usable else "bad"
-        row = f"{Path(c).name},{result}"
+        row = [clip, dist, result]
         print(row)
         results.append(row)
-    
-    csv = Path.cwd() / "tmp" / f"{TARGET}.csv"
-    with open(csv, 'w') as fh:
-        fh.write("\n".join(results))
+
+    out_csv = CLOSEST_FARTHEST_DIR / f"{WORD}_{MODE}_50_results.csv"
+    with open(out_csv, "w") as fh:
+        writer = csv.writer(fh)
+        writer.writerows(results)
+    # summary
+    print("\n\n:::::::::: SUMMARY  ")
+    print("num good:", len([g for g in results if g[2] == "good"]))
+    print("num bad:", len([g for g in results if g[2] == "bad"]))
+    print(f"results written to {out_csv}")
 
 
 if __name__ == "__main__":

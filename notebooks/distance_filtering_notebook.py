@@ -49,7 +49,7 @@ clips.sort()
 print(len(clips))
 
 # %%
-results = distance_filtering.cluster_and_sort(clips, em, n_clusters=2)
+results = distance_filtering.cluster_and_sort(clips, em, n_clusters=5)
 print(len(results["sorted_clips"]))  # will be 50 less than above
 
 # %%
@@ -76,37 +76,6 @@ ax[1].set_title("distances histogram")
 fig.set_size_inches(8, 4)
 
 # %%
-ms = input_data.standard_microspeech_model_settings(761)
-a = results["sorted_clips"][9]
-b = results["sorted_clips"][10]
-print(a)
-print(b)
-spec_a = input_data.file2spec(ms, a)
-spec_b = input_data.file2spec(ms, b)
-fig, ax = plt.subplots(ncols=2)
-ax[0].imshow(spec_a)
-ax[1].imshow(spec_a)
-np.allclose(spec_a, spec_b)
-for f in [a, b]:
-    wav = pydub.AudioSegment.from_file(f)
-    wav = pydub.effects.normalize(wav)
-    pydub.playback.play(wav)
-
-# %%
-ms = input_data.standard_microspeech_model_settings(761)
-spec = input_data.file2spec(ms, results["sorted_clips"][9])
-vec = em.predict(spec[np.newaxis])
-
-fig, ax = plt.subplots(dpi=150)
-ax.plot(vec.squeeze())
-ax.plot(results["cluster_centers"][1])
-fig.set_size_inches(10, 10)
-
-l = results["cluster_centers"][1] - vec.squeeze()
-np.linalg.norm(l)
-
-
-# %%
 # "worst" clips
 sorted_clips = results["sorted_clips"]
 for ix, (f, dist) in enumerate(reversed(list(zip(sorted_clips, distances)))):
@@ -126,6 +95,52 @@ for ix, (f, dist) in enumerate(list(zip(sorted_clips, distances))):
     wav = pydub.AudioSegment.from_file(f)
     wav = pydub.effects.normalize(wav)
     pydub.playback.play(wav)
+
+# %%
+ds = sorted(os.listdir(Path.home() / "tinyspeech_harvard/distance_sorting/closest_farthest"), key=lambda x:len(x))
+for d in ds:
+    print(d)
+
+# %%
+dest_dir = Path.home() / "tinyspeech_harvard/distance_sorting/closest_farthest"
+for word in os.listdir(words_dir):
+    print("\n--- ", word)
+    clips = glob.glob(str(words_dir / word / "*.wav"))
+    clips.sort()
+    print(len(clips))
+
+    results = distance_filtering.cluster_and_sort(clips, em, n_clusters=5)
+    sorted_clips = results["sorted_clips"]
+    closest = sorted_clips[:50]
+    farthest = sorted_clips[-50:]
+
+    closest_dir = dest_dir / word / "closest"
+    os.makedirs(closest_dir)
+    for c in closest:
+        shutil.copy2(c, closest_dir)
+    closest_csv = closest_dir / f"{word}_closest_50_input.csv"
+    with open(closest_csv, 'w') as fh:
+        distances = results["distances"][:50]
+        writer = csv.writer(fh)
+        for f,d in zip(closest, distances):
+            writer.writerow([Path(f).name,d])
+
+    farthest_dir = dest_dir / word / "farthest"
+    os.makedirs(farthest_dir)
+    for f in farthest:
+        shutil.copy2(f, farthest_dir)
+
+    farthest_csv = farthest_dir / f"{word}_farthest_50_input.csv"
+    with open(farthest_csv, 'w') as fh:
+        distances = results["distances"][-50:]
+        writer = csv.writer(fh)
+        for f,d in zip(farthest, distances):
+            writer.writerow([Path(f).name,d])
+print("done")
+
+# %%
+results = distance_filtering.cluster_and_sort(clips, em, n_clusters=5)
+print(len(results["sorted_clips"]))  # will be 50 less than above
 
 # %%
 dfdir = Path.home() / "tinyspeech_harvard/distance_sorting"
