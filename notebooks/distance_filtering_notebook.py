@@ -21,6 +21,7 @@ import pydub.playback
 import pydub.effects
 
 import sys
+
 sys.path.insert(0, str(Path.cwd().parents[0]))
 import embedding.input_data as input_data
 import embedding.distance_filtering as distance_filtering
@@ -38,16 +39,18 @@ em = distance_filtering.embedding_model()
 print("loaded model")
 
 # %%
-#words_dir = Path.home() / "tinyspeech_harvard/distance_sorting/cv7_extractions/listening_data"
-words_dir = Path.home() / "tinyspeech_harvard/frequent_words/silence_padded/en/clips"
-word = "left"
+words_dir = (
+    Path.home() / "tinyspeech_harvard/distance_sorting/cv7_extractions/listening_data"
+)
+# words_dir = Path.home() / "tinyspeech_harvard/frequent_words/silence_padded/en/clips"
+word = "soon"
 clips = glob.glob(str(words_dir / word / "*.wav"))
 clips.sort()
 print(len(clips))
 
 # %%
 results = distance_filtering.cluster_and_sort(clips, em, n_clusters=2)
-print(len(results["sorted_clips"])) # will be 50 less than above
+print(len(results["sorted_clips"]))  # will be 50 less than above
 
 # %%
 en_words_dir = Path.home() / "tinyspeech_harvard/frequent_words/silence_padded/en/clips"
@@ -74,13 +77,30 @@ fig.set_size_inches(8, 4)
 
 # %%
 ms = input_data.standard_microspeech_model_settings(761)
-spec = input_data.file2spec(ms, results["sorted_clips"][10])
+a = results["sorted_clips"][9]
+b = results["sorted_clips"][10]
+print(a)
+print(b)
+spec_a = input_data.file2spec(ms, a)
+spec_b = input_data.file2spec(ms, b)
+fig, ax = plt.subplots(ncols=2)
+ax[0].imshow(spec_a)
+ax[1].imshow(spec_a)
+np.allclose(spec_a, spec_b)
+for f in [a, b]:
+    wav = pydub.AudioSegment.from_file(f)
+    wav = pydub.effects.normalize(wav)
+    pydub.playback.play(wav)
+
+# %%
+ms = input_data.standard_microspeech_model_settings(761)
+spec = input_data.file2spec(ms, results["sorted_clips"][9])
 vec = em.predict(spec[np.newaxis])
 
-fig,ax=plt.subplots(dpi=150)
+fig, ax = plt.subplots(dpi=150)
 ax.plot(vec.squeeze())
 ax.plot(results["cluster_centers"][1])
-fig.set_size_inches(10,10)
+fig.set_size_inches(10, 10)
 
 l = results["cluster_centers"][1] - vec.squeeze()
 np.linalg.norm(l)
@@ -89,7 +109,7 @@ np.linalg.norm(l)
 # %%
 # "worst" clips
 sorted_clips = results["sorted_clips"]
-for ix, (f,dist) in enumerate(reversed(list(zip(sorted_clips, distances)))):
+for ix, (f, dist) in enumerate(reversed(list(zip(sorted_clips, distances)))):
     if ix > 10:
         break
     print(Path(f).name, dist)
@@ -99,7 +119,7 @@ for ix, (f,dist) in enumerate(reversed(list(zip(sorted_clips, distances)))):
 
 # %%
 # "best" clips (closest)
-for ix, (f,dist) in enumerate(list(zip(sorted_clips, distances))):
+for ix, (f, dist) in enumerate(list(zip(sorted_clips, distances))):
     if ix > 5:
         break
     print(Path(f).name, dist)
@@ -166,7 +186,7 @@ print(c)
 
 # %%
 scsv = Path.home() / "tinyspeech_harvard/tinyspeech/tmp/story.csv"
-bad_clips= []
+bad_clips = []
 with open(scsv, "r") as fh:
     reader = csv.reader(fh)
     for ix, line in enumerate(reader):
@@ -187,16 +207,18 @@ def play(c):
     wav = pydub.effects.normalize(wav)
     print(c)
     pydub.playback.play(wav)
+
+
 # %%
 play(bad_clips[8])
 
 # %%
 a2 = Path.home() / "tinyspeech_harvard/distance_sorting/aug2_csvs"
-csvs = glob.glob(str(a2/"*.csv"))
+csvs = glob.glob(str(a2 / "*.csv"))
 csvs.sort()
 
 # %%
-_ = [print(ix, c) for ix,c in enumerate(csvs)]
+_ = [print(ix, c) for ix, c in enumerate(csvs)]
 
 # %%
 story_bad_clips = bad_clips
@@ -238,25 +260,27 @@ set(all_clips).intersection(bad_clips)
 set(all_clips_f).intersection(all_clips)
 
 # %%
-all_clips_f= all_clips
+all_clips_f = all_clips
 # %%
 all_clips_f
 # %%
 play(bad_clips[3])
-# all 
+# all
 
 # %%
 def get_bad(fpath):
     bad_clips = []
-    with open(fpath, 'r') as fh:
+    with open(fpath, "r") as fh:
         reader = csv.reader(fh)
-        next(reader) # skip header
-        for ix,line in enumerate(reader):
+        next(reader)  # skip header
+        for ix, line in enumerate(reader):
             if line[-1] == "bad" or line[-1] == "unsure":
-            # if line[-1] == "bad":
+                # if line[-1] == "bad":
                 clip = Path(line[-2]).name
                 bad_clips.append(clip)
     return bad_clips, ix + 1
+
+
 # %%
 rollup = {}
 for fpath in csvs:
@@ -273,7 +297,7 @@ for fpath in csvs:
 
 
 # %%
-del rollup['along']
+del rollup["along"]
 # %%
 pprint.pprint(rollup)
 
@@ -295,7 +319,7 @@ for c in clips:
     counts[c] = len(wavs)
 
 # %%
-counts['film']
+counts["film"]
 
 # %%
 counts

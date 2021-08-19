@@ -52,7 +52,7 @@ def cluster_and_sort(
     train_spectrograms = np.array(
         [input_data.file2spec(model_settings, fp) for fp in train_clips]
     )
-    feature_vectors = embedding_model.predict(train_spectrograms).numpy()
+    feature_vectors = embedding_model.predict(train_spectrograms)
 
     kmeans = sklearn.cluster.KMeans(n_clusters=n_clusters, random_state=seed).fit(
         feature_vectors
@@ -61,7 +61,7 @@ def cluster_and_sort(
     print(f"generating spectrograms for {len(eval_clips)} clips...")
     eval_specs = []
     for ix, filepath in enumerate(eval_clips):
-        if ix % int(len(eval_clips) / 20) == 0:
+        if ix % int(len(eval_clips) / 10) == 0:
             print(f"{ix + 1}/{len(eval_clips)}")
         eval_specs.append(input_data.file2spec(model_settings, filepath))
     eval_specs = tf.convert_to_tensor(eval_specs)
@@ -70,9 +70,7 @@ def cluster_and_sort(
 
     print("evaluating...")
     l2_distances = tf.linalg.norm(
-        tf.convert_to_tensor(kmeans.cluster_centers_)[tf.newaxis]
-        - eval_vectors[:, tf.newaxis],
-        axis=-1,
+        kmeans.cluster_centers_[tf.newaxis] - eval_vectors[:, tf.newaxis], axis=-1,
     )
     l2_from_closest_cluster = tf.reduce_min(l2_distances, axis=1).numpy()
 
