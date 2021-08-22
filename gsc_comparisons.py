@@ -118,6 +118,7 @@ def train(train_files, val_files, model_settings, verbose=0):
 
 # %%
 def cross_compare(
+    keyword,
     train_files,
     val_files,
     test_files,
@@ -129,7 +130,7 @@ def cross_compare(
     model = train(train_files, val_files, model_settings, verbose)
 
     specs = [input_data.file2spec(model_settings, f) for f in test_files]
-    specs = np.expand_dims(specs, -1)
+    specs = tf.expand_dims(specs, -1)
     preds = model.predict(specs)
     amx = np.argmax(preds, axis=1)
     accuracy = amx[amx == 2].shape[0] / preds.shape[0]
@@ -138,7 +139,7 @@ def cross_compare(
     if cross_testset is None:
         return
     specs = [input_data.file2spec(model_settings, f) for f in cross_testset]
-    specs = np.expand_dims(specs, -1)
+    specs = tf.expand_dims(specs, -1)
     preds = model.predict(specs)
     amx = np.argmax(preds, axis=1)
     accuracy = amx[amx == 2].shape[0] / preds.shape[0]
@@ -149,18 +150,36 @@ def cross_compare(
     if unknown_test is None:
         return
     specs = [input_data.file2spec(model_settings, f) for f in unknown_test]
-    specs = np.expand_dims(specs, -1)
+    specs = tf.expand_dims(specs, -1)
     preds = model.predict(specs)
     amx = np.argmax(preds, axis=1)
     accuracy = amx[amx == 1].shape[0] / preds.shape[0]
     print(f"Test accuracy on unknown: {accuracy:0.2f}")
+
+    # testing evaluate mode
+    AUTOTUNE = tf.data.experimental.AUTOTUNE
+    bg_datadir = Path.home() / "tinyspeech_harvard/speech_commands/_background_noise_"
+    audio_dataset = input_data.AudioDataset(
+        model_settings=model_settings,
+        commands=[keyword],
+        background_data_dir=bg_datadir,
+        unknown_files=unknown_test,
+        unknown_percentage=50,
+        spec_aug_params=input_data.SpecAugParams(percentage=80),
+    )
+    test_ds = audio_dataset.eval_with_silence_unknown(
+        AUTOTUNE, test_files, label_from_parent_dir=False
+    ).batch(32)
+    results = model.evaluate(test_ds)
+    print("evaluate results", results)
 
 
 # %%
 # filter CV extractions by embedding distance clusters
 
 embedding = ef.embedding_model()
-cv_sorted, _ = ef.cluster_and_sort(cv_keyword_data, embedding)
+sorting_results = ef.cluster_and_sort(cv_keyword_data, embedding)
+cv_sorted = sorting_results["sorted_clips"]
 
 cv_best = cv_sorted[: int(len(cv_sorted) * 0.5)]
 print("best 90% of evaluated clips", len(cv_best), f"from {len(cv_keyword_data)}")
@@ -194,6 +213,7 @@ print("seed:", seed)
 verbose = 1
 print("___Train on CV, cross-compare on GSC___")
 cross_compare(
+    keyword=keyword,
     train_files=cv_train_files,
     val_files=cv_val_files,
     test_files=cv_test_files,
@@ -205,6 +225,7 @@ cross_compare(
 
 print("___Train on GSC, cross-compare on CV___")
 cross_compare(
+    keyword=keyword,
     train_files=gsc_train_files,
     val_files=gsc_val,
     test_files=gsc_test,
@@ -215,3 +236,4 @@ cross_compare(
 
 
 # %%
+
