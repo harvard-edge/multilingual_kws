@@ -139,6 +139,40 @@ for word in os.listdir(words_dir):
 print("done")
 
 # %%
+# record the training clips and the distances to the evaluation clips for GSC/MSC comparisons
+word2distances = {}
+gsc_msc_dir = Path.home() / "tinyspeech_harvard/distance_sorting/gsc_msc/"
+output_loc = gsc_msc_dir / "distances"
+for word in os.listdir(gsc_msc_dir):
+    if word == "distances":
+        continue
+    wavs = glob.glob(str(gsc_msc_dir / word / "*.wav"))
+    print(word, len(wavs))
+
+    results = distance_filtering.cluster_and_sort(wavs, em, n_clusters=5)
+    sorted_clips = results["sorted_clips"]
+    distances = results["distances"]
+    train_clips = results["train_clips"]
+
+    d_csv = output_loc / f"{word}_distances.csv"
+    t_csv = output_loc / f"{word}_trainset.csv"
+    with open(d_csv, 'w') as fh:
+        writer = csv.writer(fh)
+        for c,d in zip(sorted_clips, distances):
+            writer.writerow([Path(c).name, d])
+    with open(t_csv, 'w') as fh:
+        writer = csv.writer(fh)
+        for t in train_clips:
+            writer.writerow([Path(t).name])
+    word2distances[word] = distances
+print('done')
+
+
+# %%
+plt.hist(word2distances["yes"])
+
+
+# %%
 results = distance_filtering.cluster_and_sort(clips, em, n_clusters=5)
 print(len(results["sorted_clips"]))  # will be 50 less than above
 
