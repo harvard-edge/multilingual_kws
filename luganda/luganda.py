@@ -3,6 +3,7 @@ from dataclasses import asdict
 import os
 import glob
 import shutil
+import json
 import subprocess
 import time
 from collections import Counter
@@ -17,19 +18,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sox
 import pydub
-from pydub.playback import play
+import pydub.playback
 import textgrid
-
-from embedding import word_extraction, transfer_learning
-from embedding import batch_streaming_analysis as sa
-import input_data
-from luganda_info import WavTranscript
-
 import seaborn as sns
 
 sns.set()
 sns.set_style("darkgrid")
 sns.set_palette("bright")
+
+# %%
+
+import sys
+
+sys.path.insert(0, str(Path.cwd().parents[0]))
+from embedding import word_extraction, transfer_learning
+from embedding import batch_streaming_analysis as sa
+import input_data
+from luganda_info import WavTranscript
+
 
 # %%
 # Luganda
@@ -87,7 +93,7 @@ print(len(wav_transcript))
 ix = np.random.randint(len(wav_transcript))
 w = l_data / "clips" / wav_transcript[ix][0]
 print(ix, w, wav_transcript[ix][1])
-play(pydub.AudioSegment.from_file(w))
+pydub.playback.play(pydub.AudioSegment.from_file(w))
 
 # %%
 workdir = Path("/home/mark/tinyspeech_harvard/luganda")
@@ -517,7 +523,7 @@ non_targets = []
 keywords_to_exclude = set(
     # TODO(mmaz): find a better method to exclude variants in spelling/plurals/etc
     [keyword, "mask", "masiki", "masks"]
-    #[keyword, "corona", "korona", "kolona", "coronavirus"]
+    # [keyword, "corona", "korona", "kolona", "coronavirus"]
 )
 with open(l_csv, "r") as fh:
     reader = csv.reader(fh)
@@ -564,7 +570,11 @@ for a in os.listdir(l_alignments):
 
     keyword_wav_transcripts.append(
         WavTranscript(
-            wav=wav, transcript=transcript, keyword=keyword, occurences_s=occurences_s
+            wav=wav,
+            transcript=transcript,
+            keyword=keyword,
+            occurences_s=occurences_s,
+            tgfile=tgfile,
         )
     )
 
@@ -588,21 +598,27 @@ print(" ".join(decorated))
 start_s = w.occurences_s[0][0]
 end_s = w.occurences_s[0][1]
 audio = pydub.AudioSegment.from_file(w.wav)
-play(audio[start_s * 1000 - 500 : end_s * 1000 + 500])
+pydub.playback.play(audio[start_s * 1000 - 500 : end_s * 1000 + 500])
 
 # %%
 # generate stream and groundtruth data
 NUM_TARGETS = 80
 
-workdir = Path("/home/mark/tinyspeech_harvard/luganda")
-os.makedirs(workdir / "cs288_eval" / keyword, exist_ok=True)
-dest_wavfile = str(workdir / "cs288_eval" / keyword / f"{keyword}_stream.wav")
-groundtruth_data = workdir / "cs288_eval" / keyword / f"{keyword}_groundtruth.pkl"
+workdir = Path("/home/mark/tinyspeech_harvard/luganda/demo_eval") / keyword
+os.makedirs(workdir, exist_ok=True)
+dest_wavfile = str(workdir / f"{keyword}_stream.wav")
+dest_mp3 = str(workdir / f"{keyword}_stream.mp3")
+groundtruth_data = workdir / f"{keyword}_groundtruth.pkl"
+full_transcript_file = workdir / f"{keyword}_full_transcript.json"
+groundtruth_txt = workdir / f"{keyword}_groundtruth_labels.txt"
 # os.makedirs(workdir / "cs288_test" / keyword, exist_ok=True)
 # dest_wavfile = str(workdir / "cs288_test" / keyword / f"{keyword}_stream.wav")
 # groundtruth_data = workdir / "cs288_test" / keyword / f"{keyword}_groundtruth.pkl"
 assert not os.path.isfile(dest_wavfile), "already exists"
+assert not os.path.isfile(dest_mp3), "already exists"
 assert not os.path.isfile(groundtruth_data), "already exists"
+assert not os.path.isfile(full_transcript_file), "already exists"
+assert not os.path.isfile(groundtruth_txt), "already exists"
 
 ntlog = set()
 ixs = np.random.choice(range(len(keyword_wav_transcripts)), NUM_TARGETS, replace=False)
@@ -612,6 +628,7 @@ to_combine = []
 groundtruth_target_times_ms = []
 
 stream_data = []
+transcript = []  # TODO(mmaz): need TGFiles for non-targets also
 
 for ix in ixs:
     target = keyword_wav_transcripts[ix]
@@ -625,6 +642,30 @@ for ix in ixs:
     for start_s, _ in target.occurences_s:
         t_ms = (total_wav_duration_s + start_s) * 1000
         groundtruth_target_times_ms.append(t_ms)
+
+    ## full transcript
+    target_transcription = word_extraction.full_transcription_timings(target.tgfile)
+    target_transcription = [
+        dict(word=w, start=start + total_wav_duration_s, end=end + total_wav_duration_s)
+        for (w, start, end) in target_transcription
+    ]
+    transcript.append(
+        dict(
+            transcript_type="target",
+            transcript=target.transcript,
+            start=total_wav_duration_s,
+            end=total_wav_duration_s + target_duration_s,
+            transcript_perword=target_transcription,
+        )
+    )
+    transcript.append(
+        dict(
+            trancript_type="nontarget",
+            transcript=non_target.transcript,
+            start=(total_wav_duration_s + target_duration_s),
+            end=(total_wav_duration_s + target_duration_s + nontarget_duration_s),
+        )
+    )
 
     total_wav_duration_s += target_duration_s + nontarget_duration_s
 
@@ -653,13 +694,23 @@ combiner = sox.Combiner()
 combiner.convert(samplerate=16000, n_channels=1)
 combiner.build(to_combine, dest_wavfile, "concatenate")
 
+combiner = sox.Combiner()
+combiner.convert(samplerate=16000, n_channels=1)
+combiner.build(to_combine, dest_mp3, "concatenate")
+
 with open(groundtruth_data, "wb") as fh:
     pickle.dump(groundtruth, fh)
+with open(full_transcript_file, "w") as fh:
+    json.dump(transcript, fh)
+with open(groundtruth_txt, "w") as fh:
+    for t in groundtruth_target_times_ms:
+        fh.write(f"{keyword},{t}\n")
+
 
 # %% validate data
 t_ms = np.random.choice(groundtruth_target_times_ms)
 audio = pydub.AudioSegment.from_file(dest_wavfile)
-play(audio[t_ms : t_ms + 1000])
+pydub.playback.play(audio[t_ms : t_ms + 1000])
 
 # %%
 # listen to detections

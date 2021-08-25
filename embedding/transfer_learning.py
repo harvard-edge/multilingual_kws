@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import glob
 import numpy as np
@@ -8,8 +8,7 @@ import tensorflow as tf
 
 import sys
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
-import input_data
+import embedding.input_data as input_data
 
 
 def transfer_learn(
@@ -23,12 +22,13 @@ def transfer_learn(
     primary_lr,
     backprop_into_embedding,
     embedding_lr,
-    model_settings,
-    csvlog_dest: os.PathLike,
+    model_settings: Dict,
     base_model_path: os.PathLike,
     base_model_output: str,
-    UNKNOWN_PERCENTAGE=50.0,
-    bg_datadir="/home/mark/tinyspeech_harvard/speech_commands/_background_noise_/",
+    UNKNOWN_PERCENTAGE: float = 50.0,
+    bg_datadir: os.PathLike = "/home/mark/tinyspeech_harvard/speech_commands/_background_noise_/",
+    csvlog_dest: Optional[os.PathLike] = None,
+    verbose=1,
 ):
     """this only words for single-target models: see audio_dataset and CATEGORIES"""
 
@@ -69,20 +69,27 @@ def transfer_learn(
     )
 
     AUTOTUNE = tf.data.experimental.AUTOTUNE
-    train_ds = audio_dataset.init_single_target(AUTOTUNE, train_files, is_training=True)
-    val_ds = audio_dataset.init_single_target(AUTOTUNE, val_files, is_training=False)
-    # test_ds = a.init(AUTOTUNE, test_files, is_training=False)
-    train_ds = train_ds.shuffle(buffer_size=1000).repeat().batch(batch_size)
-    val_ds = val_ds.batch(batch_size)
+    init_train_ds = audio_dataset.init_single_target(
+        AUTOTUNE, train_files, is_training=True
+    )
+    init_val_ds = audio_dataset.init_single_target(
+        AUTOTUNE, val_files, is_training=False
+    )
+    train_ds = init_train_ds.shuffle(buffer_size=1000).repeat().batch(batch_size)
+    val_ds = init_val_ds.batch(batch_size)
 
-    csvlogger = tf.keras.callbacks.CSVLogger(csvlog_dest, append=False)
+    if csvlog_dest is not None:
+        callbacks = [tf.keras.callbacks.CSVLogger(csvlog_dest, append=False)]
+    else:
+        callbacks = []
 
     history = xfer.fit(
         train_ds,
         validation_data=val_ds,
         steps_per_epoch=batch_size * num_batches,
         epochs=num_epochs,
-        callbacks=[csvlogger],
+        callbacks=callbacks,
+        verbose=verbose,
     )
     if backprop_into_embedding:
         # https://keras.io/examples/vision/image_classification_efficientnet_fine_tuning/#transfer-learning-from-pretrained-weights
@@ -101,7 +108,7 @@ def transfer_learn(
             validation_data=val_ds,
             steps_per_epoch=batch_size * num_batches,
             epochs=num_epochs,
-            callbacks=[csvlogger],
+            callbacks=callbacks,
         )
 
     va = history.history["val_accuracy"][-1]

@@ -22,15 +22,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 import seaborn as sns
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
-# import input_data
 from accuracy_utils import StreamingAccuracyStats
 from single_target_recognize_commands import (
     SingleTargetRecognizeCommands,
     RecognizeResult,
 )
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/embedding/")
 import batch_streaming_analysis as sa
 from batch_streaming_analysis import StreamTarget
 from batch_transfer_learn_streaming import TLData

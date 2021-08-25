@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow_io as tfio
 from tensorflow.lite.experimental.microfrontend.python.ops import (
     audio_microfrontend_op as frontend_op,
 )
@@ -8,6 +9,7 @@ import numpy as np  # TODO(mmaz) tf2.4 np from tf.experimental
 import os
 import glob
 import math
+from pathlib import Path
 from dataclasses import dataclass
 
 SILENCE_LABEL = "_silence_"
@@ -38,11 +40,17 @@ def to_micro_spectrogram(model_settings, audio):
 def file2spec(model_settings, filepath):
     """there's a version of this that adds bg noise in AudioDataset"""
     audio_binary = tf.io.read_file(filepath)
-    audio, _ = tf.audio.decode_wav(
-        audio_binary,
-        desired_channels=1,
-        desired_samples=model_settings["desired_samples"],
-    )
+    extension = Path(filepath).suffix
+    if extension == ".wav":
+        audio, _ = tf.audio.decode_wav(
+            audio_binary,
+            desired_channels=1,
+            desired_samples=model_settings["desired_samples"],
+        )
+    elif extension == ".mp3":
+        audio, _ = tfio.audio.decode_mp3(audio_binary)
+    else:
+        raise ValueError(f"extension {extension} not supported")
     audio = tf.squeeze(audio, axis=-1)
     return to_micro_spectrogram(model_settings, audio)
 
@@ -458,6 +466,7 @@ class AudioDataset:
             if is_training
             else waveform_ds
         )
+
         spectrogram_ds = waveform_ds.map(
             self.get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE
         )
@@ -506,6 +515,54 @@ class AudioDataset:
 
         return spectrogram_ds.map(self.add_channel, num_parallel_calls=AUTOTUNE)
 
+    def _random_silence(self):
+        background_volume = self.gen.uniform([], 0, 1)
+        label = SILENCE_LABEL
+        audio = self.random_background_sample(background_volume)
+        return audio, label
+
+    def _random_unknown(self):
+        audio = self.get_unknown()
+        label = UNKNOWN_WORD_LABEL
+        return audio, label
+
+    def _random_silence_unknown(self, n_files):
+        n_silent = int(n_files * self.silence_percentage / 100)
+        n_unknown = int(n_files * self.unknown_percentage / 100)
+        silence_samples = tf.data.Dataset.range(n_silent).map(
+            lambda _: self._random_silence()
+        )
+        unknown_samples = tf.data.Dataset.range(n_unknown).map(
+            lambda _: self._random_unknown()
+        )
+        return silence_samples.concatenate(unknown_samples)
+
+    def eval_with_silence_unknown(self, AUTOTUNE, files, label_from_parent_dir: bool):
+        """includes silence + unknown
+        Args:
+          label_from_parent_dir: bool
+            if True, uses the parent directory as the label name
+            if False, assumes a single-target model and reads label from self.commands
+        """
+        files_ds = tf.data.Dataset.from_tensor_slices(files)
+        if label_from_parent_dir:
+            waveform_ds = files_ds.map(
+                self.get_waveform_and_label, num_parallel_calls=AUTOTUNE
+            )
+        else:
+            assert (
+                self.commands.shape[0] == 3
+            ), "model does not support both silence and unknown"
+            waveform_ds = files_ds.map(
+                self.get_single_target_waveforms, num_parallel_calls=AUTOTUNE
+            )
+
+        waveform_ds = waveform_ds.concatenate(self._random_silence_unknown(len(files)))
+        spectrogram_ds = waveform_ds.map(
+            self.get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE
+        )
+        return spectrogram_ds.map(self.add_channel, num_parallel_calls=AUTOTUNE)
+
 
 def test_timeshift():
     length = 20
@@ -552,7 +609,7 @@ def test():
 
     # x = a.random_timeshift(x)
 
-    #from scipy.io.wavfile import write
+    # from scipy.io.wavfile import write
     # write(f"tmp/bg.wav", model_settings["sample_rate"], x.numpy())
 
     # AUTOTUNE = tf.data.experimental.AUTOTUNE

@@ -1,18 +1,20 @@
 import glob
-import pydub
-from pydub.playback import play
-import pandas as pd
 import sys
 import tty
 import termios
+from pathlib import Path
+import csv
+import os
 
-WAVS = "./micro_dataset/extractions_deepspeech/down/*.wav"
-CSVS = "./counts/*.csv"
+import pydub
+import pydub.playback
+import pydub.effects
 
-# https://stackoverflow.com/a/510364
+
 class _GetchUnix:
+    """https://stackoverflow.com/a/510364"""
+
     def __call__(self):
-        import sys, tty, termios
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
@@ -22,48 +24,69 @@ class _GetchUnix:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
 
-def label():
-    outfile_name = "_".join(WAVS.split('/')[-3:-1])
-    wavs = pd.Series(glob.glob(WAVS))
 
-    df = pd.DataFrame(wavs, columns=["clips"])
-    df["usable"] = False
+class Modes:
+    CLOSEST = "closest"
+    FARTHEST = "farthest"
+
+
+######## change these:
+CLOSEST_FARTHEST_DIR = (
+    Path.home() / "tinyspeech_harvard/distance_sorting/closest_farthest/"
+)
+WORD = "reading"
+MODE = Modes.FARTHEST
+###### //////////////
+
+
+def label():
+
+    in_csv = CLOSEST_FARTHEST_DIR / WORD / MODE / f"{WORD}_{MODE}_50_input.csv"
+    assert os.path.isfile(in_csv), f"{in_csv} not found"
+    clips = []
+    with open(in_csv, "r") as fh:
+        reader = csv.reader(fh)
+        for r in reader:
+            clips.append([r[0], float(r[1])])
+
     getch = _GetchUnix()
 
-    usage = "good: g, bad: b, play again: a"
+    results = []
 
-    for ix, r in df.iterrows():
-        path = r.clips
-        clip = pydub.AudioSegment.from_wav(path)
+    for ix,(clip, dist) in enumerate(clips):
+        print(f"\n:::::: CLIP # {ix} :::", clip)
+        fpath = str(CLOSEST_FARTHEST_DIR / WORD / MODE / clip)
         while True:
-            print()
-            print(ix, path)
-            play(clip)
-            print(usage)
-            #choice = sys.stdin.read(1)
+            print("-")
+            wav = pydub.AudioSegment.from_file(fpath)
+            wav = pydub.effects.normalize(wav)
+            pydub.playback.play(wav)
+
             choice = getch()
-            if choice == 'g':
+            if choice == "g":
                 usable = True
                 break
-            elif choice == 'b':
+            elif choice == "b":
                 usable = False
                 break
-            elif choice == 'q':
+            elif choice == "q":
                 sys.exit()
-        df.at[ix, "usable"] = usable
-        print(usable)
 
-    df.to_csv("counts/" + outfile_name + ".csv", index=False)
+        result = "good" if usable else "bad"
+        row = [clip, dist, result]
+        print(row)
+        results.append(row)
 
-def count():
-    csvs = glob.glob(CSVS)
-    for c in csvs:
-        print(c)
-        df = pd.read_csv(c)
-        good = df.usable.value_counts().loc[True]
-        bad = df.usable.value_counts().loc[False]
-        print("Good:", good, "Bad:", bad)
+    out_csv = CLOSEST_FARTHEST_DIR / f"{WORD}_{MODE}_50_results.csv"
+    with open(out_csv, "w") as fh:
+        writer = csv.writer(fh)
+        writer.writerows(results)
+    # summary
+    print("\n\n:::::::::: SUMMARY  ")
+    print("num good:", len([g for g in results if g[2] == "good"]))
+    print("num bad:", len([g for g in results if g[2] == "bad"]))
+    print(f"results written to {out_csv}")
 
 
 if __name__ == "__main__":
-    count()
+    label()

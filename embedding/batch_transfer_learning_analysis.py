@@ -14,11 +14,9 @@ import multiprocessing
 
 import sys
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
-import input_data
+import embedding.input_data as input_data
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/embedding/")
-import transfer_learning
+import embedding.transfer_learning as transfer_learning
 
 
 #%%

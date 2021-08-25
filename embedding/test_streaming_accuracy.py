@@ -27,7 +27,6 @@ import seaborn as sns
 sns.set()
 sns.set_palette("bright")
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
 import input_data
 from accuracy_utils import StreamingAccuracyStats
 from single_target_recognize_commands import SingleTargetRecognizeCommands, RecognizeResult

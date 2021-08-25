@@ -13,7 +13,6 @@ import pickle
 
 import sys
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
 import input_data
 
 import matplotlib.pyplot as plt

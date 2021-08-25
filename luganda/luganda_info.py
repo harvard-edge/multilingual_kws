@@ -9,3 +9,4 @@ class WavTranscript:
     transcript: str
     keyword: Optional[str] = None
     occurences_s: List[Tuple[float, float]] = field(default_factory=list)
+    tgfile: Optional[os.PathLike] = None

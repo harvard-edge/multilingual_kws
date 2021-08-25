@@ -12,10 +12,8 @@ import pickle
 
 import sys
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/")
 import input_data
 
-sys.path.insert(0, "/home/mark/tinyspeech_harvard/tinyspeech/embedding")
 import transfer_learning
 
 import matplotlib.pyplot as plt
