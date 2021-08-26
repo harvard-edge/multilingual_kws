@@ -54,7 +54,7 @@ def label():
     results = []
 
     for ix,(clip, dist) in enumerate(clips):
-        print(f":::::: CLIP # {ix} :::", clip)
+        print(f"\n:::::: CLIP # {ix} :::", clip)
         fpath = str(CLOSEST_FARTHEST_DIR / WORD / MODE / clip)
         while True:
             print("-")

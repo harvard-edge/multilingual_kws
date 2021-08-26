@@ -10,15 +10,15 @@ import pickle
 import glob
 import subprocess
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import tensorflow as tf
 
 
-import input_data
-from accuracy_utils import StreamingAccuracyStats
-from single_target_recognize_commands import (
+import embedding.input_data as input_data
+from embedding.accuracy_utils import StreamingAccuracyStats
+from embedding.single_target_recognize_commands import (
     SingleTargetRecognizeCommands,
     RecognizeResult,
 )
@@ -37,8 +37,7 @@ class StreamFlags:
     suppression_ms: int = 500
     time_tolerance_ms: int = 750
     minimum_count: int = 4
-
-    max_chunk_length: int = 1200 #max chunk length is 1200 seconds (20 minutes) by default
+    max_chunk_length_sec: int = 1200  # max chunk length is 1200 seconds (20 minutes) by default
 
     def labels(self) -> List[str]:
         return [
@@ -71,14 +70,18 @@ def calculate_streaming_accuracy(
     audio_data_end = data_samples - clip_duration_samples
 
     chunks = []
-    max_chunk_len_samples = flag_list[0].max_chunk_length * sample_rate #max chunk length in samples
+    max_chunk_len_samples = (
+        flag_list[0].max_chunk_length_sec * sample_rate
+    )  # max chunk length in samples
 
-    if data_samples < max_chunk_len_samples: #this check might be unnecessary
+    if data_samples < max_chunk_len_samples:  # this check might be unnecessary
         chunks.append(audio)
     else:
         for ind, offset in enumerate(range(0, data_samples, max_chunk_len_samples)):
-            if (offset+max_chunk_len_samples > data_samples): #add extra check to make sure last chunk isn't too short?
-                chunks.append(audio[offset:offset+max_chunk_len_samples])
+            if (
+                offset + max_chunk_len_samples > data_samples
+            ):  # add extra check to make sure last chunk isn't too short?
+                chunks.append(audio[offset : offset + max_chunk_len_samples])
             else:
                 chunks.append(audio[offset:])
 
@@ -117,7 +120,7 @@ def calculate_streaming_accuracy(
                 inferences = inferences_
                 start = False
             else:
-                inferences = np.concatenate((inferences,inferences_))
+                inferences = np.concatenate((inferences, inferences_))
 
     results = []
     for FLAGS in flag_list:
@@ -186,9 +189,9 @@ class StreamTarget:
     target_lang: str
     target_word: str
     model_path: os.PathLike
-    destination_result_pkl: os.PathLike
-    destination_result_inferences: os.PathLike
     stream_flags: StreamFlags
+    destination_result_pkl: Optional[os.PathLike] = None
+    destination_result_inferences: Optional[os.PathLike] = None
 
 
 def eval_stream_test(st: StreamTarget, live_model=None):
@@ -201,17 +204,17 @@ def eval_stream_test(st: StreamTarget, live_model=None):
 
     model_settings = input_data.standard_microspeech_model_settings(label_count=3)
 
-    if os.path.isfile(st.destination_result_pkl):
+    if st.destination_result_pkl is not None and os.path.isfile(
+        st.destination_result_pkl
+    ):
         print("results already present", st.destination_result_pkl, flush=True)
         return
-    print("SAVING results TO\n", st.destination_result_pkl)
     inferences_exist = False
-    if os.path.isfile(st.destination_result_inferences):
-        print("inferences already present", flush=True)
-        loaded_inferences = np.load(st.destination_result_pkl)
-        inferences_exist = True
-    else:
-        print("SAVING inferences TO\n", st.destination_result_inferences, flush=True)
+    if st.destination_result_inferences is not None:
+        if os.path.isfile(st.destination_result_inferences):
+            print("inferences already present", flush=True)
+            loaded_inferences = np.load(st.destination_result_pkl)
+            inferences_exist = True
 
     results = {}
     if inferences_exist:
@@ -223,35 +226,41 @@ def eval_stream_test(st: StreamTarget, live_model=None):
             model, model_settings, st.stream_flags
         )
 
-    with open(st.destination_result_pkl, "wb") as fh:
-        pickle.dump(results, fh)
-    if not inferences_exist:
+    if st.destination_result_pkl is not None:
+        print("SAVING results TO\n", st.destination_result_pkl)
+        with open(st.destination_result_pkl, "wb") as fh:
+            pickle.dump(results, fh)
+    if not inferences_exist and st.destination_result_inferences is not None:
+        print(
+            "SAVING inferences TO\n", st.destination_result_inferences, flush=True
+        )
         np.save(st.destination_result_inferences, inferences)
 
     # https://keras.io/api/utils/backend_utils/
     tf.keras.backend.clear_session()
+    return results
 
 
 def batch_streaming_analysis():
     batch_data_to_process = []
 
     # fmt: off
-    #sse = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences/")
-    #sse = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences/")
-    #sse = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_perword/")
-    #sse = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_perword/")
+    # sse = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_sentences/")
+    # sse = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_sentences/")
+    # sse = Path("/home/mark/tinyspeech_harvard/paper_data/streaming_batch_perword/")
+    # sse = Path("/home/mark/tinyspeech_harvard/paper_data/ooe_streaming_batch_perword/")
 
     # for silence-padded data:
-    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_streaming_batch_sentences/")
-    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_ooe_streaming_batch_sentences/")
-    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_streaming_batch_perword/")
-    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_ooe_streaming_batch_perword/")
+    # dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_streaming_batch_sentences/")
+    # dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_ooe_streaming_batch_sentences/")
+    # dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_streaming_batch_perword/")
+    # dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/results_ooe_streaming_batch_perword/")
 
     # for context-padded data:
-    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_streaming_batch_sentences/")
-    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_ooe_streaming_batch_sentences/")
-    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_streaming_batch_perword/")
-    #dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_ooe_streaming_batch_perword/")
+    # dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_streaming_batch_sentences/")
+    # dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_ooe_streaming_batch_sentences/")
+    # dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_streaming_batch_perword/")
+    # dest_dir = Path("/home/mark/tinyspeech_harvard/paper_data/context_results_ooe_streaming_batch_perword/")
     # fmt: on
 
     for ix, lang_dir in enumerate(os.listdir(sse)):
