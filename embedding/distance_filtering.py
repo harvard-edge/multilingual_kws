@@ -79,5 +79,6 @@ def cluster_and_sort(
         sorted_clips=eval_clips[sorting],
         cluster_centers=kmeans.cluster_centers_,
         distances=l2_from_closest_cluster[sorting],
+        train_clips=train_clips,
     )
 
