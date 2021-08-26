@@ -102,6 +102,8 @@ for d in ds:
     print(d)
 
 # %%
+N_CLUSTERS=5
+print("# CLUSTERS ", N_CLUSTERS)
 dest_dir = Path.home() / "tinyspeech_harvard/distance_sorting/closest_farthest"
 for word in os.listdir(words_dir):
     print("\n--- ", word)
@@ -109,7 +111,7 @@ for word in os.listdir(words_dir):
     clips.sort()
     print(len(clips))
 
-    results = distance_filtering.cluster_and_sort(clips, em, n_clusters=5)
+    results = distance_filtering.cluster_and_sort(clips, em, n_clusters=N_CLUSTERS)
     sorted_clips = results["sorted_clips"]
     closest = sorted_clips[:50]
     farthest = sorted_clips[-50:]
@@ -140,16 +142,20 @@ print("done")
 
 # %%
 # record the training clips and the distances to the evaluation clips for GSC/MSC comparisons
+N_CLUSTERS=3
+N_TRAIN=100
+print("# CLUSTERS ", N_CLUSTERS, "# TRAIN", N_TRAIN)
 word2distances = {}
 gsc_msc_dir = Path.home() / "tinyspeech_harvard/distance_sorting/gsc_msc/"
-output_loc = gsc_msc_dir / "distances"
-for word in os.listdir(gsc_msc_dir):
+output_loc = gsc_msc_dir / "distances_k_3"
+assert os.listdir(output_loc) == []
+for word in ["left", "right", "down", "off", "yes"]:
     if word == "distances":
         continue
     wavs = glob.glob(str(gsc_msc_dir / word / "*.wav"))
     print(word, len(wavs))
 
-    results = distance_filtering.cluster_and_sort(wavs, em, n_clusters=5)
+    results = distance_filtering.cluster_and_sort(wavs, em, n_train=N_TRAIN, n_clusters=N_CLUSTERS)
     sorted_clips = results["sorted_clips"]
     distances = results["distances"]
     train_clips = results["train_clips"]
@@ -167,7 +173,25 @@ for word in os.listdir(gsc_msc_dir):
     word2distances[word] = distances
 print('done')
 
-
+# %%
+word = "right"
+sorted_clips=[]
+with open(output_loc / f"{word}_distances.csv", 'r') as fh:
+    reader = csv.reader(fh)
+    for row in reader:
+        p = gsc_msc_dir / word / row[0]
+        sorted_clips.append((p, float(row[1])))
+good_clips=enumerate(sorted_clips)
+bad_clips=enumerate(reversed(sorted_clips))
+for ix, (f, dist) in bad_clips:
+    # if ix < 4000 :
+    #     continue
+    if ix > 10:
+        break
+    print(Path(f).name, dist)
+    wav = pydub.AudioSegment.from_file(f)
+    wav = pydub.effects.normalize(wav)
+    pydub.playback.play(wav)
 # %%
 plt.hist(word2distances["yes"])
 
