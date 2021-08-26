@@ -1,4 +1,7 @@
 #%%
+from dataclasses import dataclass
+from typing import List
+import multiprocessing
 import os
 import json
 from pathlib import Path
@@ -148,18 +151,21 @@ def cross_compare_piecewise(
     print("evaluate results", results)
 
 
-def cross_compare(
-    keyword,
-    train_files,
-    val_files,
-    test_files,
-    cross_testset,
-    unknown_test,
-    unknown_cross,
-    verbose=0,
-):
+@dataclass(frozen=True)
+class CrossCompare:
+    keyword: str
+    train_files: List[str]
+    val_files: List[str]
+    test_files: List[str]
+    cross_testset: List[str]
+    unknown_test: List[str]
+    unknown_cross: List[str]
+    verbose: int = 0
+
+
+def cross_compare(c: CrossCompare, q):
     model_settings = input_data.standard_microspeech_model_settings(3)
-    model = train(train_files, val_files, model_settings, verbose)
+    model = train(c.train_files, c.val_files, model_settings, c.verbose)
 
     AUTOTUNE = tf.data.experimental.AUTOTUNE
     bg_datadir = Path.home() / "tinyspeech_harvard/speech_commands/_background_noise_"
@@ -167,13 +173,13 @@ def cross_compare(
         model_settings=model_settings,
         commands=[keyword],
         background_data_dir=bg_datadir,
-        unknown_files=unknown_test,
+        unknown_files=c.unknown_test,
         unknown_percentage=50,
         spec_aug_params=input_data.SpecAugParams(percentage=80),
         seed=0,
     )
     test_ds = audio_dataset_test.eval_with_silence_unknown(
-        AUTOTUNE, test_files, label_from_parent_dir=False
+        AUTOTUNE, c.test_files, label_from_parent_dir=False
     ).batch(32)
     test_results = model.evaluate(test_ds)
     print(test_results)
@@ -182,19 +188,19 @@ def cross_compare(
         model_settings=model_settings,
         commands=[keyword],
         background_data_dir=bg_datadir,
-        unknown_files=unknown_cross,
+        unknown_files=c.unknown_cross,
         unknown_percentage=50,
         spec_aug_params=input_data.SpecAugParams(percentage=80),
         seed=0,
     )
     cross_ds = audio_dataset_cross.eval_with_silence_unknown(
-        AUTOTUNE, cross_testset, label_from_parent_dir=False
+        AUTOTUNE, c.cross_testset, label_from_parent_dir=False
     ).batch(32)
     cross_results = model.evaluate(cross_ds)
     print(cross_results)
 
-    # test acc, cross acc
-    return test_results[1], cross_results[1]
+    testacc_crossacc = (test_results[1], cross_results[1])
+    q.put(testacc_crossacc)
 
 
 # %%
@@ -236,6 +242,12 @@ def load_gsc_data(keyword, VAL_PCT=10, TEST_PCT=10):
 
 # %%
 paper_data = {}
+embedding_results = (
+    Path.home() / "tinyspeech_harvard/distance_sorting/embedding_results.json"
+)
+assert not os.path.exists(embedding_results)
+q = multiprocessing.Queue()
+
 for keyword in ["left", "right", "off", "down", "yes"]:
     print("::::::::::::::::::", keyword, "::::::::::::::::")
     # load sorted distances for MSWC target keywords
@@ -257,7 +269,7 @@ for keyword in ["left", "right", "off", "down", "yes"]:
     )
     cv_other = sorted(list(cv_other_dir.rglob("*.wav")))
     cv_other = [str(p) for p in cv_other]  # TF wants strings not posixpaths
-    #print(len(cv_other))
+    # print(len(cv_other))
 
     N_TRAIN = 5
     N_VAL = 20
@@ -282,7 +294,7 @@ for keyword in ["left", "right", "off", "down", "yes"]:
         print("seed:", seed)
         verbose = 0
         print("___Train on CV, cross-compare on GSC___")
-        cv2cv_test_acc, cv2gsc_cross_acc = cross_compare(
+        cc_cv2gsc = CrossCompare(
             keyword=keyword,
             train_files=cv_train_files,
             val_files=cv_val_files,
@@ -292,9 +304,13 @@ for keyword in ["left", "right", "off", "down", "yes"]:
             unknown_cross=gsc_unknown,
             verbose=verbose,
         )
+        p = multiprocessing.Process(target=cross_compare, args=(cc_cv2gsc, q,))
+        p.start()
+        p.join()
+        cv2cv_test_acc, cv2gsc_cross_acc = q.get()
 
         print("___Train on GSC, cross-compare on CV___")
-        gsc2gsc_test_acc, gsc2cv_cross_acc = cross_compare(
+        cc_gsc2cv = CrossCompare(
             keyword=keyword,
             train_files=gsc_train_files,
             val_files=gsc_val,
@@ -304,6 +320,10 @@ for keyword in ["left", "right", "off", "down", "yes"]:
             unknown_cross=cv_other,
             verbose=verbose,
         )
+        p = multiprocessing.Process(target=cross_compare, args=(cc_gsc2cv, q,))
+        p.start()
+        p.join()
+        gsc2gsc_test_acc, gsc2cv_cross_acc = q.get()
         print(f"keyword {keyword}")
         print(
             f"{keyword} / MSWC->MSWC {cv2cv_test_acc:0.2f} GSC->MSWC {gsc2cv_cross_acc:0.2f}"
@@ -318,13 +338,33 @@ for keyword in ["left", "right", "off", "down", "yes"]:
             gsc2gsc=gsc2gsc_test_acc,
         )
 print("done")
-embedding_results = (
-    Path.home() / "tinyspeech_harvard/distance_sorting/embedding_results.json"
-)
-assert not os.path.exists(embedding_results)
 with open(embedding_results, "w") as fh:
     json.dump(paper_data, fh)
 
+
+# %%
+embedding_results = (
+    Path.home() / "tinyspeech_harvard/distance_sorting/embedding_results.json"
+)
+with open(embedding_results) as fh:
+    results = json.load(fh)
+
+tests = []
+for kw, seeds in results.items():
+    print(kw)
+    for seed, data in seeds.items():
+        print(seed)
+        cv2cv = data["cv2cv"]
+        gsc2cv = data["gsc2cv"]
+        cv2gsc = data["cv2gsc"]
+        gsc2gsc = data["gsc2gsc"]
+        test = np.array([[cv2cv, gsc2cv], [cv2gsc, gsc2gsc]])
+        tests.append(test)
+tests = np.stack(tests)
+print(np.mean(tests, axis=0))
+
+# [[0.94753037 0.87601529]
+#  [0.85248329 0.89008864]]
 
 # %%
 # filter CV extractions by embedding distance clusters
