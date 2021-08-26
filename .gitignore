@@ -26,6 +26,13 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.out
+*.png
+*.pdf
+*stats*.p
+*.zip
+
+
 MANIFEST
 
 # PyInstaller
@@ -128,3 +135,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+eda/csv_explorer.ipynb
+*.html
+*.txt
+*.mp3
+*.p

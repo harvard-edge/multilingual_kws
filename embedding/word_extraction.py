@@ -18,6 +18,7 @@ from scipy.io import wavfile
 import multiprocessing
 import functools
 
+from tqdm import tqdm
 
 def wordcounts(csvpath, skip_header=True, transcript_column=2):
     """count the frequencies of all words in a csv produced by
@@ -43,6 +44,24 @@ def generate_filemap(
     filemap = {}
     for root, dirs, files in os.walk(
         pathlib.Path(alignment_basedir) / lang_isocode / "alignments"
+    ):
+        if not files:
+            continue  # this is the top level dir
+        for textgrid in files:
+            mp3name = os.path.splitext(textgrid)[0]
+            if mp3name in filemap:
+                raise ValueError(f"{mp3name} already present in filemap")
+            filemap[mp3name] = os.path.join(root, textgrid)
+    return filemap
+
+def generate_new_filemap(
+    lang_isocode="en",
+    alignment_basedir="/home/mark/tinyspeech_harvard/common-voice-forced-alignments/",
+):
+    """generate a filepath map from mp3 filename to textgrid"""
+    filemap = {}
+    for root, dirs, files in os.walk(
+        pathlib.Path(alignment_basedir) / lang_isocode
     ):
         if not files:
             continue  # this is the top level dir
@@ -79,6 +98,36 @@ def _extract_timings(words_to_search_for, mp3_to_textgrid, timings, notfound, ro
             end_s = interval.maxTime
             timings[word].append((mp3name_no_extension, start_s, end_s))
 
+def _extract_new_timings(words_to_search_for, mp3_to_textgrid, timings, notfound, row):
+    # find words in common_words set from each row of csv
+    mp3name_no_extension = os.path.splitext(row[0])[0]
+    mp3name_no_extension = mp3name_no_extension.replace("_", "-")
+    # print(mp3name_no_extension)
+    words = row[1].split()
+    for word in words:
+
+        if word not in words_to_search_for:
+            continue
+        # get alignment timings for this word
+        try:
+            tgf = mp3_to_textgrid[mp3name_no_extension]
+        except KeyError as e:
+            # print("error1", mp3name_no_extension)
+            notfound.append((mp3name_no_extension, word))
+            continue
+        try:
+            tg = textgrid.TextGrid.fromFile(tgf)
+        except TextGridError as e:
+            # print("error2", tgf)
+            notfound.append((mp3name_no_extension, word))
+            continue
+        for interval in tg[0]:
+            if interval.mark != word:
+                continue
+            start_s = interval.minTime
+            end_s = interval.maxTime
+            timings[word].append((mp3name_no_extension, start_s, end_s))
+
 
 def generate_wordtimings(
     words_to_search_for: Set[str],
@@ -104,14 +153,14 @@ def generate_wordtimings(
             timings[w] = manager.list()
 
         worker = functools.partial(
-            _extract_timings, words_to_search_for, mp3_to_textgrid, timings, notfound
+            _extract_new_timings, words_to_search_for, mp3_to_textgrid, timings, notfound
         )
 
         pool = multiprocessing.Pool()
-        for ix, result in enumerate(
+        for ix, result in tqdm(enumerate(
             pool.imap_unordered(worker, reader, chunksize=4000)
-        ):
-            if ix % 80_000 == 0:
+        )):
+            if ix % 10000 == 0:
                 print(ix)
         pool.close()
         pool.join()
