@@ -365,6 +365,9 @@ print(np.mean(tests, axis=0))
 
 # [[0.94753037 0.87601529]
 #  [0.85248329 0.89008864]]
+print(np.std(tests, axis=0))
+# [[0.0392504  0.07447217]
+#  [0.07388507 0.03652708]]
 
 # %%
 # filter CV extractions by embedding distance clusters
