@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Multilingual KWS Visualizer</title>
+    <style>
+      body {
+        font-family: 'Helvetica neue', Helvetica, Arial, sans-serif;
+      }
+
+      #titles, #waveform-container {
+        margin: 24px auto;
+        width: 1000px;
+      }
+
+      #zoomview-container, #overview-container {
+        margin: 0 0 24px 0;
+        line-height: 0;
+        -moz-box-shadow: 3px 3px 20px #919191;
+        -webkit-box-shadow: 3px 3px 20px #919191;
+        box-shadow: 3px 3px 20px #919191;
+      }
+
+      #zoomview-container {
+        height: 300px;
+      }
+
+      #overview-container {
+        height: 200px;
+      }
+
+      #demo-controls {
+        margin: 0 auto 24px auto;
+        width: 1000px;
+        display: flex;
+        align-items: center;
+      }
+
+      #demo-controls button {
+        background: #fff;
+        border: 1px solid #919191;
+        cursor: pointer;
+      }
+
+      #audio {
+        flex: 0 0 30%;
+      }
+
+      #controls {
+        flex: 1;
+        margin-left: 1em;
+      }
+
+      #seek-time {
+        width: 4em;
+      }
+
+      #transcript-container {
+        width: 1000px;
+        height: 100px;
+        background: #eeeeee;
+      }
+
+      .log {
+        margin: 0 auto 24px auto;
+        width: 1000px;
+      }
+
+      table {
+        width: 100%;
+      }
+
+      table th {
+        text-align: left;
+      }
+
+      table th, table td {
+        padding: 0.5em;
+      }
+
+      .hide {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="titles">
+      <h1>Multilingual KWS Visualizer</h1>
+      <p>
+        Code, models, and documentation: [<a href="https://www.github.com/harvard-edge/multilingual_kws">https://www.github.com/harvard-edge/multilingual_kws</a>]
+      </p>
+
+    <h2>Transcript (if available):</h2>
+    <div id="transcript-container">
+      <div id="transcript-body"></div>
+    </div>
+
+    <div id="waveform-container">
+      <div id="zoomview-container"></div>
+      <div id="overview-container"></div>
+    </div>
+
+    <div id="demo-controls">
+      <audio id="audio" controls="controls">
+        <source src="data/stream.wav" type="audio/wav">
+        <!-- <source src="/TOL_6min_720p_download.mp3" type="audio/mpeg">
+        <source src="/TOL_6min_720p_download.ogg" type="audio/ogg"> -->
+        Your browser does not support the audio element.
+      </audio>
+
+      <div id="controls">
+        <div>
+          <button data-action="zoom-in">Zoom in</button>
+          <button data-action="zoom-out">Zoom out</button>
+          <input type="text" id="seek-time" value="0.0">
+          <button data-action="seek">Seek</button>
+          <label for="amplitude-scale">Amplitude scale</label>
+          <input type="range" id="amplitude-scale" min="0" max="10" step="1">
+        </div>
+        <div>
+          <button data-action="log-data">View detection confidence scores</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="log">
+      <div id="segments" class="hide">
+        <h2>Detections</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Confidence</th>
+              <th>Start time</th>
+              <th>End time</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top: 100px;">
+      <a href="https://www.seas.harvard.edu/">
+        <img src="https://www.seas.harvard.edu/sites/default/files/images/H_SEAS_logo_RGB_1.jpg" alt="Harvard SEAS Edge Lab" style="margin-right: 100px;">
+      </a>
+      <a href="https://edge.seas.harvard.edu/">
+        <img src="https://edge.seas.harvard.edu/files/edge/files/harvard_edge_main.png?m=1541959806" width="360px" alt="Edge Computing Lab">
+      </a>
+    </div>
+
+
+    <script src="https://unpkg.com/peaks.js"></script>
+    <script>
+      (function(Peaks) {
+        var renderSegments = function(peaks) {
+          var segmentsContainer = document.getElementById('segments');
+          var segments = peaks.segments.getSegments();
+          var html = '';
+
+          for (var i = 0; i < segments.length; i++) {
+            var segment = segments[i];
+
+            var row = '<tr>' +
+              '<td>' + segment.id + '</td>' +
+              '<td><input data-action="update-segment-label" type="text" value="' + segment.labelText + '" data-id="' + segment.id + '"/></td>' +
+              '<td><input data-action="update-segment-start-time" type="number" value="' + segment.startTime + '" data-id="' + segment.id + '"/></td>' +
+              '<td><input data-action="update-segment-end-time" type="number" value="' + segment.endTime + '" data-id="' + segment.id + '"/></td>' +
+              '<td>' + '<a href="#' + segment.id + '" data-action="play-segment" data-id="' + segment.id + '">Play</a>' + '</td>' +
+              '<td>' + '<a href="#' + segment.id + '" data-action="loop-segment" data-id="' + segment.id + '">Loop</a>' + '</td>' +
+              '<td>' + '<a href="#' + segment.id + '" data-action="remove-segment" data-id="' + segment.id + '">Remove</a>' + '</td>' +
+              '</tr>';
+
+            html += row;
+          }
+
+          segmentsContainer.querySelector('tbody').innerHTML = html;
+
+          if (html.length) {
+            segmentsContainer.classList.remove('hide');
+          }
+
+          document.querySelectorAll('input[data-action="update-segment-start-time"]').forEach(function(inputElement) {
+            inputElement.addEventListener('input', function(event) {
+              var element = event.target;
+              var id = element.getAttribute('data-id');
+              var segment = peaks.segments.getSegment(id);
+
+              if (segment) {
+                var startTime = parseFloat(element.value);
+
+                if (startTime < 0) {
+                  startTime = 0;
+                  element.value = 0;
+                }
+
+                if (startTime >= segment.endTime) {
+                  startTime = segment.endTime - 0.1;
+                  element.value = startTime;
+                }
+
+                segment.update({ startTime: startTime });
+              }
+            });
+          });
+
+          document.querySelectorAll('input[data-action="update-segment-end-time"]').forEach(function(inputElement) {
+            inputElement.addEventListener('input', function(event) {
+              var element = event.target;
+              var id = element.getAttribute('data-id');
+              var segment = peaks.segments.getSegment(id);
+
+              if (segment) {
+                var endTime = parseFloat(element.value);
+
+                if (endTime < 0) {
+                  endTime = 0;
+                  element.value = 0;
+                }
+
+                if (endTime <= segment.startTime) {
+                  endTime = segment.startTime + 0.1;
+                  element.value = endTime;
+                }
+
+                segment.update({ endTime: endTime });
+              }
+            });
+          });
+
+          document.querySelectorAll('input[data-action="update-segment-label"]').forEach(function(inputElement) {
+            inputElement.addEventListener('input', function(event) {
+              var element = event.target;
+              var id = element.getAttribute('data-id');
+              var segment = peaks.segments.getSegment(id);
+              var labelText = element.labelText;
+
+              if (segment) {
+                segment.update({ labelText: labelText });
+              }
+            });
+          });
+        };
+
+        var options = {
+          containers: {
+            zoomview: document.getElementById('zoomview-container'),
+            overview: document.getElementById('overview-container')
+          },
+          mediaElement: document.getElementById('audio'),
+          dataUri: {
+            arraybuffer: '/data/stream.dat'
+            //json: '/TOL_6min_720p_download.json'
+          },
+          keyboard: true,
+          pointMarkerColor: '#006eb0',
+          showPlayheadTime: true,
+          zoomWaveformColor: '#dddddd',
+          overviewWaveformColor: '#C8DCF7',
+          keyboard: true,
+        };
+
+        Peaks.init(options, function(err, peaksInstance) {
+          if (err) {
+            console.error(err.message);
+            return;
+          }
+
+          console.log("Peaks instance ready");
+
+          fetch("data/detections.json")
+            .then(response => response.json())
+            .then(json => {
+              for (const detection of json) {
+                const det_ms = detection[1];
+                const confidence = detection[2].toString().substring(0,5);
+                peaksInstance.segments.add({
+                  startTime: 0.001 * det_ms - 0.25,
+                  endTime: 0.001 * det_ms + 1,
+                  labelText: confidence,
+                  editable: false,
+                  color: "#e274cf"
+                })
+                peaksInstance.points.add({
+                  time: 0.001 * det_ms,
+                  labelText: confidence,
+                  editable: false,
+                  color: "#e274cf"
+                })
+              }
+            });
+
+          var transcript = [];
+          fetch("data/full_transcript.json")
+            .then(response => response.json())
+            .then(json => transcript = json);
+
+          var displayTranscript = function(time) {
+            var t = "";
+            for (tseg of transcript) {
+              if (time > tseg.start && time < tseg.end) {
+                t = tseg.transcript;
+              }
+            }
+            document.getElementById("transcript-body").textContent = t;
+          }
+
+          document.querySelector('[data-action="zoom-in"]').addEventListener('click', function() {
+            peaksInstance.zoom.zoomIn();
+          });
+
+          document.querySelector('[data-action="zoom-out"]').addEventListener('click', function() {
+            peaksInstance.zoom.zoomOut();
+          });
+
+          var segmentCounter = 1;
+
+          document.querySelector('button[data-action="log-data"]').addEventListener('click', function(event) {
+            renderSegments(peaksInstance);
+          });
+
+          document.querySelector('button[data-action="seek"]').addEventListener('click', function(event) {
+            var time = document.getElementById('seek-time').value;
+            var seconds = parseFloat(time);
+
+            if (!Number.isNaN(seconds)) {
+              peaksInstance.player.seek(seconds);
+            }
+          });
+
+          document.querySelector('body').addEventListener('click', function(event) {
+            var element = event.target;
+            var action  = element.getAttribute('data-action');
+            var id      = element.getAttribute('data-id');
+
+            if (action === 'play-segment') {
+              var segment = peaksInstance.segments.getSegment(id);
+              peaksInstance.player.playSegment(segment);
+            }
+            else if (action === 'loop-segment') {
+              var segment = peaksInstance.segments.getSegment(id);
+              peaksInstance.player.playSegment(segment, true);
+            }
+            else if (action === 'remove-point') {
+              peaksInstance.points.removeById(id);
+            }
+            else if (action === 'remove-segment') {
+              peaksInstance.segments.removeById(id);
+            }
+          });
+
+          var amplitudeScales = {
+            "0": 0.0,
+            "1": 0.1,
+            "2": 0.25,
+            "3": 0.5,
+            "4": 0.75,
+            "5": 1.0,
+            "6": 1.5,
+            "7": 2.0,
+            "8": 3.0,
+            "9": 4.0,
+            "10": 5.0
+          };
+
+          document.getElementById('amplitude-scale').addEventListener('input', function(event) {
+            var scale = amplitudeScales[event.target.value];
+
+            peaksInstance.views.getView('zoomview').setAmplitudeScale(scale);
+            peaksInstance.views.getView('overview').setAmplitudeScale(scale);
+          });
+
+
+          peaksInstance.on('keyboard.space', function() {
+            console.log('keyboard.space' );
+            if (peaksInstance.player.isPlaying()) {
+              peaksInstance.player.pause();
+            } else {
+              peaksInstance.player.play();
+            }
+            
+          });
+          // Points mouse events
+
+          peaksInstance.on('points.mouseenter', function(point) {
+            console.log('points.mouseenter:', point);
+          });
+
+          peaksInstance.on('points.mouseleave', function(point) {
+            console.log('points.mouseleave:', point);
+          });
+
+          peaksInstance.on('points.click', function(point) {
+            console.log('points.click:', point);
+          });
+
+          peaksInstance.on('points.dblclick', function(point) {
+            console.log('points.dblclick:', point);
+          });
+
+          peaksInstance.on('points.dragstart', function(point) {
+            console.log('points.dragstart:', point);
+          });
+
+          peaksInstance.on('points.dragmove', function(point) {
+            console.log('points.dragmove:', point);
+          });
+
+          peaksInstance.on('points.dragend', function(point) {
+            console.log('points.dragend:', point);
+          });
+
+          // Segments mouse events
+
+          peaksInstance.on('segments.dragstart', function(segment, startMarker) {
+            console.log('segments.dragstart:', segment, startMarker);
+          });
+
+          peaksInstance.on('segments.dragend', function(segment, startMarker) {
+            console.log('segments.dragend:', segment, startMarker);
+          });
+
+          peaksInstance.on('segments.dragged', function(segment, startMarker) {
+            console.log('segments.dragged:', segment, startMarker);
+          });
+
+          peaksInstance.on('segments.mouseenter', function(segment) {
+            console.log('segments.mouseenter:', segment);
+          });
+
+          peaksInstance.on('segments.mouseleave', function(segment) {
+            console.log('segments.mouseleave:', segment);
+          });
+
+          peaksInstance.on('segments.click', function(segment) {
+            console.log('segments.click:', segment);
+          });
+
+          peaksInstance.on('segments.dblclick', function(segment) {
+            console.log('segments.dblclick:', segment);
+          });
+
+          peaksInstance.on('zoomview.click', function(time) {
+            console.log('zoomview.click:', time);
+          });
+
+          peaksInstance.on('zoomview.dblclick', function(time) {
+            console.log('zoomview.dblclick:', time);
+          });
+
+          peaksInstance.on('overview.click', function(time) {
+            console.log('overview.click:', time);
+          });
+
+          peaksInstance.on('overview.dblclick', function(time) {
+            console.log('overview.dblclick:', time);
+          });
+
+          peaksInstance.on('player.seeked', function(time) {
+            console.log('player.seeked:', time);
+            if (transcript.length == 0) {
+              return;
+            }
+            displayTranscript(time);
+          });
+          peaksInstance.on('player.timeupdate', function(time) {
+            displayTranscript(time);
+          });
+
+          peaksInstance.on('player.playing', function(time) {
+            console.log('player.playing:', time);
+          });
+
+          peaksInstance.on('player.pause', function(time) {
+            console.log('player.pause:', time);
+          });
+
+          peaksInstance.on('player.ended', function() {
+            console.log('player.ended');
+          });
+        });
+      })(peaks);
+    </script>
+  </body>
+</html>
