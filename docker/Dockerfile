@@ -3,9 +3,9 @@ FROM tensorflow/tensorflow:2.3.4-gpu-jupyter
 # from parent directory multilingual_kws:
 # docker build -t mkws docker/ 
 
-# inference can be run via:
-# docker run --rm  -u $(id -u):$(id -g) -v $(pwd):/context -it mkws /bin/bash
-# > python -m  embedding.run_inference --keyword hello --modelpath /context/hello_model --wav /context/hello_stream.wav
+# inference and visualization can be run via:
+# docker run --rm -p 8080:8080 -u $(id -u):$(id -g) -v $(pwd):/context -it mkws /bin/bash
+# > python -m  embedding.run_inference --keyword hello --modelpath /context/hello_model --wav /context/hello_stream.wav --visualizer
 # if you have nvidia-docker installed, include the following flag to docker run: 
 # --gpus all
 
