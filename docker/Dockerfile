@@ -1,13 +1,23 @@
-FROM tensorflow/tensorflow:2.3.4-gpu-jupyter
+FROM tensorflow/tensorflow:2.3.4-gpu
+# for jupyter you can use the following:
+# tensorflow/tensorflow:2.3.4-gpu-jupyter
 
 # from parent directory multilingual_kws:
 # docker build -t mkws docker/ 
 
-# inference and visualization can be run via:
-# docker run --rm -p 8080:8080 -u $(id -u):$(id -g) -v $(pwd):/context -it mkws /bin/bash
-# > python -m  embedding.run_inference --keyword hello --modelpath /context/hello_model --wav /context/hello_stream.wav --visualizer
-# if you have nvidia-docker installed, include the following flag to docker run: 
-# --gpus all
+# inference and visualization can be run via the below command:
+# note: if you do not have nvidia-docker installed, remove "--gpus all"
+
+# docker run --gpus all -p 8080:8080 --rm -u $(id -u):$(id -g) -it \
+#    -v $(pwd):/demo_data \
+#    mkws \
+#    --keyword mask \
+#    --modelpath /demo_data/xfer_epochs_4_bs_64_nbs_2_val_acc_1.00_target_mask \
+#    --groundtruth /demo_data/mask_groundtruth_labels.txt \
+#    --wav /demo_data/mask_stream.wav \
+#    --transcript /demo_data/mask_full_transcript.json \
+#    --visualizer
+
 
 # switch to bash within the container
 ENV SHELL /bin/bash
@@ -56,3 +66,5 @@ RUN pip install tensorflow-io==0.16.0 --no-dependencies
 # RUN echo "alpha-0.0.0"
 RUN git clone https://github.com/harvard-edge/multilingual_kws /multilingual_kws
 WORKDIR /multilingual_kws
+RUN chmod -R 777 /multilingual_kws/visualizer/
+ENTRYPOINT ["python", "-m", "embedding.run_inference"]
