@@ -85,10 +85,10 @@
   </head>
   <body>
     <div id="titles">
-      <h1>Multilingual KWS Visualizer</h1>
-      <p>
+      <h1>Multilingual Keyword Spotting Visualizer</h1>
+      <!-- <p>
         Keyword spotting visualizer for streaming audio
-      </p>
+      </p> -->
       <p>
         Code, models, and documentation: [<a href="https://www.github.com/harvard-edge/multilingual_kws">https://www.github.com/harvard-edge/multilingual_kws</a>]
       </p>
@@ -273,24 +273,30 @@
 
           console.log("Peaks instance ready");
 
+          colors = ["#e274cf", "#4C2BE0"] //todo: expand this
+
           fetch("data/detections.json")
             .then(response => response.json())
             .then(json => {
-              for (const detection of json) {
+              const keywords = json["keywords"];
+              for (const detection of json["detections"]) {
                 const det_ms = detection[1];
                 const confidence = detection[2].toString().substring(0,5);
+                const label = detection[0] + ":" + confidence;
+                const kw_ix = keywords.indexOf(detection[0]);
+                color = colors[kw_ix];
                 peaksInstance.segments.add({
                   startTime: 0.001 * det_ms - 0.25,
                   endTime: 0.001 * det_ms + 1,
-                  labelText: confidence,
+                  labelText: label,
                   editable: false,
-                  color: "#e274cf"
+                  color: color,
                 })
                 peaksInstance.points.add({
                   time: 0.001 * det_ms,
-                  labelText: confidence,
+                  labelText: label,
                   editable: false,
-                  color: "#e274cf"
+                  color: color,
                 })
               }
             });

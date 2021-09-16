@@ -67,4 +67,4 @@ RUN pip install tensorflow-io==0.16.0 --no-dependencies
 RUN git clone https://github.com/harvard-edge/multilingual_kws /multilingual_kws
 WORKDIR /multilingual_kws
 RUN chmod -R 777 /multilingual_kws/visualizer/
-ENTRYPOINT ["python", "-m", "embedding.run_inference"]
+ENTRYPOINT ["python", "-m", "embedding.run"]
