@@ -273,7 +273,8 @@
 
           console.log("Peaks instance ready");
 
-          colors = ["#e274cf", "#4C2BE0"] //todo: expand this
+          //colors = ["#e274cf", "#4C2BE0"] //todo: expand this
+          colors = ["#e274cf", "#ff0000", "#00ff00", "#0000ff"]
 
           fetch("data/detections.json")
             .then(response => response.json())
@@ -284,7 +285,18 @@
                 const confidence = detection[2].toString().substring(0,5);
                 const label = detection[0] + ":" + confidence;
                 const kw_ix = keywords.indexOf(detection[0]);
-                color = colors[kw_ix];
+
+                const truth_val = detection[3].toString();
+                if (truth_val === 'ng') {
+                  color = colors[0];
+                } else if (truth_val === 'fp') {
+                  color = colors[1];
+                } else if (truth_val === 'fn') {
+                  color = colors[2];
+                } else if (truth_val === 'tp') {
+                  color = colors[3];
+                }
+
                 peaksInstance.segments.add({
                   startTime: 0.001 * det_ms - 0.25,
                   endTime: 0.001 * det_ms + 1,
@@ -389,7 +401,7 @@
             } else {
               peaksInstance.player.play();
             }
-            
+
           });
           // Points mouse events
 
