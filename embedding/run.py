@@ -36,7 +36,7 @@ def inference(
 ):
     """
     Runs inference on a streaming audio file. Example invocation:
-      $ python -m embedding.run_inference --keyword mask --modelpath mask_model --wav mask_radio.wav 
+      $ python -m embedding.run_inference --keyword mask --modelpath mask_model --wav mask_radio.wav
     Args
       keyword: target keywords for few-shot KWS (pass in as [word1, word2, word3])
       modelpath: comma-demlimited list of paths to finetuned few-shot models
@@ -47,7 +47,7 @@ def inference(
       serve_port: browser port to run visualization server on
       detection_threshold: confidence threshold for inference (default=0.9)
       inference_chunk_len_seconds: we chunk the wavfile into portions
-        to avoid exhausting GPU memory - this sets the chunksize. 
+        to avoid exhausting GPU memory - this sets the chunksize.
         default = 1200 seconds (i.e., 20 minutes)
       language: target language (for data visualization)
       write_detections: path to save detections.json
@@ -111,6 +111,16 @@ def inference(
     detections_with_confidence = list(sorted(unsorted_detections, key=lambda d: d[1]))
     for d in detections_with_confidence:
         print(d)
+
+    # cleanup groundtruth if needed
+    if created_temp_gt:
+        os.remove(groundtruth)
+        print(f"deleted {groundtruth}")
+        for i in range(0, len(detections_with_confidence)):
+            detections_with_confidence[i].append('ng') #no groundtruth
+    else:
+        #modify detections using groundtruth
+        detections_with_confidence = get_groundtruth(detections_with_confidence, keywords, groundtruth)
 
     detections = dict(keywords=keywords, detections=detections_with_confidence)
 
@@ -195,8 +205,8 @@ def train(
     unknown_percentage: float = 50.0,
     base_model_output: str = "dense_2",
 ):
-    """Fine-tune few-shot model from embedding representation. The embedding 
-    representation and unknown words can be downloaded from 
+    """Fine-tune few-shot model from embedding representation. The embedding
+    representation and unknown words can be downloaded from
     https://github.com/harvard-edge/multilingual_kws/releases
     The background noise directory can be downloaded from:
     http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz
