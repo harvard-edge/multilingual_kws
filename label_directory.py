@@ -1,4 +1,6 @@
+from ast import parse
 import glob
+import argparse
 import sys
 import tty
 import termios
@@ -9,6 +11,7 @@ import os
 import pydub
 import pydub.playback
 import pydub.effects
+from scipy.sparse import data
 
 
 class _GetchUnix:
@@ -30,18 +33,17 @@ class Modes:
     FARTHEST = "farthest"
 
 
-######## change these:
-CLOSEST_FARTHEST_DIR = (
-    Path.home() / "tinyspeech_harvard/distance_sorting/closest_farthest/"
-)
-WORD = "reading"
-MODE = Modes.FARTHEST
-###### //////////////
+def label(args):
+    datadir = Path(args.datadir)
+    print("datadir:", datadir)
+    if args.closest:
+        MODE = Modes.CLOSEST
+    else:
+        MODE = Modes.FARTHEST
 
+    print("mode:", MODE)
 
-def label():
-
-    in_csv = CLOSEST_FARTHEST_DIR / WORD / MODE / f"{WORD}_{MODE}_50_input.csv"
+    in_csv = datadir / args.word / MODE / f"{args.word}_{MODE}_50_input.csv"
     assert os.path.isfile(in_csv), f"{in_csv} not found"
     clips = []
     with open(in_csv, "r") as fh:
@@ -53,9 +55,9 @@ def label():
 
     results = []
 
-    for ix,(clip, dist) in enumerate(clips):
+    for ix, (clip, dist) in enumerate(clips):
         print(f"\n:::::: CLIP # {ix} :::", clip)
-        fpath = str(CLOSEST_FARTHEST_DIR / WORD / MODE / clip)
+        fpath = str(datadir / args.word / MODE / clip)
         while True:
             print("-")
             wav = pydub.AudioSegment.from_file(fpath)
@@ -77,16 +79,26 @@ def label():
         print(row)
         results.append(row)
 
-    out_csv = CLOSEST_FARTHEST_DIR / f"{WORD}_{MODE}_50_results.csv"
-    with open(out_csv, "w") as fh:
-        writer = csv.writer(fh)
-        writer.writerows(results)
+    if not args.dryrun:
+        out_csv = datadir / f"{args.word}_{MODE}_50_results.csv"
+        with open(out_csv, "w") as fh:
+            writer = csv.writer(fh)
+            writer.writerows(results)
     # summary
-    print("\n\n:::::::::: SUMMARY  ")
+    print("\n\n\n\n:::::::::: SUMMARY  ")
+    print("mode:", MODE)
     print("num good:", len([g for g in results if g[2] == "good"]))
     print("num bad:", len([g for g in results if g[2] == "bad"]))
-    print(f"results written to {out_csv}")
+    if not args.dryrun:
+        print(f">>>>>> results written to {out_csv}")
 
 
 if __name__ == "__main__":
-    label()
+    parser = argparse.ArgumentParser(description="labeler for listening data")
+    parser.add_argument("datadir", help="directory of closest/farthest data")
+    parser.add_argument("word", help="word to analyze")
+    parser.add_argument('--dryrun', action="store_true", help="do not write to output csv file")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-c", "--closest", action="store_true", help="Mode: CLOSEST")
+    group.add_argument("-f", "--farthest", action="store_true", help="Mode: FARTHEST")
+    label(parser.parse_args())
