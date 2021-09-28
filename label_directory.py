@@ -11,7 +11,6 @@ import os
 import pydub
 import pydub.playback
 import pydub.effects
-from scipy.sparse import data
 
 
 class _GetchUnix:
