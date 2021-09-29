@@ -39,11 +39,14 @@ em = distance_filtering.embedding_model()
 print("loaded model")
 
 # %%
+# words_dir = (
+#     Path.home() / "tinyspeech_harvard/distance_sorting/cv7_extractions/listening_data"
+# )
 words_dir = (
-    Path.home() / "tinyspeech_harvard/distance_sorting/cv7_extractions/listening_data"
+    Path.home() / "tinyspeech_harvard/distance_sorting/morelangs/listening_data_de/"
 )
 # words_dir = Path.home() / "tinyspeech_harvard/frequent_words/silence_padded/en/clips"
-word = "soon"
+word = "bitte"
 clips = glob.glob(str(words_dir / word / "*.wav"))
 clips.sort()
 print(len(clips))
@@ -104,7 +107,7 @@ for d in ds:
 # %%
 N_CLUSTERS=5
 print("# CLUSTERS ", N_CLUSTERS)
-dest_dir = Path.home() / "tinyspeech_harvard/distance_sorting/closest_farthest"
+dest_dir = Path.home() / "tinyspeech_harvard/distance_sorting/morelangs/closest_farthest_de"
 for word in os.listdir(words_dir):
     print("\n--- ", word)
     clips = glob.glob(str(words_dir / word / "*.wav"))

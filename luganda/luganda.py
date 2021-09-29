@@ -33,8 +33,22 @@ import sys
 sys.path.insert(0, str(Path.cwd().parents[0]))
 from embedding import word_extraction, transfer_learning
 from embedding import batch_streaming_analysis as sa
-import input_data
+from embedding import input_data
 from luganda_info import WavTranscript
+
+# %%
+l_csv = Path("/media/mark/hyperion/makerere/uliza-clips/transcripts.csv")
+counts = word_extraction.wordcounts(l_csv, skip_header=True, transcript_column=2)
+
+# %%
+words = os.listdir(Path.home() / "tinyspeech_harvard/luganda/covid_keyword_utterances")
+words.append('covid')
+cs = []
+for w in words:
+    cs.append((w, counts[w]))
+cs.sort(key=lambda c: c[1], reverse=True)
+cs[:20]
+#%%
 
 
 # %%
