@@ -144,8 +144,8 @@ print(np.mean(avg_farthest), np.std(avg_farthest))
 # %%
 # load from csv
 
-f = "closest_farthest_es.csv"
-# f = "closest_farthest_de.csv"
+# f = "closest_farthest_es.csv"
+f = "closest_farthest_de.csv"
 df = pd.read_csv(f)
 word = "word"
 tne = "total_num_extracted"
@@ -159,6 +159,16 @@ assert np.allclose((df[ngc] + df[nbc]).values, 50)
 assert np.allclose((df[ngf] + df[nbf]).values, 50)
 
 df = df[[word, tne, nbc, nbf]]
+
+print("Near WER mean, std", np.mean(df[nbc].values / 50 * 100), np.std(df[nbc].values / 50 * 100))
+print("Far WER mean, st", np.mean(df[nbf].values / 50 * 100), np.std(df[nbf].values / 50 * 100))
+
+# ES:
+# Near WER mean 4.64
+# Far WER mean 21.36
+# DE
+# Near WER mean 1.04, 5.14
+# Far WER mean 32.32, 19.21
 
 
 def to_pct(num_bad):
@@ -174,6 +184,8 @@ df = pd.DataFrame(data=df.values, columns=["Word", "# Clips", "Near WER", "Far W
 df.style.hide_index()
 # %%
 print(df.to_latex(index=False, column_format="lrrr"))
+
+# %%
 
 # %%
 basedir = Path.home() / "tinyspeech_harvard/analysis_mswc"
@@ -212,6 +224,7 @@ df
 # %%
 # print(df.to_latex(index=False, column_format="cccc", caption="todo", label="todo"))
 latex = df.to_latex(index=False, column_format="|c|c|c|c|")
+
 
 def wrap_otherlang(text):
     ########### CHANGE THIS            VVVVVV
