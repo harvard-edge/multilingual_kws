@@ -8,13 +8,14 @@ import subprocess
 import multiprocessing
 import json
 import glob
+import csv
 
 import fire
 
 from embedding import input_data
 from embedding import batch_streaming_analysis as sa
 from embedding import transfer_learning
-from embedding.tpr_fpr import tpr_fpr
+from embedding.tpr_fpr import tpr_fpr, get_groundtruth
 
 
 def eval(streamtarget: sa.StreamTarget, results: Dict):
@@ -33,6 +34,7 @@ def inference(
     inference_chunk_len_seconds: int = 1200,
     language: str = "unspecified_language",
     write_detections: Optional[os.PathLike] = None,
+    overwrite: bool = False,
 ):
     """
     Runs inference on a streaming audio file. Example invocation:
@@ -51,6 +53,7 @@ def inference(
         default = 1200 seconds (i.e., 20 minutes)
       language: target language (for data visualization)
       write_detections: path to save detections.json
+      overwrite: preserves (and overwrites) visualization outputs
     """
 
     if len(keywords[0]) == 1:
@@ -102,6 +105,9 @@ def inference(
         )
         manager = multiprocessing.Manager()
         results = manager.dict()
+        # TODO(mmaz): note that the summary tpr/fpr calculated within eval is incorrect when multiple
+        # targets are being evaluated - groundtruth_labels.txt contains multiple targets but
+        # each model is only single-target (at the moment)
         p = multiprocessing.Process(target=eval, args=(streamtarget, results))
         p.start()
         p.join()
@@ -109,6 +115,12 @@ def inference(
         unsorted_detections.extend(results[keyword][0][1][detection_threshold][1])
 
     detections_with_confidence = list(sorted(unsorted_detections, key=lambda d: d[1]))
+    with open("tmp/garbage.json", 'w') as fh:
+        json.dump(detections_with_confidence, fh)
+
+    with open("tmp/garbage.json", 'r') as fh:
+        detections_with_confidence = json.load(fh)
+
     for d in detections_with_confidence:
         print(d)
 
@@ -116,11 +128,19 @@ def inference(
     if created_temp_gt:
         os.remove(groundtruth)
         print(f"deleted {groundtruth}")
-        for i in range(0, len(detections_with_confidence)):
-            detections_with_confidence[i].append('ng') #no groundtruth
+        # no groundtruth
+        detections_with_confidence = [d + ["ng"] for d in detections_with_confidence]
     else:
-        #modify detections using groundtruth
-        detections_with_confidence = get_groundtruth(detections_with_confidence, keywords, groundtruth)
+        # modify detections using groundtruth
+        groundtruth_data = []
+        with open(groundtruth, "r") as fh:
+            reader = csv.reader(fh)
+            for row in reader:
+                groundtruth_data.append((row[0], float(row[1])))
+
+        detections_with_confidence = get_groundtruth(
+            detections_with_confidence, keywords, groundtruth_data
+        )
 
     detections = dict(keywords=keywords, detections=detections_with_confidence)
 
@@ -128,12 +148,6 @@ def inference(
     if write_detections is not None:
         with open(write_detections, "w") as fh:
             json.dump(detections, fh)
-
-
-    # cleanup groundtruth if needed
-    if created_temp_gt:
-        os.remove(groundtruth)
-        print(f"deleted {groundtruth}")
 
     if not visualizer:
         return
@@ -149,10 +163,11 @@ def inference(
     viz_detections = data_dest / "detections.json"
     viz_files = [viz_dat, viz_transcript, viz_wav, viz_detections]
 
-    for f in viz_files:
-        if os.path.exists(f):
-            print(f"ERROR {f} already exists")
-            return
+    if not overwrite:
+        for f in viz_files:
+            if os.path.exists(f):
+                print(f"ERROR {f} already exists")
+                return
 
     # copy wav to serving destination
     shutil.copy2(wav, viz_wav)
@@ -185,10 +200,11 @@ def inference(
         print("\nTerminating visualization server")
         proc.terminate()
 
-    for f in viz_files:
-        if os.path.exists(f):
-            print(f"deleting {f}")
-            os.remove(f)
+    if not overwrite:
+        for f in viz_files:
+            if os.path.exists(f):
+                print(f"deleting {f}")
+                os.remove(f)
 
 
 def train(
