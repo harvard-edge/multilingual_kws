@@ -115,11 +115,6 @@ def inference(
         unsorted_detections.extend(results[keyword][0][1][detection_threshold][1])
 
     detections_with_confidence = list(sorted(unsorted_detections, key=lambda d: d[1]))
-    with open("tmp/garbage.json", 'w') as fh:
-        json.dump(detections_with_confidence, fh)
-
-    with open("tmp/garbage.json", 'r') as fh:
-        detections_with_confidence = json.load(fh)
 
     for d in detections_with_confidence:
         print(d)
