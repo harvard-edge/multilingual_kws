@@ -97,7 +97,12 @@
 
     
     <section id="groundtruth-controls">
-      <!-- TODO: disable when gt not available -->
+      <div class="row mb-3">
+        <label for="confidenceRange" class="form-label">Confidence threshold: <span id="confthreshviz">0</span></label>
+        <input type="range" class="form-range" min="0" max="1" step="0.01" value="0"
+          oninput="document.getElementById('confthreshviz').textContent = this.value;" id="confidenceRange">
+      </div>
+      <!-- TODO(mmaz): disable when gt not available -->
       <div class="row mb-3">
         <div class="col-md-3">
 
@@ -117,8 +122,17 @@
           </div>
 
         </div>
-        <!-- GT tables -->
-        <div class="col-md-9">
+        <!-- keyword controls -->
+        <div class="col-md-6" id="kwcontrols" style="background-color:#e6e8f6;">
+          <template id="kwtemplate">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" checked>
+              <label class="form-check-label" ></label>
+            </div>
+          </template>
+
+        </div>
+        <div class="col-md-3">
 
         </div>
       </div>
@@ -306,37 +320,83 @@
           console.log("Peaks instance ready");
 
           //colors = ["#e274cf", "#4C2BE0"] //todo: expand this
-          colors = ["#e274cf", "#ff0000", "#aa00aa", "#0000ff"]
+          const colors = {ng : "#e274cf", fp: "#ff0000", fn: "#aa00aa", tp: "#0000ff"};
           var detections = null;
           var showtp = true;
           var showfp = true;
           var showfn = true;
+
           var segfxn = function() {
-            if (detections === null) {
+            if (null === detections) {
               return;
             }
             peaksInstance.segments.removeAll();
             peaksInstance.points.removeAll();
-            console.log("seg");
-            const keywords = detections["keywords"];
-            for (const detection of detections["detections"]) {
-              const det_ms = detection[1];
-              const confidence = detection[2].toString().substring(0,5);
-              const label = detection[0] + ":" + confidence;
-              const kw_ix = keywords.indexOf(detection[0]);
+            const keywords = detections.keywords;
 
-              const truth_val = detection[3].toString();
-              if (truth_val === 'ng') {
-                color = colors[0];
-              } else if (truth_val === 'fp' && showfp) {
-                color = colors[1];
-              } else if (truth_val === 'fn' && showfn) {
-                color = colors[2];
-              } else if (truth_val === 'tp' && showtp) {
-                color = colors[3];
-              } else {
+            const enabledKeywords = new Set();
+            for (const keyword of keywords) {
+              if (document.getElementById("keyword-" + keyword).checked) {
+                enabledKeywords.add(keyword);
+              }
+            }
+
+            const confThresh = document.getElementById("confidenceRange").value;
+
+            // apply current detection threshold
+            // - serverside, only false negatives wrt the minimum detection threshold are missing confidence values
+            // - clientside, some false negatives are also due to filtering by the UI threshold
+            var filteredDetections = [];
+            for (const origdetection of detections.detections) {
+              // if keyword diasbled, skip
+              if (!enabledKeywords.has(origdetection.keyword)) {
                 continue;
               }
+              // todo: fragile deep-copy 
+              var detection = JSON.parse(JSON.stringify(origdetection));
+
+              // if tp confidence below visibility threshold, change to false negative
+              // if fp confidence below visibility threshold, extinguish the fp
+              if (detection.hasOwnProperty("confidence")) {
+                if (detection.confidence < confThresh && detection.groundtruth === "tp") {
+                  detection.groundtruth = "fn";
+                } else if (detection.confidence < confThresh && detection.groundtruth === "fp") {
+                  continue;
+                }
+              }
+              filteredDetections.push(detection);
+            }
+
+            for (const detection of filteredDetections) {
+              // remaining skipping logic (we are not done yet):
+              // 1. if confidence not set, and showfn is false, skip
+              // 2. if groundtruth is fp or fn, check showfp and showfn
+              // 3. always show ng (no groundtruth) for enabled keywords
+
+              var label = detection.keyword;
+
+              if (detection.hasOwnProperty("confidence")) {
+                const sconf = detection.confidence.toString().substring(0,5);
+                label += ":" + sconf; 
+                const tags = {tp: "[TP]", fp: "[FP]", fn: "[FN]", ng: ""};
+                label += tags[detection.groundtruth];
+              } else {
+                //no confidence value, i.e., serverside false negative
+                label += "[FN]";
+              }
+
+              if (!showfn && detection.groundtruth === "fn") {
+                continue;
+              }
+              if (!showtp && detection.groundtruth === "tp") {
+                continue;
+              }
+              if (!showfp && detection.groundtruth === "fp") {
+                continue;
+              }
+
+              const det_ms = detection.time_ms;
+              const color = colors[detection.groundtruth];
 
               peaksInstance.segments.add({
                 startTime: 0.001 * det_ms - 0.25,
@@ -354,21 +414,36 @@
             }
           };
 
+          document.getElementById("confidenceRange").onmouseup = segfxn;
 
           document.getElementById("tpswitch").onclick = function() {
             showtp = document.getElementById("tpswitch").checked;
-            console.log('TP', showtp);
+            // console.log('TP', showtp);
             segfxn();
           };
           document.getElementById("fpswitch").onclick = function() {
             showfp = document.getElementById("fpswitch").checked;
-            console.log('FP', showfp);
+            // console.log('FP', showfp);
             segfxn();
           };
           document.getElementById("fnswitch").onclick = function() {
             showfn = document.getElementById("fnswitch").checked;
-            console.log('FN', showfn);
+            // console.log('FN', showfn);
             segfxn();
+          };
+          var kwfxn = function() {
+            var kwcontrols = document.querySelector("#kwcontrols");
+            var template = document.querySelector("#kwtemplate");
+            for (const keyword of detections["keywords"]) {
+              var clone = template.content.cloneNode(true);
+              var inp = clone.querySelector("input");
+              inp.id = "keyword-" + keyword;
+              inp.onclick = segfxn;
+              var label = clone.querySelector("label");
+              label.htmlFor = inp.id;
+              label.textContent = keyword;
+              kwcontrols.appendChild(clone);
+            }
           };
 
 
@@ -376,6 +451,11 @@
             .then(response => response.json())
             .then(json => {
               detections = json;
+              console.log("initializing detection threshold", detections.min_threshold);
+              document.getElementById("confidenceRange").min = detections.min_threshold;
+              document.getElementById("confidenceRange").value = detections.min_threshold;
+              document.getElementById("confthreshviz").textContent = detections.min_threshold;
+              kwfxn();
               segfxn();
             });
 

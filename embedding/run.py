@@ -124,7 +124,10 @@ def inference(
         os.remove(groundtruth)
         print(f"deleted {groundtruth}")
         # no groundtruth
-        detections_with_confidence = [d + ["ng"] for d in detections_with_confidence]
+        detections_with_confidence = [
+            dict(keyword=d[0], time_ms=d[1], confidence=d[2], groundtruth="ng")
+            for d in detections_with_confidence
+        ]
     else:
         # modify detections using groundtruth
         groundtruth_data = []
@@ -137,7 +140,11 @@ def inference(
             detections_with_confidence, keywords, groundtruth_data
         )
 
-    detections = dict(keywords=keywords, detections=detections_with_confidence)
+    detections = dict(
+        keywords=keywords,
+        detections=detections_with_confidence,
+        min_threshold=detection_threshold,
+    )
 
     # write detections to json
     if write_detections is not None:
