@@ -66,10 +66,10 @@ def get_groundtruth_and_stats(
         precision = (tp / (tp + fp))
         recall = (tp / (tp + fn))
         f1 = 2*(precision*recall) / (precision + recall)
-        fpr = (fp / (fp + tn))
-        tpr = (tp / (tp + fn))
+        #fpr = (fp / (fp + tn))
+        #tpr = (tp / (tp + fn))
 
-        stats = [tpr,fpr,precision,recall,f1]
+        stats = [precision,recall,f1]
 
         return detections,stats
 

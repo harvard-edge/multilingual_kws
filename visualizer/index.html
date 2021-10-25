@@ -134,9 +134,9 @@
         </div>
         <div class="col-md-3">
              <!-- stats: tpr fpr f1 -->
-             <p id="tpr_viz"></p>
-             <p id="fpr_viz"></p>
-             <p id="f1_viz"></p>
+             <div id="precision_viz"></div>
+             <div id="recall_viz"></div>
+             <div id="f1_viz"></div>
              <!-- <label for="tpr" class="form-label">TPR: <span id="tpr_viz">0</span></label>
              <label for="fpr" class="form-label">FPR: <span id="fpr_viz">0</span></label>
              <label for="f1" class="form-label">F1: <span id="f1_viz">0</span></label> -->
@@ -382,22 +382,24 @@
                 fp = fp + 1;
               }
 
-              //add fpr tpr here
               filteredDetections.push(detection);
             }
 
             var precision = (tp / (tp + fp));
             var recall = (tp / (tp + fn));
             var f1 = 2*(precision*recall) / (precision + recall);
-            var fpr = (fp / (fp + tn));
-            var tpr = (tp / (tp + fn));
+            // var fpr = (fp / (fp + tn));
+            // var tpr = (tp / (tp + fn));
+            document.getElementById("precision_viz").textContent = "Precision: " + precision;
+            document.getElementById("recall_viz").textContent = "Recall: " + recall;
+	    document.getElementById("f1_viz").textContent =  "F1: " + f1;
 
-            var tpr_disp = document.getElementById('tpr');
-            tpr_disp.textContent = "TPR: " + tpr;
-            var fpr_disp = document.getElementById('fpr');
-            fpr_disp.textContent = "FPR: " + fpr;
-            var f1_disp = document.getElementById('f1');
-            f1_disp.textContent = "F1: " + f1;
+            // var prec_disp = document.getElementById('precision_viz');
+            // prec_disp.textContent = "TPR: " + precision;
+            // var rec_disp = document.getElementById('recall_viz');
+            // rec_disp.textContent = "FPR: " + recall;
+            // var f1_disp = document.getElementById('f1_viz');
+            // f1_disp.textContent = "F1: " + f1;
 
             for (const detection of filteredDetections) {
               // remaining skipping logic (we are not done yet):
@@ -488,8 +490,8 @@
               document.getElementById("confidenceRange").value = detections.min_threshold;
               document.getElementById("confthreshviz").textContent = detections.min_threshold;
 
-              document.getElementById("tpr_viz").textContent = "TPR: " + detections.tpr;
-              document.getElementById("fpr_viz").textContent = "TPR: " + detections.fpr;
+              document.getElementById("precision_viz").textContent = "Precision: " + detections.precision;
+              document.getElementById("recall_viz").textContent = "Recall: " + detections.recall;
               document.getElementById("f1_viz").textContent =  "F1: " +detections.f1;
               kwfxn();
               segfxn();

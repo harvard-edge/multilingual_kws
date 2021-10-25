@@ -9,7 +9,7 @@ import multiprocessing
 import json
 import glob
 import csv
-import sklearn
+#import sklearn
 
 import fire
 
@@ -148,9 +148,9 @@ def inference(
         keywords=keywords,
         detections=detections_with_confidence,
         min_threshold=detection_threshold,
-        tpr=tpr,
-        fpr=fpr,
-        f1=f1
+        precision=stats[0],
+        recall=stats[1],
+        f1=stats[2]
     )
 
     # write detections to json
