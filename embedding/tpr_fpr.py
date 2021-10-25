@@ -1,3 +1,78 @@
+def get_groundtruth_and_stats(
+    found_words, targets, groundtruth, time_tolerance_ms=1500,
+):
+    detections = []
+    fp = 0
+    tp = 0
+    fn = 0
+    for target in targets:
+        gt_target_times = [t for k, t in groundtruth if k == target]
+        print("gt target occurences", len(gt_target_times))
+        found_target_times = [found for found in found_words if found[0] == target]
+        print("num found targets", len(found_target_times))
+
+        # false negatives
+        for time in gt_target_times:
+            latest_time = time + time_tolerance_ms
+            earliest_time = time - time_tolerance_ms
+            potential_match = False
+            for _, found_time, _ in found_target_times:
+                if found_time > latest_time:
+                    break
+                if found_time < earliest_time:
+                    continue
+                potential_match = True
+            if not potential_match:
+                # false negative
+                detections.append(dict(keyword=target, time_ms=time, groundtruth="fn"))
+                fn += 1
+
+        # true positives / false positives
+        for _, time, confidence in found_target_times:
+            latest_time = time + time_tolerance_ms
+            earliest_time = time - time_tolerance_ms
+
+            potential_match = False
+            for gt_time in gt_target_times:
+                if gt_time > latest_time:
+                    break
+                if gt_time < earliest_time:
+                    continue
+                potential_match = True
+
+            # these tp/fp classifications are wrt the (minimum) detection confidence threshold
+            # and do not reflect a higher user threshold in the visualizer
+            if potential_match:  # true positive
+                detections.append(
+                    dict(
+                        keyword=target,
+                        time_ms=time,
+                        confidence=confidence,
+                        groundtruth="tp",
+                    )
+                )
+                tp += 1
+            else:  # false positive
+                detections.append(
+                    dict(
+                        keyword=target,
+                        time_ms=time,
+                        confidence=confidence,
+                        groundtruth="fp",
+                    )
+                )
+                fp += 1
+
+        precision = (tp / (tp + fp))
+        recall = (tp / (tp + fn))
+        f1 = 2*(precision*recall) / (precision + recall)
+        fpr = (fp / (fp + tn))
+        tpr = (tp / (tp + fn))
+
+        stats = [tpr,fpr,precision,recall,f1]
+
+        return detections,stats
+
 def get_groundtruth(
     found_words, targets, groundtruth, time_tolerance_ms=1500,
 ):
