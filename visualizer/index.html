@@ -134,9 +134,12 @@
         </div>
         <div class="col-md-3">
              <!-- stats: tpr fpr f1 -->
-             <label for="tpr" class="form-label">TPR: <span id="tpf_viz">0</span></label>
+             <p id="tpr_viz"></p>
+             <p id="fpr_viz"></p>
+             <p id="f1_viz"></p>
+             <!-- <label for="tpr" class="form-label">TPR: <span id="tpr_viz">0</span></label>
              <label for="fpr" class="form-label">FPR: <span id="fpr_viz">0</span></label>
-             <label for="f1" class="form-label">F1: <span id="f1_viz">0</span></label>
+             <label for="f1" class="form-label">F1: <span id="f1_viz">0</span></label> -->
         </div>
       </div>
 
@@ -390,11 +393,11 @@
             var tpr = (tp / (tp + fn));
 
             var tpr_disp = document.getElementById('tpr');
-            tpr_disp.value = tpr;
+            tpr_disp.textContent = "TPR: " + tpr;
             var fpr_disp = document.getElementById('fpr');
-            fpr_disp.value = fpr;
+            fpr_disp.textContent = "FPR: " + fpr;
             var f1_disp = document.getElementById('f1');
-            f1_disp.value = f1;
+            f1_disp.textContent = "F1: " + f1;
 
             for (const detection of filteredDetections) {
               // remaining skipping logic (we are not done yet):
@@ -484,6 +487,10 @@
               document.getElementById("confidenceRange").min = detections.min_threshold;
               document.getElementById("confidenceRange").value = detections.min_threshold;
               document.getElementById("confthreshviz").textContent = detections.min_threshold;
+
+              document.getElementById("tpr_viz").textContent = "TPR: " + detections.tpr;
+              document.getElementById("fpr_viz").textContent = "TPR: " + detections.fpr;
+              document.getElementById("f1_viz").textContent =  "F1: " +detections.f1;
               kwfxn();
               segfxn();
             });

@@ -137,18 +137,20 @@ def inference(
             for row in reader:
                 groundtruth_data.append((row[0], float(row[1])))
 
-        #(detections_with_confidence,stats) = get_groundtruth_and_stats(
-        #    detections_with_confidence, keywords, groundtruth_data
-        #)
-        detections_with_confidence = get_groundtruth(
+        detections_with_confidence,stats = get_groundtruth_and_stats(
             detections_with_confidence, keywords, groundtruth_data
         )
+        #detections_with_confidence = get_groundtruth(
+        #    detections_with_confidence, keywords, groundtruth_data
+        #)
 
     detections = dict(
         keywords=keywords,
         detections=detections_with_confidence,
         min_threshold=detection_threshold,
-        #stats=stats #tpr,fpr,precision,recall,f1
+        tpr=tpr,
+        fpr=fpr,
+        f1=f1
     )
 
     # write detections to json
