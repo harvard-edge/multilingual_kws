@@ -9,14 +9,14 @@ import multiprocessing
 import json
 import glob
 import csv
-#import sklearn
+import sklearn
 
 import fire
 
 from embedding import input_data
 from embedding import batch_streaming_analysis as sa
 from embedding import transfer_learning
-from embedding.tpr_fpr import tpr_fpr, get_groundtruth, get_groundtruth_and_stats
+from embedding.tpr_fpr import tpr_fpr, get_groundtruth
 
 
 def eval(streamtarget: sa.StreamTarget, results: Dict):
@@ -137,20 +137,42 @@ def inference(
             for row in reader:
                 groundtruth_data.append((row[0], float(row[1])))
 
-        detections_with_confidence,stats = get_groundtruth_and_stats(
+        detections_with_confidence = get_groundtruth(
             detections_with_confidence, keywords, groundtruth_data
         )
-        #detections_with_confidence = get_groundtruth(
-        #    detections_with_confidence, keywords, groundtruth_data
-        #)
+
+        fp = 0
+        tp = 0
+        fn = 0
+        gt_for_stats = []
+        detections_for_stats = []
+        for k,t,c,g in detections_with_confidence:
+            if (g == 'tp'):
+                gt_for_stats.append(k)
+                detections_for_stats.append(k)
+                tp += 1
+            elif (g == 'fn'):
+                gt_for_stats.append('None')
+                detections_for_stats.append(k)
+                fn += 1
+            elif (g == 'fp'):
+                gt_for_stats.append(k)
+                detections_for_stats.append('None')
+                fp += 1
+
+        #precision,recall,f1,support = sklearn.metrics.precision_recall_fscore_support(gt_for_stats, detections_for_stats, average='micro')
+
+        precision = (tp / (tp + fp))
+        recall = (tp / (tp + fn))
+        f1 = 2*(precision*recall) / (precision + recall)
+        fpr = (fp / (fp + tn))
+        tpr = (tp / (tp + fn))
 
     detections = dict(
         keywords=keywords,
         detections=detections_with_confidence,
         min_threshold=detection_threshold,
-        precision=stats[0],
-        recall=stats[1],
-        f1=stats[2]
+        stats=[tpr,fpr,precision,recall,f1]
     )
 
     # write detections to json

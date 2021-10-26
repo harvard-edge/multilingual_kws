@@ -95,7 +95,7 @@
         Code, models, and documentation: [<a href="https://www.github.com/harvard-edge/multilingual_kws">https://www.github.com/harvard-edge/multilingual_kws</a>]
       </p>
 
-    
+
     <section id="groundtruth-controls">
       <div class="row mb-3">
         <label for="confidenceRange" class="form-label">Confidence threshold: <span id="confthreshviz">0</span></label>
@@ -133,7 +133,13 @@
 
         </div>
         <div class="col-md-3">
-
+             <!-- stats: tpr fpr f1 -->
+             <div id="precision_viz"></div>
+             <div id="recall_viz"></div>
+             <div id="f1_viz"></div>
+             <!-- <label for="tpr" class="form-label">TPR: <span id="tpr_viz">0</span></label>
+             <label for="fpr" class="form-label">FPR: <span id="fpr_viz">0</span></label>
+             <label for="f1" class="form-label">F1: <span id="f1_viz">0</span></label> -->
         </div>
       </div>
 
@@ -347,12 +353,15 @@
             // - serverside, only false negatives wrt the minimum detection threshold are missing confidence values
             // - clientside, some false negatives are also due to filtering by the UI threshold
             var filteredDetections = [];
+            var tp = 0;
+            var fn = 0;
+            var fp = 0;
             for (const origdetection of detections.detections) {
               // if keyword diasbled, skip
               if (!enabledKeywords.has(origdetection.keyword)) {
                 continue;
               }
-              // todo: fragile deep-copy 
+              // todo: fragile deep-copy
               var detection = JSON.parse(JSON.stringify(origdetection));
 
               // if tp confidence below visibility threshold, change to false negative
@@ -364,8 +373,33 @@
                   continue;
                 }
               }
+
+              if (detection.groundtruth === "tp") {
+                tp = tp + 1;
+              } else if (detection.groundtruth === "fn") {
+                fn = fn + 1;
+              } else {
+                fp = fp + 1;
+              }
+
               filteredDetections.push(detection);
             }
+
+            var precision = (tp / (tp + fp));
+            var recall = (tp / (tp + fn));
+            var f1 = 2*(precision*recall) / (precision + recall);
+            // var fpr = (fp / (fp + tn));
+            // var tpr = (tp / (tp + fn));
+            document.getElementById("precision_viz").textContent = "Precision: " + precision;
+            document.getElementById("recall_viz").textContent = "Recall: " + recall;
+	    document.getElementById("f1_viz").textContent =  "F1: " + f1;
+
+            // var prec_disp = document.getElementById('precision_viz');
+            // prec_disp.textContent = "TPR: " + precision;
+            // var rec_disp = document.getElementById('recall_viz');
+            // rec_disp.textContent = "FPR: " + recall;
+            // var f1_disp = document.getElementById('f1_viz');
+            // f1_disp.textContent = "F1: " + f1;
 
             for (const detection of filteredDetections) {
               // remaining skipping logic (we are not done yet):
@@ -377,7 +411,7 @@
 
               if (detection.hasOwnProperty("confidence")) {
                 const sconf = detection.confidence.toString().substring(0,5);
-                label += ":" + sconf; 
+                label += ":" + sconf;
                 const tags = {tp: "[TP]", fp: "[FP]", fn: "[FN]", ng: ""};
                 label += tags[detection.groundtruth];
               } else {
@@ -455,6 +489,10 @@
               document.getElementById("confidenceRange").min = detections.min_threshold;
               document.getElementById("confidenceRange").value = detections.min_threshold;
               document.getElementById("confthreshviz").textContent = detections.min_threshold;
+
+              document.getElementById("precision_viz").textContent = "Precision: " + detections.precision;
+              document.getElementById("recall_viz").textContent = "Recall: " + detections.recall;
+              document.getElementById("f1_viz").textContent =  "F1: " +detections.f1;
               kwfxn();
               segfxn();
             });
