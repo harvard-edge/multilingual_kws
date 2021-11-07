@@ -93,7 +93,7 @@ def inference(
             target_keyword=keyword,
             detection_thresholds=[detection_threshold],
             average_window_duration_ms=100,
-            suppression_ms=500,
+            suppression_ms=0,#500,
             time_tolerance_ms=750,  # only used when graphing
             max_chunk_length_sec=inference_chunk_len_seconds,
         )

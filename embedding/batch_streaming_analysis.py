@@ -145,21 +145,25 @@ def calculate_streaming_accuracy(
             ):
                 output_softmax = inferences[ix]
                 current_time_ms = int(audio_data_offset * 1000 / sample_rate)
-                recognize_commands.process_latest_result(
-                    output_softmax, current_time_ms, recognize_element
-                )
-                if (
-                    recognize_element.is_new_command
-                    and recognize_element.found_command != "_silence_"
-                ):
+                #print("current_time and detection:",current_time_ms,output_softmax[0])
+                #recognize_commands.process_latest_result(
+                #    output_softmax, current_time_ms, recognize_element
+                #)
+                if (output_softmax[2] > 0.2):
+
+                #if (
+                #    recognize_element.is_new_command
+                #    and recognize_element.found_command != "_silence_"
+                #):
+                    
                     all_found_words.append(
-                        [recognize_element.found_command, current_time_ms]
+                        [FLAGS.labels()[2], current_time_ms]
                     )
                     all_found_words_w_confidences.append(
                         [
-                            recognize_element.found_command,
+                            FLAGS.labels()[2],
                             current_time_ms,
-                            recognize_element.score,
+                            output_softmax[2],
                         ]
                     )
                     stats.calculate_accuracy_stats(

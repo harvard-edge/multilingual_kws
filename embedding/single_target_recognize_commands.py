@@ -179,6 +179,7 @@ class SingleTargetRecognizeCommands(object):
     # current_top_index = sorted_averaged_index_score[0][0]
     # current_top_label = self._labels[current_top_index]
     current_top_score = average_scores[self._target_id]
+    #print('current:',current_top_score)
     if current_top_score > self._detection_threshold:
       current_top_label = self._labels[self._target_id]
     else:
