@@ -12,10 +12,18 @@ isocodes = [ "en", "de", "fr", "ca", "rw", "es", "ru", "it", "pl", "eu",
     "rm-sursilv", "ro", "sl", "sah", "lv", "ia", "sk", "cv", "ga-IE",
     "zh-CN", "ka", "cnh", "ha", "rm-vallader", "ta", "vi", "as",
     "gn", "or", "dv", "lt", ]
-# fmt:on
 print(len(isocodes))
 
-l2i = {'German': 'de', 'English': 'en', 'French': 'fr', 'Catalan': 'ca', 'Kinyarwada': 'rw', 'Spanish': 'es', 'Russian': 'ru', 'Italian': 'it', 'Polish': 'pl', 'Basque': 'eu', 'Persian': 'fa', 'Dutch': 'nl', 'Esparanto': 'eo', 'Portuguese': 'pt', 'Welsh': 'cy', 'Tatar': 'tt', 'Czech': 'cs', 'Ukranian': 'uk', 'Estonian': 'et', 'Turkish': 'tr', 'Mongolian': 'mn', 'Kyrgyz': 'ky', 'Arabic': 'ar', 'Frisian': 'fy-NL', 'Swedish': 'sv-SE', 'Maltese': 'mt', 'Indonesian': 'id', 'Greek': 'el', 'Breton': 'br', 'Sursilvan': 'rm-sursilv', 'Romanian': 'ro', 'Slovenian': 'sl', 'Sakha': 'sah', 'Latvian': 'lv', 'Interlingua': 'ia', 'Slovak': 'sk', 'Chuvash': 'cv', 'Irish': 'ga-IE', 'Chinese': 'zh-CN', 'Georgian': 'ka', 'Hakha': 'cnh', 'Chin': 'ha', 'Hausa': 'rm-vallader', 'Vallader': 'ta', 'Tamil': 'vi', 'Vietnamese': 'as', 'Assamese': 'gn', 'Guarani': 'or', 'Oriya': 'dv', 'Lithuanian': 'lt'}
+l2i = { "German": "de", "English": "en", "French": "fr", "Catalan": "ca", "Kinyarwada": "rw", "Spanish": "es", "Russian": "ru", "Italian": "it", "Polish": "pl",
+    "Basque": "eu", "Persian": "fa", "Dutch": "nl", "Esparanto": "eo", "Portuguese": "pt", "Welsh": "cy", "Tatar": "tt", "Czech": "cs", "Ukranian": "uk", "Estonian": "et",
+    "Turkish": "tr", "Mongolian": "mn", "Kyrgyz": "ky", "Arabic": "ar", "Frisian": "fy-NL", "Swedish": "sv-SE", "Maltese": "mt", "Indonesian": "id", "Greek": "el", "Breton": "br",
+    "Sursilvan": "rm-sursilv", "Romanian": "ro", "Slovenian": "sl", "Sakha": "sah", "Latvian": "lv", "Interlingua": "ia", "Slovak": "sk",
+    "Chuvash": "cv", "Irish": "ga-IE", "Chinese": "zh-CN", "Georgian": "ka", "Hakha Chin": "cnh", "Hausa": "ha", "Vallader": "rm-vallader", "Tamil": "ta", "Vietnamese": "vi",
+    "Assamese": "as", "Guarani": "gn", "Oriya": "or", "Dhivehi": "dv", "Lithuanian": "lt",
+}
+print(len(l2i))
+# fmt:on
+
 i2l = {v:k for k,v in l2i.items()}
 print(i2l)
 
