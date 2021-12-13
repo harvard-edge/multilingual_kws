@@ -18,7 +18,7 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
-import embedding.input_data as input_data
+import multilingual_kws.embedding.input_data as input_data
 # import tensorflow as tf
 
 

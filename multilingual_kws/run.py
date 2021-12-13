@@ -12,10 +12,10 @@ import csv
 
 import fire
 
-from embedding import input_data
-from embedding import batch_streaming_analysis as sa
-from embedding import transfer_learning
-from embedding.tpr_fpr import tpr_fpr, get_groundtruth
+from multilingual_kws.embedding import input_data
+from multilingual_kws.embedding import batch_streaming_analysis as sa
+from multilingual_kws.embedding import transfer_learning
+from multilingual_kws.embedding.tpr_fpr import tpr_fpr, get_groundtruth
 
 
 def eval(streamtarget: sa.StreamTarget, results: Dict):

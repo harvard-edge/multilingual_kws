@@ -16,9 +16,9 @@ import numpy as np
 import tensorflow as tf
 
 
-import embedding.input_data as input_data
-from embedding.accuracy_utils import StreamingAccuracyStats
-from embedding.single_target_recognize_commands import (
+import multilingual_kws.embedding.input_data as input_data
+from multilingual_kws.embedding.accuracy_utils import StreamingAccuracyStats
+from multilingual_kws.embedding.single_target_recognize_commands import (
     SingleTargetRecognizeCommands,
     RecognizeResult,
 )

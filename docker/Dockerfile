@@ -1,6 +1,6 @@
-FROM tensorflow/tensorflow:2.3.4-gpu
+FROM tensorflow/tensorflow:2.7.0-gpu
 # for jupyter you can use the following:
-# tensorflow/tensorflow:2.3.4-gpu-jupyter
+# tensorflow/tensorflow:latest-gpu-jupyter
 
 # from parent directory multilingual_kws:
 # docker build -t mkws docker/ 
@@ -35,6 +35,7 @@ RUN apt update \
         ffmpeg \
         software-properties-common \
         git \
+        opus-tools \
         build-essential cmake \
         libmad0-dev \ 
         libid3tag0-dev libsndfile1-dev libgd-dev libboost-filesystem-dev \
@@ -61,10 +62,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash - \
     && npm install -g serve
 
 RUN pip install dataclasses sox matplotlib seaborn pandas pydub fire 
-RUN pip install tensorflow-io==0.16.0 --no-dependencies
 
 # RUN echo "alpha-0.0.0"
 RUN git clone https://github.com/harvard-edge/multilingual_kws /multilingual_kws
 WORKDIR /multilingual_kws
+RUN wget https://github.com/harvard-edge/multilingual_kws/releases/download/v0.1-alpha/multilingual_context_73_0.8011.tar.gz && \
+    tar xf multilingual_context_73_0.8011.tar.gz
+RUN wget https://github.com/harvard-edge/multilingual_kws/releases/download/v0.1-alpha/unknown_files.tar.gz && \
+    tar xf unknown_files.tar.gz
 RUN chmod -R 777 /multilingual_kws/visualizer/
-ENTRYPOINT ["python", "-m", "embedding.run"]
+ENTRYPOINT ["python", "-m", "multilingual_kws.run"]
