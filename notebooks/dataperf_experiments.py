@@ -1,5 +1,4 @@
 # %%
-import matplotlib
 import tensorflow as tf
 import numpy as np
 import IPython
@@ -7,7 +6,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import os
 import subprocess
-import csv
 from sklearn.linear_model import LogisticRegression
 
 # %%
@@ -73,7 +71,7 @@ print("Number of unknown files", len(unknown_files))
 
 # %%
 # N kws, N unknown
-N_SAMPLES = 50
+N_SAMPLES = 5
 N_TEST = 100
 rng = np.random.RandomState(0)
 keyword_samples = rng.choice(keyword_samples, N_SAMPLES + N_TEST, replace=False)
@@ -95,7 +93,8 @@ pos_test_spectrograms = np.array(
 neg_test_spectrograms = np.array(
     [input_data.file2spec(settings, str(s)) for s in neg_test]
 )
-# %%
+print(positive_spectrograms.shape, negative_spectrograms.shape)
+print(pos_test_spectrograms.shape, neg_test_spectrograms.shape)
 
 # %%
 positive_fvs = embedding.predict(positive_spectrograms[:, :, :, np.newaxis])
@@ -106,19 +105,17 @@ neg_test_fvs = embedding.predict(neg_test_spectrograms[:, :, :, np.newaxis])
 # %%
 X = np.vstack([positive_fvs, negative_fvs])
 print(X.shape)
-# %%
 y = np.hstack([np.ones(positive_fvs.shape[0]), np.zeros(negative_fvs.shape[0])])
 print(y.shape)
-
-# %%
-
 clf = LogisticRegression(random_state=0).fit(X, y)
-# %%
-# %%
+
 test_X = np.vstack([pos_test_fvs, neg_test_fvs])
 test_y = np.hstack([np.ones(pos_test_fvs.shape[0]), np.zeros(neg_test_fvs.shape[0])])
 print(y.shape)
-clf.score(test_X, test_y)
+print("test score", clf.score(test_X, test_y))
 # 0.94 
+
+# %%
+plt.hist(np.linalg.norm(pos_test_fvs, axis=1))
 
 # %%
