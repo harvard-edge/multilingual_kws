@@ -40,7 +40,7 @@ model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base-960h")
 
 # %%
 
-def get_embedding(audio):
+def get_attention(audio):
     inputs = processor(audio, sampling_rate=16000, return_tensors="pt")
     with torch.no_grad():
         outputs = model(**inputs)
@@ -52,30 +52,82 @@ def get_embedding(audio):
     # 768 - attention vectors?
     return last_hidden_states
 
-# %%
-get_embedding(audio).shape
+def get_embedding_from_fp(filepath):
+    audio = librosa.load(filepath, sr=16000)[0]
+    attention = get_attention(audio)
+    return np.amax(np.squeeze(attention.numpy()), axis=0)
 
+# %%
+print(get_attention(audio).shape)
+print(np.amax(np.squeeze(get_attention(audio).numpy()), 0).shape)
+print(get_embedding_from_fp(wavs[0]).shape)
 # %%
 samples = 20
 
 rng = np.random.RandomState(0)
 fps = rng.choice(wavs, samples, replace=False)
 audios = [librosa.load(fp, sr=16000)[0] for fp in fps]
-embeddings = [get_embedding(a) for a in audios]
+embeddings = [get_attention(a) for a in audios]
 print(len(audios))
 print("\n".join([str(e.shape) for e in embeddings]))
 
 # %%
 
-max_timesteps = max([embedding.shape[1] for embedding in embeddings])
-padded_embedding_data = [np.pad(embedding, ((0,0), (0, max_timesteps - embedding.shape[1]), (0, 0))) for embedding in embeddings]
-# %%
 print("\n".join([str(e.shape) for e in embeddings]))
-print("\n".join([str(e.shape) for e in padded_embedding_data]))
 
 # %%
 x = np.concatenate(embeddings)
 # x1 = np.concatenate(padded_embedding_data)
 np.amax(x, 1).shape
 
+# %%
+unknown_files_txt = Path.home() / "tinyspeech_harvard/unknown_files/unknown_files.txt"
+unknown_samples_base = Path.home() / "tinyspeech_harvard/unknown_files"
+unknown_files = []
+with open(unknown_files_txt, "r") as fh:
+    for w in fh.read().splitlines():
+        unknown_files.append(unknown_samples_base / w)
+print("Number of unknown files", len(unknown_files))
+# %%
+
+N_RUNS = 5
+N_SAMPLES = 20
+N_TEST = 100
+
+msdir_wav = Path.home() / "tinyspeech_harvard/dataperf/mswc_microset_wav"
+keyword = "bird"
+keyword_samples = list(sorted((msdir_wav / "en" / "clips" / keyword).glob("*.wav")))
+print(len(keyword_samples))
+rng = np.random.RandomState(0)
+keyword_samples = rng.choice(keyword_samples, (N_RUNS * N_SAMPLES) + N_TEST, replace=False)
+unknown_samples = rng.choice(unknown_files, N_SAMPLES + N_TEST, replace=False)
+
+negative_samples = unknown_samples[:N_SAMPLES]
+pos_test = keyword_samples[-N_TEST:]
+neg_test = unknown_samples[-N_TEST:]
+
+negative_fvs = np.array([get_embedding_from_fp(f) for f in negative_samples])
+pos_test_fvs = np.array([get_embedding_from_fp(f) for f in pos_test])
+neg_test_fvs = np.array([get_embedding_from_fp(f) for f in neg_test])
+
+test_X = np.vstack([pos_test_fvs, neg_test_fvs])
+print("testX", test_X.shape)
+test_y = np.hstack([np.ones(pos_test_fvs.shape[0]), np.zeros(neg_test_fvs.shape[0])])
+
+for ix in range(N_RUNS):
+    print("::::: start", ix)
+    start = ix * N_SAMPLES
+    end = start + N_SAMPLES
+    print(start, end)
+    positive_samples = keyword_samples[start:end]
+
+    positive_fvs = np.array([get_embedding_from_fp(f) for f in positive_samples])
+
+    X = np.vstack([positive_fvs, negative_fvs])
+    print(X.shape)
+    y = np.hstack([np.ones(positive_fvs.shape[0]), np.zeros(negative_fvs.shape[0])])
+    print(y.shape)
+    clf = sklearn.linear_model.LogisticRegression(random_state=0).fit(X, y)
+
+    print("test score", clf.score(test_X, test_y))
 # %%
