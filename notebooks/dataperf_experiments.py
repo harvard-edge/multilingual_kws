@@ -119,3 +119,60 @@ print("test score", clf.score(test_X, test_y))
 plt.hist(np.linalg.norm(pos_test_fvs, axis=1))
 
 # %%
+# performance spread
+
+N_RUNS = 5
+N_SAMPLES = 20
+N_TEST = 100
+
+settings = input_data.standard_microspeech_model_settings(3)
+
+rng = np.random.RandomState(0)
+keyword_samples = rng.choice(keyword_samples, (N_RUNS * N_SAMPLES) + N_TEST, replace=False)
+unknown_samples = rng.choice(unknown_files, N_SAMPLES + N_TEST, replace=False)
+
+negative_samples = unknown_samples[:N_SAMPLES]
+pos_test = keyword_samples[-N_TEST:]
+neg_test = unknown_samples[-N_TEST:]
+
+negative_spectrograms = np.array(
+    [input_data.file2spec(settings, str(s)) for s in negative_samples]
+)
+pos_test_spectrograms = np.array(
+    [input_data.file2spec(settings, str(s)) for s in pos_test]
+)
+neg_test_spectrograms = np.array(
+    [input_data.file2spec(settings, str(s)) for s in neg_test]
+)
+print(pos_test_spectrograms.shape, neg_test_spectrograms.shape)
+
+negative_fvs = embedding.predict(negative_spectrograms[:, :, :, np.newaxis])
+pos_test_fvs = embedding.predict(pos_test_spectrograms[:, :, :, np.newaxis])
+neg_test_fvs = embedding.predict(neg_test_spectrograms[:, :, :, np.newaxis])
+
+test_X = np.vstack([pos_test_fvs, neg_test_fvs])
+test_y = np.hstack([np.ones(pos_test_fvs.shape[0]), np.zeros(neg_test_fvs.shape[0])])
+
+for ix in range(N_RUNS):
+    print("::::: start", ix)
+    start = ix * N_SAMPLES
+    end = start + N_SAMPLES
+    print(start, end)
+    positive_samples = keyword_samples[start:end]
+    positive_spectrograms = np.array(
+        [input_data.file2spec(settings, str(s)) for s in positive_samples]
+    )
+    print(positive_spectrograms.shape, negative_spectrograms.shape)
+
+    positive_fvs = embedding.predict(positive_spectrograms[:, :, :, np.newaxis])
+
+    X = np.vstack([positive_fvs, negative_fvs])
+    print(X.shape)
+    y = np.hstack([np.ones(positive_fvs.shape[0]), np.zeros(negative_fvs.shape[0])])
+    print(y.shape)
+    clf = LogisticRegression(random_state=0).fit(X, y)
+
+    print("test score", clf.score(test_X, test_y))
+# %%
+
+# %%

@@ -115,19 +115,70 @@ print("testX", test_X.shape)
 test_y = np.hstack([np.ones(pos_test_fvs.shape[0]), np.zeros(neg_test_fvs.shape[0])])
 
 for ix in range(N_RUNS):
-    print("::::: start", ix)
+    print("::::: run", ix)
     start = ix * N_SAMPLES
     end = start + N_SAMPLES
-    print(start, end)
+    # print(start, end)
     positive_samples = keyword_samples[start:end]
 
     positive_fvs = np.array([get_embedding_from_fp(f) for f in positive_samples])
 
     X = np.vstack([positive_fvs, negative_fvs])
-    print(X.shape)
+    # print(X.shape)
     y = np.hstack([np.ones(positive_fvs.shape[0]), np.zeros(negative_fvs.shape[0])])
-    print(y.shape)
+    # print(y.shape)
     clf = sklearn.linear_model.LogisticRegression(random_state=0).fit(X, y)
 
     print("test score", clf.score(test_X, test_y))
+# %%
+#multiclass linear regression
+
+N_RUNS = 5
+N_SAMPLES = 20
+N_TEST = 100
+
+msdir_wav = Path.home() / "tinyspeech_harvard/dataperf/mswc_microset_wav"
+kw1 = "bird"
+kw2 = "house"
+kw1s = list(sorted((msdir_wav / "en" / "clips" / kw1).glob("*.wav")))
+kw2s = list(sorted((msdir_wav / "en" / "clips" / kw2).glob("*.wav")))
+rng = np.random.RandomState(0)
+kw1s = rng.choice(kw1s, (N_RUNS * N_SAMPLES) + N_TEST, replace=False)
+kw2s = rng.choice(kw2s, (N_RUNS * N_SAMPLES) + N_TEST, replace=False)
+unknown_samples = rng.choice(unknown_files, N_SAMPLES + N_TEST, replace=False)
+
+negative_samples = unknown_samples[:N_SAMPLES]
+negative_fvs = np.array([get_embedding_from_fp(f) for f in negative_samples])
+
+pos1_test = np.array([get_embedding_from_fp(f) for f in kw1s[-N_TEST:]])
+pos2_test = np.array([get_embedding_from_fp(f) for f in kw2s[-N_TEST:]])
+
+neg_test = unknown_samples[-N_TEST:]
+neg_test_fvs = np.array([get_embedding_from_fp(f) for f in neg_test])
+
+test_X = np.vstack([pos1_test, pos2_test, neg_test_fvs])
+print("testX", test_X.shape)
+test_y = np.hstack([[1] * pos1_test.shape[0], [2] * pos2_test.shape[0], np.zeros(neg_test_fvs.shape[0])])
+
+for ix in range(N_RUNS):
+    print("::::: run", ix)
+    start = ix * N_SAMPLES
+    end = start + N_SAMPLES
+    # print(start, end)
+    pos1_samples = kw1s[start:end]
+    pos2_samples = kw2s[start:end]
+    samples = np.concatenate([pos1_samples, pos2_samples])
+
+    positive_fvs = np.array([get_embedding_from_fp(f) for f in samples])
+
+    X = np.vstack([positive_fvs, negative_fvs])
+    # print(X.shape)
+    y = np.hstack([[1] * pos1_samples.shape[0], [2] * pos2_samples.shape[0], np.zeros(negative_fvs.shape[0])])
+    # print(y.shape)
+    clf = sklearn.linear_model.LogisticRegression(random_state=0).fit(X, y)
+
+    print("test score", clf.score(test_X, test_y))
+
+# %%
+
 # %%
