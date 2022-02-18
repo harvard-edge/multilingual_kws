@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import os
 import subprocess
 from sklearn.linear_model import LogisticRegression
+import yaml
 
 # %%
 # %matplotlib inline
@@ -64,10 +65,21 @@ plt.gcf().set_size_inches(15, 5)
 unknown_files_txt = Path.home() / "tinyspeech_harvard/unknown_files/unknown_files.txt"
 unknown_samples_base = Path.home() / "tinyspeech_harvard/unknown_files"
 unknown_files = []
+unknown_en = []
 with open(unknown_files_txt, "r") as fh:
     for w in fh.read().splitlines():
         unknown_files.append(unknown_samples_base / w)
+        # print(w)
+        lang = Path(w).parts[1]
+        # print(lang)
+        if lang == "en":
+            unknown_en.append(unknown_samples_base / w)
 print("Number of unknown files", len(unknown_files))
+print("Number of unknown en", len(unknown_en))
+
+unknown_en_words = [Path(w).parts[-2] for w in unknown_en]
+print(set(unknown_en_words))
+print(len(unknown_en_words) - len(set(unknown_en_words)))
 
 # %%
 # N kws, N unknown
@@ -113,7 +125,7 @@ test_X = np.vstack([pos_test_fvs, neg_test_fvs])
 test_y = np.hstack([np.ones(pos_test_fvs.shape[0]), np.zeros(neg_test_fvs.shape[0])])
 print(y.shape)
 print("test score", clf.score(test_X, test_y))
-# 0.94 
+# 0.94
 
 # %%
 plt.hist(np.linalg.norm(pos_test_fvs, axis=1))
@@ -128,7 +140,9 @@ N_TEST = 100
 settings = input_data.standard_microspeech_model_settings(3)
 
 rng = np.random.RandomState(0)
-keyword_samples = rng.choice(keyword_samples, (N_RUNS * N_SAMPLES) + N_TEST, replace=False)
+keyword_samples = rng.choice(
+    keyword_samples, (N_RUNS * N_SAMPLES) + N_TEST, replace=False
+)
 unknown_samples = rng.choice(unknown_files, N_SAMPLES + N_TEST, replace=False)
 
 negative_samples = unknown_samples[:N_SAMPLES]
@@ -174,5 +188,55 @@ for ix in range(N_RUNS):
 
     print("test score", clf.score(test_X, test_y))
 # %%
+# %%
+# YAML output
+# TODO(mmaz): these are fake splits, switch to official splits
+
+rng = np.random.RandomState(0)
+shuf_pos = rng.permutation(keyword_samples)
+shuf_neg = rng.permutation(unknown_en)
+
+n_train_pos = int(len(shuf_pos) * 0.8)
+n_train_neg = int(len(shuf_neg) * 0.8)
+pos_train = shuf_pos[:n_train_pos]
+neg_train = shuf_neg[:n_train_neg]
+pos_test = shuf_pos[n_train_pos:]
+neg_test = shuf_neg[n_train_neg:]
+
+print([len(l) for l in [pos_train, neg_train, pos_test, neg_test]])
+
+print(pos_train[0])
+print(neg_train[0])
+rel_pos = Path.home() / "tinyspeech_harvard/dataperf/mswc_microset_wav"
+rel_neg = Path.home() / "tinyspeech_harvard/unknown_files"
 
 # %%
+settings = input_data.standard_microspeech_model_settings(3)
+def get_ev(fp):
+    spec = input_data.file2spec(settings, str(fp))
+    return np.squeeze(embedding.predict(spec[None])).tolist()
+
+v = get_ev(pos_train[0])
+print(v)
+
+# %%
+target_train = [(str(fp.relative_to(rel_pos)), get_ev(fp)) for fp in pos_train]
+nontarget_train = [(str(fp.relative_to(rel_neg)), get_ev(fp)) for fp in neg_train]
+target_test = [(str(fp.relative_to(rel_pos)), get_ev(fp)) for fp in pos_test]
+nontarget_test = [(str(fp.relative_to(rel_neg)), get_ev(fp)) for fp in neg_test]
+
+# %%
+def to_lod(l):
+    return [dict(sample_id=fp, mswc_embedding=e) for (fp,e) in l]
+
+train_yaml = dict(target_samples = to_lod(target_train), nontarget_samples=nontarget_train)
+test_yaml = dict(target_samples = to_lod(target_test), nontarget_samples=nontarget_test)
+
+with open("train_bird.yml", 'w') as fh:
+    fh.write(yaml.dump(train_yaml, default_flow_style=None, sort_keys=False))
+with open("test_bird.yml", 'w') as fh:
+    fh.write(yaml.dump(test_yaml, default_flow_style=None, sort_keys=False))
+
+# %%
+
+
