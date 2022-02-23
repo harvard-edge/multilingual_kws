@@ -8,6 +8,7 @@ import os
 import subprocess
 from sklearn.linear_model import LogisticRegression
 import yaml
+import sys
 
 # %%
 # %matplotlib inline
@@ -189,7 +190,7 @@ for ix in range(N_RUNS):
     print("test score", clf.score(test_X, test_y))
 # %%
 # %%
-# YAML output
+# serialized output
 # TODO(mmaz): these are fake splits, switch to official splits
 
 rng = np.random.RandomState(0)
@@ -212,9 +213,12 @@ rel_neg = Path.home() / "tinyspeech_harvard/unknown_files"
 
 # %%
 settings = input_data.standard_microspeech_model_settings(3)
+
+
 def get_ev(fp):
     spec = input_data.file2spec(settings, str(fp))
     return np.squeeze(embedding.predict(spec[None])).tolist()
+
 
 v = get_ev(pos_train[0])
 print(v)
@@ -226,17 +230,80 @@ target_test = [(str(fp.relative_to(rel_pos)), get_ev(fp)) for fp in pos_test]
 nontarget_test = [(str(fp.relative_to(rel_neg)), get_ev(fp)) for fp in neg_test]
 
 # %%
-def to_lod(l):
-    return [dict(sample_id=fp, mswc_embedding=e) for (fp,e) in l]
+# yaml out
+# def to_lod(l):
+#     return [dict(sample_id=fp, mswc_embedding=e) for (fp,e) in l]
 
-train_yaml = dict(target_samples = to_lod(target_train), nontarget_samples=nontarget_train)
-test_yaml = dict(target_samples = to_lod(target_test), nontarget_samples=nontarget_test)
+# train_yaml = dict(target_samples = to_lod(target_train), nontarget_samples=nontarget_train)
+# test_yaml = dict(target_samples = to_lod(target_test), nontarget_samples=nontarget_test)
 
-with open("train_bird.yml", 'w') as fh:
-    fh.write(yaml.dump(train_yaml, default_flow_style=None, sort_keys=False))
-with open("test_bird.yml", 'w') as fh:
-    fh.write(yaml.dump(test_yaml, default_flow_style=None, sort_keys=False))
+# with open("train_bird.yml", 'w') as fh:
+#     yaml.dump(train_yaml, fh, default_flow_style=None, sort_keys=False)
+# with open("test_bird.yml", 'w') as fh:
+#     yaml.dump(test_yaml, fh, default_flow_style=None, sort_keys=False)
+
+
+# %%
+pb = Path.home() / "tinyspeech_harvard/dataperf/dataperf-speech-example/selection/serialization/serialization"
+sys.path.insert(0, str(pb))
+import protoc_pb2
 
 # %%
 
+def serialize_vectors(fps_vecs, samples, sample_type):
+    for (fp, vec) in fps_vecs:
+        sample = samples.samples.add()
+        sample.sample_type = sample_type
+        sample.sample_id = fp
+        sample.mswc_embedding_vector.extend(vec)
+    return
 
+train_samples = protoc_pb2.Samples()
+serialize_vectors(target_train, train_samples, protoc_pb2.SampleType.TARGET)
+serialize_vectors(nontarget_train, train_samples, protoc_pb2.SampleType.NONTARGET)
+
+test_samples = protoc_pb2.Samples()
+serialize_vectors(target_test, test_samples, protoc_pb2.SampleType.TARGET)
+serialize_vectors(nontarget_test, test_samples, protoc_pb2.SampleType.NONTARGET)
+
+# %%
+with open("train.pb", "wb") as fh:
+    fh.write(train_samples.SerializeToString())
+with open("test.pb", "wb") as fh:
+    fh.write(test_samples.SerializeToString())
+
+# %%
+target_train_np = np.array([["target", fp, v] for (fp, v) in target_train], dtype=object)
+nontarget_train_np = np.array(
+    [["nontarget", fp, v] for (fp, v) in nontarget_train], dtype=object
+)
+
+target_test_np = np.array([["target", fp, v] for (fp, v) in target_test], dtype=object)
+nontarget_test_np = np.array(
+    [["nontarget", fp, v] for (fp, v) in nontarget_test], dtype=object
+)
+
+train_np = np.vstack([target_train_np, nontarget_train_np])
+test_np = np.vstack([target_test_np, nontarget_test_np])
+
+
+# %%
+np.savez_compressed("train_bird.npz", train=train_np)
+np.savez_compressed("test_bird.npz", test=test_np)
+# np.save("test.npy", test_np)
+# np.save("train.npy", train_np)
+
+
+# %%
+load = np.load("train.npz", allow_pickle=True)["train"]
+print(load.shape)
+target_vecs = load[load[:, 0] == "target"][:,2]
+nontarget_vecs =load[load[:, 0] == "nontarget"][:,2]
+print(target_vecs.shape)
+print(target_vecs.dtype)
+print(nontarget_vecs.shape)
+
+# %%
+target_vecs[0]
+
+# %%
