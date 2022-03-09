@@ -10,6 +10,7 @@ from sklearn.linear_model import LogisticRegression
 import yaml
 import sys
 import pandas as pd
+import tqdm
 
 # %%
 # %matplotlib inline
@@ -334,8 +335,8 @@ spec_ds = (
     .batch(BATCH_SIZE)
     .prefetch(AUTOTUNE)
 )
-feature_vec = embedding.predict(spec_ds)
-print("Feature vector shape:", feature_vec.shape)
+feature_vecs = embedding.predict(spec_ds)
+print("Feature vector shape:", feature_vecs.shape)
 # %%
 
 # %%
@@ -355,7 +356,7 @@ df = pd.DataFrame(
     data=dict(
         clip_id=sample_paths,
         #mswc_embedding_vector=pd.Series(list(feature_vec), dtype=np.float32),
-        mswc_embedding_vector=pd.Series(list(feature_vec)),
+        mswc_embedding_vector=pd.Series(list(feature_vecs)),
     )
 )
 # df = pd.DataFrame(data=dict(clip_id=sample_paths))
@@ -375,4 +376,59 @@ mswc_16khz = Path("/media/mark/hyperion/mswc/16khz_wav")
 keyword_samples = list(sorted((mswc_16khz / "en" / "clips" / keyword).glob("*.wav")))
 print(len(keyword_samples))
 print(keyword_samples[0])
+
+# %%
+mswc_embedding_destdir = Path("/media/mark/hyperion/mswc/embeddings/en")
+mswc_16khz = Path("/media/mark/hyperion/mswc/16khz_wav/en/clips")
+keywords = list(sorted(os.listdir(mswc_16khz)))
+print(len(keywords))
+for keyword in tqdm.tqdm(keywords):
+    keyword_samples = list(sorted((mswc_16khz / keyword).glob("*.wav")))
+    dest = mswc_embedding_destdir / f"{keyword}.parquet"
+    if dest.exists():
+        # we are resuming from a partial run
+        continue
+
+    samples_str = [str(f) for f in keyword_samples]
+    if len(samples_str) == 0:
+        # this is bad news. 
+        # https://github.com/harvard-edge/multilingual_kws/issues/35
+        continue
+
+    spec_ds = (
+        tf.data.Dataset.from_tensor_slices(samples_str)
+        .map(to_spec, num_parallel_calls=AUTOTUNE)
+        .batch(BATCH_SIZE)
+        .prefetch(AUTOTUNE)
+    )
+
+    feature_vecs = embedding.predict(spec_ds)
+    id_paths = [str(fp.relative_to(mswc_16khz)) for fp in keyword_samples]
+
+    df = pd.DataFrame(
+        data=dict(
+            clip_id=id_paths,
+            mswc_embedding_vector=pd.Series(list(feature_vecs)),
+        )
+    )
+    dest = mswc_embedding_destdir / f"{keyword}.parquet"
+    df.to_parquet(dest)
+    # print(f"{mswc_embedding_destdir=}{keyword=}{dest=}")
+
+# %%
+keyword
+
+# %%
+uhohs = []
+mswc_16khz = Path("/media/mark/hyperion/mswc/16khz_wav/en/clips")
+keywords = list(sorted(os.listdir(mswc_16khz)))
+print(len(keywords))
+for keyword in tqdm.tqdm(keywords):
+    keyword_samples = list(sorted((mswc_16khz / keyword).glob("*.wav")))
+    if len(keyword_samples) == 0:
+        uhohs.append(keyword)
+print(len(uhohs))
+
+# %%
+print(uhohs)
 # %%
