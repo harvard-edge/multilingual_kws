@@ -9,6 +9,7 @@ import subprocess
 from sklearn.linear_model import LogisticRegression
 import yaml
 import sys
+import pandas as pd
 
 # %%
 # %matplotlib inline
@@ -244,11 +245,15 @@ nontarget_test = [(str(fp.relative_to(rel_neg)), get_ev(fp)) for fp in neg_test]
 
 
 # %%
-pb = Path.home() / "tinyspeech_harvard/dataperf/dataperf-speech-example/selection/serialization/serialization"
+pb = (
+    Path.home()
+    / "tinyspeech_harvard/dataperf/dataperf-speech-example/selection/serialization/serialization"
+)
 sys.path.insert(0, str(pb))
 import protoc_pb2
 
 # %%
+
 
 def serialize_vectors(fps_vecs, samples, sample_type):
     for (fp, vec) in fps_vecs:
@@ -257,6 +262,7 @@ def serialize_vectors(fps_vecs, samples, sample_type):
         sample.sample_id = fp
         sample.mswc_embedding_vector.extend(vec)
     return
+
 
 train_samples = protoc_pb2.Samples()
 serialize_vectors(target_train, train_samples, protoc_pb2.SampleType.TARGET)
@@ -273,7 +279,9 @@ with open("test.pb", "wb") as fh:
     fh.write(test_samples.SerializeToString())
 
 # %%
-target_train_np = np.array([["target", fp, v] for (fp, v) in target_train], dtype=object)
+target_train_np = np.array(
+    [["target", fp, v] for (fp, v) in target_train], dtype=object
+)
 nontarget_train_np = np.array(
     [["nontarget", fp, v] for (fp, v) in nontarget_train], dtype=object
 )
@@ -297,8 +305,8 @@ np.savez_compressed("test_bird.npz", test=test_np)
 # %%
 load = np.load("train.npz", allow_pickle=True)["train"]
 print(load.shape)
-target_vecs = load[load[:, 0] == "target"][:,2]
-nontarget_vecs =load[load[:, 0] == "nontarget"][:,2]
+target_vecs = load[load[:, 0] == "target"][:, 2]
+nontarget_vecs = load[load[:, 0] == "nontarget"][:, 2]
 print(target_vecs.shape)
 print(target_vecs.dtype)
 print(nontarget_vecs.shape)
@@ -306,4 +314,65 @@ print(nontarget_vecs.shape)
 # %%
 target_vecs[0]
 
+
+# %%
+samples_str = [str(f) for f in keyword_samples]
+settings = input_data.standard_microspeech_model_settings(3)
+spectrogram = input_data.file2spec(settings, sample_fpath)
+
+BATCH_SIZE = 1024
+AUTOTUNE = tf.data.experimental.AUTOTUNE
+
+
+def to_spec(fpath):
+    return input_data.file2spec(settings, fpath)
+
+
+spec_ds = (
+    tf.data.Dataset.from_tensor_slices(samples_str)
+    .map(to_spec, num_parallel_calls=AUTOTUNE)
+    .batch(BATCH_SIZE)
+    .prefetch(AUTOTUNE)
+)
+feature_vec = embedding.predict(spec_ds)
+print("Feature vector shape:", feature_vec.shape)
+# %%
+
+# %%
+
+#rel_pos = Path.home() / "tinyspeech_harvard/dataperf/mswc_microset_wav"
+# print(keyword_samples[0].relative_to(rel_pos))
+# sample_paths = [str(fp.relative_to(rel_pos)) for fp in keyword_samples]
+
+mswc_16khz = Path("/media/mark/hyperion/mswc/16khz_wav")
+print(keyword_samples[0].relative_to(mswc_16khz))
+sample_paths = [str(fp.relative_to(mswc_16khz)) for fp in keyword_samples]
+
+print(len(sample_paths))
+
+# %%
+df = pd.DataFrame(
+    data=dict(
+        clip_id=sample_paths,
+        #mswc_embedding_vector=pd.Series(list(feature_vec), dtype=np.float32),
+        mswc_embedding_vector=pd.Series(list(feature_vec)),
+    )
+)
+# df = pd.DataFrame(data=dict(clip_id=sample_paths))
+print(df.shape)
+print(df.dtypes)
+df.head()
+
+# %%
+df.to_parquet("/home/mark/tmp/try.parquet")
+# %%
+df = pd.read_parquet("/home/mark/tmp/try.parquet")
+print(df.dtypes)
+df.head()
+# %%
+keyword = "and"
+mswc_16khz = Path("/media/mark/hyperion/mswc/16khz_wav")
+keyword_samples = list(sorted((mswc_16khz / "en" / "clips" / keyword).glob("*.wav")))
+print(len(keyword_samples))
+print(keyword_samples[0])
 # %%
