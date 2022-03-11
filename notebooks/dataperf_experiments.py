@@ -2,6 +2,7 @@
 import tensorflow as tf
 import numpy as np
 import IPython
+import shutil
 from pathlib import Path
 import matplotlib.pyplot as plt
 import os
@@ -431,4 +432,72 @@ print(len(uhohs))
 
 # %%
 print(uhohs)
+# %%
+
+
+
+# %%
+mswcen = Path("/media/mark/hyperion/mswc/en/clips")
+keywords = list(sorted(os.listdir(mswcen)))
+rng = np.random.RandomState(0)
+chosen = rng.choice(keywords, 1000, replace=False)
+for keyword in chosen:
+    wavs = list(sorted(Path(mswcen / keyword).iterdir()))
+    if len(wavs) > 10:
+        samples = rng.choice(wavs, 10, replace=False)
+    else:
+        samples = wavs
+    for s in samples:
+        shutil.copy2(s, "/media/mark/hyperion/mswc/wavtesting")
+# %%
+
+bads = []
+for f in Path("/media/mark/hyperion/mswc/wavtesting").iterdir():
+    if f.is_dir():
+        continue
+    dest = Path("/media/mark/hyperion/mswc/wavtesting") / "wavs" / (f.stem + ".wav")
+    cvt = f"opusdec {f} {dest}"
+    try:
+        subprocess.call(cvt, shell=True, timeout=10)
+    except:
+        bads.append(f)
+
+print("Bads -------------------")
+for b in bads:
+    print(b)
+# %%
+results = []
+for ix, f in enumerate(Path("/media/mark/hyperion/mswc/wavtesting/wavs").iterdir()):
+    cmd = f"sox {f} -n stat"
+    out = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # change the "\n" to " - " to inline the filename with the number of samples
+    res = str(f) + "\n" + out.stdout.decode("utf8") + out.stderr.decode("utf8")
+    results.append(res)
+    # print("---", ix)
+p = Path("/home/mark/tmp/soxout.txt")
+p.write_text("\n".join(results))
+
+# %%
+rs = Path("/home/mark/tmp/soxout.txt").read_text()
+qs = []
+for l in rs.splitlines():
+    if "Samples read" in l:
+        qs.append(l)
+len(qs)
+# %%
+
+# %%
+good = 0
+bad = 0
+bads = []
+for q in qs:
+    if "48000" in q:
+        good += 1
+    else:
+        bad += 1
+        bads.append(q)
+print(good, bad)
+# %%
+bads
+
 # %%
