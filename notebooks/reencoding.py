@@ -35,17 +35,30 @@ def convert_16k_wav(task:Task):
 #fmt: off
 mswc_languages = ['sl', 'br', 'ro', 'rm-sursilv', 'el', 'mt', 'id', 'sah', 'fy-NL', 'cv', 'sk', 'ia', 'lv', 'vi', 'ar', 'as', 'or', 'gn', 'sv-SE', 'dv', 'ta', 'rm-vallader', 'ka', 'zh-CN', 'cnh', 'ha', 'ga-IE', 'ky', 'mn', 'tr', 'lt', 'uk', 'et', 'cs', 'tt', 'pt', 'nl', 'cy', 'ru', 'eo', 'fa', 'eu', 'pl', 'rw', 'ca', 'it', 'de', 'en', 'es', 'fr']
 assert len(mswc_languages) == 50
-std3_ignore = ['ab', 'gl']
+
+
+# std3_ignore = ['ab', 'gl']
 std3_langs = ['br', 'cv', 'gn', 'de', 'el', 'en', 'fa', 'ca', 'ha', 'lt', 'pt', 'ru', 'rw', 'sk', 'ta', 'tr', 'tt', 'uk', 'zh-CN']
 for lang in std3_langs:
     assert lang in mswc_languages, f"{lang} missing"
+
+superset_std2_langs = ['it', 'mt', 'pl', 'sl', 'ka', 'rm-sursilv', 'rm-vallader', 'mn', 'ro', 'es', 'eo', 'sah', 'lv', 'fr', 'eu', 'cnh', 'pa-IN', 'dv', 'ar', 'fi', 'vi', 'as', 'cy', 'lg', 'ab', 'or', 'cs', 'fy-NL', 'sv-SE', 'hi', 'id', 'ky', 'ia', 'et', 'ga-IE', 'ja', 'nl'] # removed 'el'
+std2_mswc_langs = list(set(mswc_languages).intersection(superset_std2_langs))
+print(std2_mswc_langs)
+
+# isocodes_to_process = std3_langs
+isocodes_to_process = std2_mswc_langs
+
+basedir_std3 = "/mnt/disks/std3/data/generated/common_voice/frequent_words/{lang_isocode}/clips"
+basedir_std2 = "/mnt/disks/std2/data/generated/common_voice/frequent_words/{lang_isocode}/clips"
+basedir_template = basedir_std2
 #fmt:on
 
-verify = False
+verify = True
 if verify:
-    for lang_isocode in std3_langs:
+    for lang_isocode in isocodes_to_process:
         print(f"verifying all clips in MSWC metadata are present on disk for {lang_isocode}")
-        basedir = Path(f"/mnt/disks/std3/data/generated/common_voice/frequent_words/{lang_isocode}/clips")
+        basedir = Path(basedir_template.format(lang_isocode))
         uhoh = 0
         considered = 0
         for keyword, samples in tqdm.tqdm(meta[lang_isocode]["filenames"].items()):
@@ -59,10 +72,8 @@ if verify:
         assert uhoh == 0, "missing source wavfiles"
 
 
-for lang_isocode in std3_langs:
-    if lang_isocode in ["en", "de", "sk", "br"]:
-        continue # already done
-    basedir = Path(f"/mnt/disks/std3/data/generated/common_voice/frequent_words/{lang_isocode}/clips")
+for lang_isocode in isocodes_to_process:
+    basedir = Path(basedir_template.format(lang_isocode))
     full_name = meta[lang_isocode]["language"]
     print(f"\n\n starting {lang_isocode} -------- {full_name}")
 
