@@ -24,21 +24,23 @@ with gzip.open(j, "r") as fh:
 class TestParams:
     minimum_total_samples: int = 300  # for candidate words
     language_isocode: str = "en"
-    num_targets: int = 10 
+    num_targets: int = 5
     num_experiments: int = 100
     num_splits_per_experiment: int = 10
-    max_num_samples_for_selection: int = 500
-    num_target_samples: int = 400
-    num_nontarget_samples: int = 100
+    max_num_samples_for_selection: int = 300
+    # num_target_samples: int = 400 # TODO(mmaz) should we enforce this?
+    num_nontarget_training_samples: int = 100
+    num_nontarget_eval_samples: int = 200  # ideally - TODO(mmaz) we are missing some unknown samples
+
     SEED_EXPERIMENT_GENERATION: int = 0
     SEED_NONTARGET_SELECTION: int = 0
     SEED_SPLITTER: int = 0
 
-
-assert (
-    TestParams.num_target_samples + TestParams.num_nontarget_samples
-    == TestParams.max_num_samples_for_selection
-), "nontarget and target samples must sum to max samples"
+#TODO(mmaz) should we enforce this?
+# assert (
+#     TestParams.num_target_samples + TestParams.num_nontarget_training_samples
+#     == TestParams.max_num_samples_for_selection
+# ), "nontarget and target samples must sum to max samples"
 
 # %%
 candidate_words = []
@@ -142,9 +144,6 @@ while len(experiment_list) < TestParams.num_experiments:
         continue
     experiment_list.append(candidate_exp)
 
-for ix, e in enumerate(experiment_list):
-    print(ix, e)
-
 
 # test harness
 def read_parquet(word, parquet_basedir=Path("/media/mark/hyperion/mswc/embeddings/en")):
@@ -167,10 +166,47 @@ def get_fvs_by_split(word):
     return results
 
 
-experiment_results = []
-experiment_scores = []
+def get_unknown_fvs():
+    # use the same unknowns for all folds for now
+    # TODO(mmaz) improve this
+    unknown_rng = np.random.RandomState(TestParams.SEED_NONTARGET_SELECTION)
+    selected_unknowns = unknown_rng.choice(
+        unknown_en,
+        TestParams.num_nontarget_training_samples
+        + TestParams.num_nontarget_eval_samples,
+        replace=False,
+    )
+    missing_unknowns = 0
+    selected_fvs = []
+    for u in selected_unknowns:
+        u_path = Path(u)
+        word = u_path.parts[-2]
+        df = read_parquet(word)
+        parquet_idx = f"{word}/{u_path.stem}.wav"
+        fv = df.loc[df["clip_id"] == parquet_idx]
+        if fv.shape[0] == 0:
+            missing_unknowns += 1
+            continue
+        fv = np.stack(fv.mswc_embedding_vector.values)
+        selected_fvs.append(fv)
+    print("WARNING: missing unknowns", missing_unknowns)
+    selected_fvs = np.concatenate(selected_fvs)
+    print(selected_fvs.shape)
+    training_unknowns = selected_fvs[: TestParams.num_nontarget_training_samples, :]
+    eval_unknowns = selected_fvs[TestParams.num_nontarget_training_samples :, :]
+    print("training_unknowns", training_unknowns.shape)
+    print("eval unknowns", eval_unknowns.shape)
+    return dict(train=training_unknowns, eval=eval_unknowns)
+
+
+unknown_fvs = get_unknown_fvs()
+
+# %%
+
+
 def experiment_run(e):
-    word2classid = {word: ix for ix, word in enumerate(e)}
+    # reserve index 0 for unknown
+    word2classid = {word: ix + 1 for ix, word in enumerate(e)}
 
     #  {weather : {train: (970, 1024), dev:, test:, ...}}}
     word2splits_fvs = {word: get_fvs_by_split(word) for word in e}
@@ -199,6 +235,15 @@ def experiment_run(e):
     training_labels = np.array(training_labels)
     eval_labels = np.array(eval_labels)
 
+    # add unknowns
+    training_samples = np.vstack([training_samples, unknown_fvs["train"]])
+    training_labels = np.concatenate(
+        [training_labels, [0] * unknown_fvs["train"].shape[0]]
+    )
+
+    eval_samples = np.vstack([eval_samples, unknown_fvs["eval"]])
+    eval_labels = np.concatenate([eval_labels, [0] * unknown_fvs["eval"].shape[0]])
+
     selector = sklearn.model_selection.StratifiedShuffleSplit(
         n_splits=TestParams.num_splits_per_experiment,
         train_size=TestParams.max_num_samples_for_selection,
@@ -210,8 +255,9 @@ def experiment_run(e):
     for train_ixs, val_ixs in selector.split(training_samples, training_labels):
         train_Xs = training_samples[train_ixs]
         train_ys = training_labels[train_ixs]
+        # TODO(mmaz) look at the distribution of unknowns vs the target samples
 
-        # TODO(mmaz) 
+        # TODO(mmaz)
         #  * what kind of SVM do we want
         #  * should we use the pipeline for scaling features?
         #  https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html#sklearn.svm.SVC
@@ -225,12 +271,21 @@ def experiment_run(e):
         score = clf.score(val_Xs, val_ys)
         crossfold_scores.append(score)
 
-
     best_clf = classifiers[np.argmax(crossfold_scores)]
     experiment_score = best_clf.score(eval_samples, eval_labels)
     experiment_results = dict(words=e, score=experiment_score)
     return experiment_results
 
+
+# s, yd = experiment_run(experiment_list[0])
+# print(s)
+# print(len(yd))
+# plt.hist(yd)
+
+for ix, e in enumerate(experiment_list):
+    print(ix, e)
+experiment_results = []
+experiment_scores = []
 with multiprocessing.Pool() as p:
     for r in p.imap_unordered(experiment_run, experiment_list, chunksize=5):
         experiment_scores.append(r["score"])
@@ -239,5 +294,6 @@ with multiprocessing.Pool() as p:
             print(f"{len(experiment_scores)}/{TestParams.num_experiments} done")
 
 plt.hist(experiment_scores, bins=25)
+plt.show()
 
 # %%
