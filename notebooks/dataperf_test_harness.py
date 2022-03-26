@@ -27,8 +27,8 @@ class TestParams:
     num_targets: int = 5
     num_experiments: int = 100
     num_splits_per_experiment: int = 10
-    max_num_samples_for_selection: int = 300
-    # num_target_samples: int = 400 # TODO(mmaz) should we enforce this?
+    #max_num_samples_for_selection: int = 300 # TODO(mmaz) (how) should we enforce this?
+    num_target_samples: int = 400 
     num_nontarget_training_samples: int = 100
     num_nontarget_eval_samples: int = 200  # ideally - TODO(mmaz) we are missing some unknown samples
 
@@ -235,18 +235,14 @@ def experiment_run(e):
     training_labels = np.array(training_labels)
     eval_labels = np.array(eval_labels)
 
-    # add unknowns
-    training_samples = np.vstack([training_samples, unknown_fvs["train"]])
-    training_labels = np.concatenate(
-        [training_labels, [0] * unknown_fvs["train"].shape[0]]
-    )
-
+    # add unknowns to evals (for now we add unknowns to the training samples within each fold)
     eval_samples = np.vstack([eval_samples, unknown_fvs["eval"]])
     eval_labels = np.concatenate([eval_labels, [0] * unknown_fvs["eval"].shape[0]])
+    
 
     selector = sklearn.model_selection.StratifiedShuffleSplit(
         n_splits=TestParams.num_splits_per_experiment,
-        train_size=TestParams.max_num_samples_for_selection,
+        train_size=TestParams.num_target_samples,
         random_state=TestParams.SEED_SPLITTER,
     )
     # cross-validation on training data
@@ -256,6 +252,10 @@ def experiment_run(e):
         train_Xs = training_samples[train_ixs]
         train_ys = training_labels[train_ixs]
         # TODO(mmaz) look at the distribution of unknowns vs the target samples
+
+        # add unknowns
+        train_Xs = np.vstack([train_Xs, unknown_fvs["train"]])
+        train_ys = np.concatenate([train_ys, [0] * unknown_fvs["train"].shape[0]])
 
         # TODO(mmaz)
         #  * what kind of SVM do we want
@@ -267,6 +267,10 @@ def experiment_run(e):
 
         val_Xs = training_samples[val_ixs]
         val_ys = training_labels[val_ixs]
+
+        # add unknowns to val fold (these are the same as in the final eval split for now, TODO(mmaz))
+        val_Xs = np.vstack([val_Xs, unknown_fvs["eval"]])
+        val_ys = np.concatenate([val_ys, [0] * unknown_fvs["eval"].shape[0]])
 
         score = clf.score(val_Xs, val_ys)
         crossfold_scores.append(score)
