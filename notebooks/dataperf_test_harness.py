@@ -1,14 +1,16 @@
 # %%
 from dataclasses import dataclass
 import multiprocessing
-import numpy as np
 import csv
 import json
+import gzip
 from pathlib import Path
 import matplotlib.pyplot as plt
-import gzip
+import numpy as np
 import pandas as pd
 import sklearn
+import sklearn.svm
+import sklearn.model_selection
 
 # %%
 j = Path.home() / "tinyspeech_harvard/dataperf/metadata.json.gz"
@@ -22,8 +24,8 @@ with gzip.open(j, "r") as fh:
 class TestParams:
     minimum_total_samples: int = 300  # for candidate words
     language_isocode: str = "en"
-    num_targets: int = 5
-    num_experiments: int = 20
+    num_targets: int = 10 
+    num_experiments: int = 100
     num_splits_per_experiment: int = 10
     max_num_samples_for_selection: int = 500
     num_target_samples: int = 400
@@ -46,11 +48,11 @@ for w, c in meta[TestParams.language_isocode]["wordcounts"].items():
 print(len(candidate_words))
 
 # %%
-splits_csv = Path("/media/mark/hyperion/mswc/splits_en/en_splits.csv")
-assert splits_csv.stem.split("_")[0] == TestParams.language_isocode
+splits_file = Path("/media/mark/hyperion/mswc/splits_en/en_splits.csv")
+assert splits_file.stem.split("_")[0] == TestParams.language_isocode
 
 sample2split = {}  # map of opus sample filenames (from metadata.json) to split
-with open(splits_csv, "r") as fh:
+with open(splits_file, "r") as fh:
     reader = csv.reader(fh)
     next(reader)  # SET,LINK,WORD,VALID,SPEAKER,GENDER
     for row in reader:
@@ -144,9 +146,7 @@ for ix, e in enumerate(experiment_list):
     print(ix, e)
 
 
-# %%
-
-
+# test harness
 def read_parquet(word, parquet_basedir=Path("/media/mark/hyperion/mswc/embeddings/en")):
     return pd.read_parquet(parquet_basedir / (word + ".parquet"))
 
@@ -232,10 +232,12 @@ def experiment_run(e):
     return experiment_results
 
 with multiprocessing.Pool() as p:
-    for r in p.imap_unordered(experiment_run, experiment_list):
+    for r in p.imap_unordered(experiment_run, experiment_list, chunksize=5):
         experiment_scores.append(r["score"])
         experiment_results.append(r)
+        if len(experiment_scores) % int(TestParams.num_experiments / 10) == 0:
+            print(f"{len(experiment_scores)}/{TestParams.num_experiments} done")
 
-plt.hist(experiment_scores)
+plt.hist(experiment_scores, bins=25)
 
 # %%
