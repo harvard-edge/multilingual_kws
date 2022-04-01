@@ -9,6 +9,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import sklearn
+import sklearn.pipeline
+import sklearn.linear_model
+import sklearn.ensemble
+import sklearn.preprocessing
+# from sklearn.metrics import classification_report
 import sklearn.svm
 import sklearn.model_selection
 
@@ -25,11 +30,11 @@ class TestParams:
     minimum_total_samples: int = 300  # for candidate words
     language_isocode: str = "en"
     num_targets: int = 5
-    num_experiments: int = 100
+    num_experiments: int = 200
     num_splits_per_experiment: int = 10
     #max_num_samples_for_selection: int = 300 # TODO(mmaz) (how) should we enforce this?
-    num_target_samples: int = 400 
-    num_nontarget_training_samples: int = 100
+    num_target_samples: int = 100 
+    num_nontarget_training_samples: int = 20
     num_nontarget_eval_samples: int = 200  # ideally - TODO(mmaz) we are missing some unknown samples
 
     SEED_EXPERIMENT_GENERATION: int = 0
@@ -202,6 +207,79 @@ def get_unknown_fvs():
 unknown_fvs = get_unknown_fvs()
 
 # %%
+# classifiers
+
+def simplest_svm(train_Xs, train_ys):
+    # TODO(mmaz)
+    #  * what kind of SVM do we want
+    #  * should we use the pipeline for scaling features?
+    #  https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html#sklearn.svm.SVC
+    clf = sklearn.svm.SVC()
+    clf.fit(train_Xs, train_ys)
+    return clf
+
+def svm_with_scaling(train_Xs, train_ys):
+    clf = sklearn.pipeline.Pipeline(
+        [("scaler", sklearn.preprocessing.StandardScaler()), ("svm", sklearn.svm.SVC())]
+    )
+    clf.fit(train_Xs, train_ys)
+    return clf
+
+def logistic_regression(train_Xs, train_ys):
+    clf = sklearn.linear_model.LogisticRegression()
+    clf.fit(train_Xs, train_ys)
+    return clf
+
+def logistic_regression_with_scaling(train_Xs, train_ys):
+    clf = sklearn.pipeline.Pipeline(
+        [("scaler", sklearn.preprocessing.StandardScaler()), ("lr", sklearn.linear_model.LogisticRegression())]
+    )
+    clf.fit(train_Xs, train_ys)
+    return clf
+
+def random_forest(train_Xs, train_ys):
+    clf = sklearn.ensemble.RandomForestClassifier()
+    clf.fit(train_Xs, train_ys)
+    return clf
+
+# def xgboost(train_Xs, train_ys):
+#     clf = sklearn.ensemble.XGBClassifier()
+#     clf.fit(train_Xs, train_ys)
+#     return clf
+
+def gradient_boosting(train_Xs, train_ys):
+    clf = sklearn.ensemble.GradientBoostingClassifier()
+    clf.fit(train_Xs, train_ys)
+    return clf
+
+def logistic_regression_with_l1_regularization(train_Xs, train_ys):
+    clf = sklearn.linear_model.LogisticRegression(penalty="l1", solver="liblinear")
+    clf.fit(train_Xs, train_ys)
+    return clf
+
+def logistic_regression_with_l2_regularization(train_Xs, train_ys):
+    clf = sklearn.linear_model.LogisticRegression(penalty="l2")
+    clf.fit(train_Xs, train_ys)
+    return clf
+
+# def logistic_regression_with_elastic_net_regularization(train_Xs, train_ys):
+#     clf = sklearn.linear_model.LogisticRegression(penalty="elasticnet")
+#     clf.fit(train_Xs, train_ys)
+#     return clf
+
+# def logistic_regression_with_lasso_regularization(train_Xs, train_ys):
+#     clf = sklearn.linear_model.LogisticRegression(penalty="lasso")
+#     clf.fit(train_Xs, train_ys)
+#     return clf
+
+# def logistic_regression_with_ridge_regularization(train_Xs, train_ys):
+#     clf = sklearn.linear_model.LogisticRegression(penalty="ridge")
+#     clf.fit(train_Xs, train_ys)
+#     return clf
+
+classifier_functions = [simplest_svm, svm_with_scaling, logistic_regression, logistic_regression_with_scaling, random_forest, gradient_boosting, logistic_regression_with_l1_regularization, logistic_regression_with_l2_regularization]
+
+# %%
 
 
 def experiment_run(e):
@@ -257,14 +335,6 @@ def experiment_run(e):
         train_Xs = np.vstack([train_Xs, unknown_fvs["train"]])
         train_ys = np.concatenate([train_ys, [0] * unknown_fvs["train"].shape[0]])
 
-        # TODO(mmaz)
-        #  * what kind of SVM do we want
-        #  * should we use the pipeline for scaling features?
-        #  https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html#sklearn.svm.SVC
-        clf = sklearn.svm.SVC()
-        clf.fit(train_Xs, train_ys)
-        classifiers.append(clf)
-
         val_Xs = training_samples[val_ixs]
         val_ys = training_labels[val_ixs]
 
@@ -272,12 +342,32 @@ def experiment_run(e):
         val_Xs = np.vstack([val_Xs, unknown_fvs["eval"]])
         val_ys = np.concatenate([val_ys, [0] * unknown_fvs["eval"].shape[0]])
 
-        score = clf.score(val_Xs, val_ys)
-        crossfold_scores.append(score)
+        classifiers_per_fold = []
+        scores_per_fold = []
+        for cfxn in classifier_functions:
+            clf = cfxn(train_Xs, train_ys)
+            scores_per_fold.append(clf.score(val_Xs, val_ys))
+            classifiers_per_fold.append(clf)
+        crossfold_scores.append(scores_per_fold)
+        classifiers.append(classifiers_per_fold)
 
-    best_clf = classifiers[np.argmax(crossfold_scores)]
+        # val_Xs = training_samples[val_ixs]
+        # val_ys = training_labels[val_ixs]
+
+        # # add unknowns to val fold (these are the same as in the final eval split for now, TODO(mmaz))
+        # val_Xs = np.vstack([val_Xs, unknown_fvs["eval"]])
+        # val_ys = np.concatenate([val_ys, [0] * unknown_fvs["eval"].shape[0]])
+
+        # score = clf.score(val_Xs, val_ys)
+        # crossfold_scores.append(score)
+
+    crossfold_scores = np.array(crossfold_scores)
+    best_clf_ix = np.unravel_index(np.argmax(crossfold_scores, axis=None), crossfold_scores.shape)
+    best_clf = classifiers[best_clf_ix[0]][best_clf_ix[1]]
     experiment_score = best_clf.score(eval_samples, eval_labels)
-    experiment_results = dict(words=e, score=experiment_score)
+    # best_clf = classifiers[np.argmax(crossfold_scores)]
+    # experiment_score = best_clf.score(eval_samples, eval_labels)
+    experiment_results = dict(words=e, score=experiment_score, best_clf_ix=best_clf_ix)
     return experiment_results
 
 
@@ -290,7 +380,7 @@ for ix, e in enumerate(experiment_list):
     print(ix, e)
 experiment_results = []
 experiment_scores = []
-with multiprocessing.Pool() as p:
+with multiprocessing.Pool(processes=8) as p:
     for r in p.imap_unordered(experiment_run, experiment_list, chunksize=5):
         experiment_scores.append(r["score"])
         experiment_results.append(r)
@@ -299,5 +389,8 @@ with multiprocessing.Pool() as p:
 
 plt.hist(experiment_scores, bins=25)
 plt.show()
+
+for r in experiment_results:
+    print(r["best_clf_ix"])
 
 # %%
