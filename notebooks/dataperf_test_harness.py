@@ -13,6 +13,7 @@ import sklearn.pipeline
 import sklearn.linear_model
 import sklearn.ensemble
 import sklearn.preprocessing
+
 # from sklearn.metrics import classification_report
 import sklearn.svm
 import sklearn.model_selection
@@ -27,13 +28,13 @@ with gzip.open(j, "r") as fh:
 
 @dataclass
 class TestParams:
-    minimum_total_samples: int = 300  # for candidate words
+    minimum_total_samples: int = 500  # for candidate words
     language_isocode: str = "en"
     num_targets: int = 5
     num_experiments: int = 200
     num_splits_per_experiment: int = 10
-    #max_num_samples_for_selection: int = 300 # TODO(mmaz) (how) should we enforce this?
-    num_target_samples: int = 100 
+    # max_num_samples_for_selection: int = 300 # TODO(mmaz) (how) should we enforce this?
+    num_target_samples: int = 100
     num_nontarget_training_samples: int = 20
     num_nontarget_eval_samples: int = 200  # ideally - TODO(mmaz) we are missing some unknown samples
 
@@ -41,7 +42,8 @@ class TestParams:
     SEED_NONTARGET_SELECTION: int = 0
     SEED_SPLITTER: int = 0
 
-#TODO(mmaz) should we enforce this?
+
+# TODO(mmaz) should we enforce this?
 # assert (
 #     TestParams.num_target_samples + TestParams.num_nontarget_training_samples
 #     == TestParams.max_num_samples_for_selection
@@ -54,6 +56,8 @@ for w, c in meta[TestParams.language_isocode]["wordcounts"].items():
         candidate_words.append(w)
 print(len(candidate_words))
 
+# %%
+candidate_words
 # %%
 splits_file = Path("/media/mark/hyperion/mswc/splits_en/en_splits.csv")
 assert splits_file.stem.split("_")[0] == TestParams.language_isocode
@@ -209,6 +213,7 @@ unknown_fvs = get_unknown_fvs()
 # %%
 # classifiers
 
+
 def simplest_svm(train_Xs, train_ys):
     # TODO(mmaz)
     #  * what kind of SVM do we want
@@ -218,6 +223,7 @@ def simplest_svm(train_Xs, train_ys):
     clf.fit(train_Xs, train_ys)
     return clf
 
+
 def svm_with_scaling(train_Xs, train_ys):
     clf = sklearn.pipeline.Pipeline(
         [("scaler", sklearn.preprocessing.StandardScaler()), ("svm", sklearn.svm.SVC())]
@@ -225,42 +231,53 @@ def svm_with_scaling(train_Xs, train_ys):
     clf.fit(train_Xs, train_ys)
     return clf
 
+
 def logistic_regression(train_Xs, train_ys):
     clf = sklearn.linear_model.LogisticRegression()
     clf.fit(train_Xs, train_ys)
     return clf
 
+
 def logistic_regression_with_scaling(train_Xs, train_ys):
     clf = sklearn.pipeline.Pipeline(
-        [("scaler", sklearn.preprocessing.StandardScaler()), ("lr", sklearn.linear_model.LogisticRegression())]
+        [
+            ("scaler", sklearn.preprocessing.StandardScaler()),
+            ("lr", sklearn.linear_model.LogisticRegression()),
+        ]
     )
     clf.fit(train_Xs, train_ys)
     return clf
+
 
 def random_forest(train_Xs, train_ys):
     clf = sklearn.ensemble.RandomForestClassifier()
     clf.fit(train_Xs, train_ys)
     return clf
 
+
 # def xgboost(train_Xs, train_ys):
 #     clf = sklearn.ensemble.XGBClassifier()
 #     clf.fit(train_Xs, train_ys)
 #     return clf
+
 
 def gradient_boosting(train_Xs, train_ys):
     clf = sklearn.ensemble.GradientBoostingClassifier()
     clf.fit(train_Xs, train_ys)
     return clf
 
+
 def logistic_regression_with_l1_regularization(train_Xs, train_ys):
     clf = sklearn.linear_model.LogisticRegression(penalty="l1", solver="liblinear")
     clf.fit(train_Xs, train_ys)
     return clf
 
+
 def logistic_regression_with_l2_regularization(train_Xs, train_ys):
     clf = sklearn.linear_model.LogisticRegression(penalty="l2")
     clf.fit(train_Xs, train_ys)
     return clf
+
 
 # def logistic_regression_with_elastic_net_regularization(train_Xs, train_ys):
 #     clf = sklearn.linear_model.LogisticRegression(penalty="elasticnet")
@@ -277,7 +294,16 @@ def logistic_regression_with_l2_regularization(train_Xs, train_ys):
 #     clf.fit(train_Xs, train_ys)
 #     return clf
 
-classifier_functions = [simplest_svm, svm_with_scaling, logistic_regression, logistic_regression_with_scaling, random_forest, gradient_boosting, logistic_regression_with_l1_regularization, logistic_regression_with_l2_regularization]
+classifier_functions = [
+    simplest_svm,
+    svm_with_scaling,
+    logistic_regression,
+    logistic_regression_with_scaling,
+    random_forest,
+    gradient_boosting,
+    logistic_regression_with_l1_regularization,
+    logistic_regression_with_l2_regularization,
+]
 
 # %%
 
@@ -316,7 +342,6 @@ def experiment_run(e):
     # add unknowns to evals (for now we add unknowns to the training samples within each fold)
     eval_samples = np.vstack([eval_samples, unknown_fvs["eval"]])
     eval_labels = np.concatenate([eval_labels, [0] * unknown_fvs["eval"].shape[0]])
-    
 
     selector = sklearn.model_selection.StratifiedShuffleSplit(
         n_splits=TestParams.num_splits_per_experiment,
@@ -342,32 +367,37 @@ def experiment_run(e):
         val_Xs = np.vstack([val_Xs, unknown_fvs["eval"]])
         val_ys = np.concatenate([val_ys, [0] * unknown_fvs["eval"].shape[0]])
 
-        classifiers_per_fold = []
-        scores_per_fold = []
-        for cfxn in classifier_functions:
-            clf = cfxn(train_Xs, train_ys)
-            scores_per_fold.append(clf.score(val_Xs, val_ys))
-            classifiers_per_fold.append(clf)
-        crossfold_scores.append(scores_per_fold)
-        classifiers.append(classifiers_per_fold)
+        # classifiers_per_fold = []
+        # scores_per_fold = []
+        # for cfxn in classifier_functions:
+        #     clf = cfxn(train_Xs, train_ys)
+        #     scores_per_fold.append(clf.score(val_Xs, val_ys))
+        #     classifiers_per_fold.append(clf)
+        # crossfold_scores.append(scores_per_fold)
+        # classifiers.append(classifiers_per_fold)
 
-        # val_Xs = training_samples[val_ixs]
-        # val_ys = training_labels[val_ixs]
+        clf = sklearn.ensemble.VotingClassifier(
+            estimators=[
+                ("svm", sklearn.svm.SVC(probability=True)),
+                ("lr", sklearn.linear_model.LogisticRegression()),
+            ],
+            voting="soft",
+            weights=None,
+        )
+        clf.fit(train_Xs, train_ys)
+        classifiers.append(clf)
 
-        # # add unknowns to val fold (these are the same as in the final eval split for now, TODO(mmaz))
-        # val_Xs = np.vstack([val_Xs, unknown_fvs["eval"]])
-        # val_ys = np.concatenate([val_ys, [0] * unknown_fvs["eval"].shape[0]])
+        score = clf.score(val_Xs, val_ys)
+        crossfold_scores.append(score)
 
-        # score = clf.score(val_Xs, val_ys)
-        # crossfold_scores.append(score)
-
-    crossfold_scores = np.array(crossfold_scores)
-    best_clf_ix = np.unravel_index(np.argmax(crossfold_scores, axis=None), crossfold_scores.shape)
-    best_clf = classifiers[best_clf_ix[0]][best_clf_ix[1]]
-    experiment_score = best_clf.score(eval_samples, eval_labels)
-    # best_clf = classifiers[np.argmax(crossfold_scores)]
+    # crossfold_scores = np.array(crossfold_scores)
+    # best_clf_ix = np.unravel_index(np.argmax(crossfold_scores, axis=None), crossfold_scores.shape)
+    # best_clf = classifiers[best_clf_ix[0]][best_clf_ix[1]]
     # experiment_score = best_clf.score(eval_samples, eval_labels)
-    experiment_results = dict(words=e, score=experiment_score, best_clf_ix=best_clf_ix)
+    # experiment_results = dict(words=e, score=experiment_score, best_clf_ix=best_clf_ix)
+    best_clf = classifiers[np.argmax(crossfold_scores)]
+    experiment_score = best_clf.score(eval_samples, eval_labels)
+    experiment_results = dict(words=e, score=experiment_score)
     return experiment_results
 
 
