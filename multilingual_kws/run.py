@@ -41,7 +41,7 @@ def inference(
       $ python -m embedding.run_inference --keyword mask --modelpath mask_model --wav mask_radio.wav
     Args
       keyword: target keywords for few-shot KWS (pass in as [word1, word2, word3])
-      modelpath: comma-demlimited list of paths to finetuned few-shot models
+      modelpaths: comma-demlimited list of paths to finetuned few-shot models
       wav: path to the audio file to analyze
       groundtruth: optional path to a groundtruth audio file
       transcript: optional path to a groundtruth transcript (for data visualization)
