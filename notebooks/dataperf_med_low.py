@@ -110,21 +110,3 @@ for kw in ["pessoas", "grupo", "camisa", "tempo", "andando"]:
 # camisa: shirt, 47
 # tempo: time, 47
 # andando: walking, 41
-
-# %%
-# val count
-for kw in ["karena", "sangat", "bahasa", "belajar", "kemarin"]:
-    print(kw, c[kw])
-# %%
-# train counts:
-# karena: because, 181
-# sangat: very, 159
-# bahasa: language, 135 
-# belajar: study, 107
-# kemarin: yesterday, 103
-# val counts:
-# karena 25
-# sangat 22
-# bahasa 19
-# belajar 14
-# kemarin 13
