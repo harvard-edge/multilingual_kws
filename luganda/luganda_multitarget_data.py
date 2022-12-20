@@ -30,11 +30,12 @@ l_alignments = l_test / "alignments"
 
 # TODO(mmaz): find a better method to exclude variants in spelling/plurals/etc
 keyword_set = {
-    "mask",
-    "masiki",
-    "masks",
-    "korona",
-    "corona",
+    # "mask",
+    # "masiki",
+    # "masks",
+    "akawuka"
+    # "korona",
+    # "corona",
 }
 # {"corona", "korona", "kolona", "coronavirus"}
 # corona  covid  mask  okugema  ssennyiga
@@ -158,6 +159,9 @@ pydub.playback.play(audio[start_s * 1000 - 500 : end_s * 1000 + 500])
 # %%
 NUM_TARGETS = 80
 ixs = np.random.choice(range(len(keyword_wav_transcripts)), NUM_TARGETS, replace=False)
+# use all data
+# NUM_TARGETS=len(keyword_wav_transcripts)
+# ixs = np.array(range(NUM_TARGETS))
 
 kwcount = {w: 0 for w in keyword_set}
 for ix in ixs:
@@ -168,7 +172,7 @@ pprint.pprint(kwcount)
 # %%
 # generate stream and groundtruth data
 print(len(ixs))
-workdir = Path.home() / "tinyspeech_harvard/luganda" / "mt_eval"
+workdir = Path.home() / "tinyspeech_harvard/luganda" / "oct_7_eval"
 os.makedirs(workdir, exist_ok=False)  # ensure we dont overwrite files
 dest_wavfile = str(workdir / f"stream.wav")
 dest_mp3 = str(workdir / f"stream.mp3")

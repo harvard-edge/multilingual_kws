@@ -28,15 +28,17 @@ with gzip.open(j, "r") as fh:
 
 @dataclass
 class TestParams:
-    minimum_total_samples: int = 500  # for candidate words
+    minimum_total_samples: int = 500  # for candidate target words
     language_isocode: str = "en"
     num_targets: int = 5
     num_experiments: int = 200
     num_splits_per_experiment: int = 10
     # max_num_samples_for_selection: int = 300 # TODO(mmaz) (how) should we enforce this?
     num_target_samples: int = 100
-    num_nontarget_training_samples: int = 20
-    num_nontarget_eval_samples: int = 200  # ideally - TODO(mmaz) we are missing some unknown samples
+
+    minimum_samples_for_nontarget_words: int = 200  # nontarget samples do not follow MSWC train/dev/test splits
+    num_nontarget_training_words: int = 100
+    num_nontarget_eval_words: int = 100  # distinct words the model has not been trained on as nontarget
 
     SEED_EXPERIMENT_GENERATION: int = 0
     SEED_NONTARGET_SELECTION: int = 0
@@ -56,8 +58,6 @@ for w, c in meta[TestParams.language_isocode]["wordcounts"].items():
         candidate_words.append(w)
 print(len(candidate_words))
 
-# %%
-candidate_words
 # %%
 splits_file = Path("/media/mark/hyperion/mswc/splits_en/en_splits.csv")
 assert splits_file.stem.split("_")[0] == TestParams.language_isocode
@@ -175,16 +175,23 @@ def get_fvs_by_split(word):
     return results
 
 
-def get_unknown_fvs():
-    # use the same unknowns for all folds for now
-    # TODO(mmaz) improve this
+def get_unknown_fvs(target_words: set[str]):
+    candidate_nontarget_words = []
+    for w, c in meta[TestParams.language_isocode]["wordcounts"].items():
+        if c > TestParams.minimum_samples_for_nontarget_words and w not in target_words:
+            candidate_nontarget_words.append(w)
+    print(len(candidate_nontarget_words))
+
+    # repeatability via (1) fixed iter order in metadata.json.gz and (2) fixed seed
     unknown_rng = np.random.RandomState(TestParams.SEED_NONTARGET_SELECTION)
     selected_unknowns = unknown_rng.choice(
-        unknown_en,
-        TestParams.num_nontarget_training_samples
-        + TestParams.num_nontarget_eval_samples,
+        candidate_nontarget_words,
+        TestParams.num_nontarget_training_words + TestParams.num_nontarget_eval_words,
         replace=False,
     )
+    train_unknowns = selected_unknowns[:TestParams.num_nontarget_training_words]
+    eval_unknowns = selected_unknowns[:TestParams.num_nontarget_training_words]
+
     missing_unknowns = 0
     selected_fvs = []
     for u in selected_unknowns:
