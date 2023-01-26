@@ -1,24 +1,52 @@
 # %%
-from email import header
 from pathlib import Path
 import pandas as pd
 import yaml
+import subprocess
+
 
 # %%
-listening_results_basedir = (
-    Path.home() / "tinyspeech_harvard/dataperf/listening_results/round1/"
-)
+# normalization
+for lang in ["id", "pt"]:
+    for split in ["validation", "test"]:
+        wavs = (
+            Path.home()
+            / f"h/dataperf/target_listening_data/unnormalized/{lang}/{split}"
+        )
+        wavs = list(wavs.glob("*.wav"))
+        print(lang, split, len(wavs))
+        for wav in wavs:
+            dest = (
+                Path.home()
+                / f"h/dataperf/target_listening_data/normalized/{lang}/{split}/{wav.name}"
+            )
+            # http://johnriselvato.com/ffmpeg-how-to-normalize-audio/
+            subprocess.run(
+                [
+                    "/Users/mark/miniconda3/envs/ffmpeg/bin/ffmpeg",
+                    "-i",
+                    str(wav),
+                    "-af",
+                    "loudnorm=I=-16:TP=-1.5:LRA=11",
+                    "-c:a",
+                    "pcm_s16le",
+                    "-ar",
+                    "16000",
+                    "-ac",
+                    "1",
+                    "-y",
+                    str(dest),
+                ]
+            )
+print("Done")
 
-experiment_basedir = (
-    Path.home() / "tinyspeech_harvard/dataperf/preliminary_evaluation_dataset"
-)
-
-list(listening_results_basedir.iterdir())
 
 # %%
 
 
-def target_validation_filter(target, dryrun=True):
+def target_validation_filter(
+    target, listening_results_basedir, experiment_basedir, dryrun=True
+):
     print("==== validation filter for", target)
     eval_yml_file = experiment_basedir / "eval.yaml"
     eval_yml = yaml.safe_load(eval_yml_file.read_text())
@@ -71,16 +99,51 @@ def target_validation_filter(target, dryrun=True):
         print("removing", len(bad_samples), "bad samples from", target)
         print("overwriting yaml", eval_yml_file)
         eval_yml_file.write_text(yaml.dump(eval_yml))
+        # not strictly necessary to overwrite the parquet
         print("overwriting parquet", parquet_file)
         cleaned_parquet.to_parquet(parquet_file)
 
 
-target_validation_filter("episode")
+# target_validation_filter("episode")
 # %%
-for target in ["episode", "job", "restaurant", "fifty", "route"]:
-    target_validation_filter(target, dryrun=True)
-# %%
+# english
 raise ValueError("caution - this overwrites")
+listening_results_basedir = (
+    Path.home() / "tinyspeech_harvard/dataperf/listening_results/round1/"
+)
+
+experiment_basedir = (
+    Path.home() / "tinyspeech_harvard/dataperf/preliminary_evaluation_dataset"
+)
+list(listening_results_basedir.iterdir())
 for target in ["episode", "job", "restaurant", "fifty", "route"]:
     target_validation_filter(target, dryrun=False)
+# %%
+# indonesian
+raise ValueError("caution - this overwrites")
+listening_results_basedir = Path.home() / "h/dataperf/id_pt_listening_results/"
+experiment_basedir = Path.home() / "h/dataperf/dataperf_id_data"
+list(listening_results_basedir.iterdir())
+for target in ["karena", "sangat", "bahasa", "belajar", "kemarin"]:
+    target_validation_filter(
+        target,
+        listening_results_basedir=listening_results_basedir,
+        experiment_basedir=experiment_basedir,
+        dryrun=False,
+    )
+
+# %%
+# portuguese
+raise ValueError("caution - this overwrites")
+listening_results_basedir = Path.home() / "h/dataperf/id_pt_listening_results/"
+experiment_basedir = Path.home() / "h/dataperf/dataperf_pt_data"
+list(listening_results_basedir.iterdir())
+for target in ["pessoas", "grupo", "camisa", "tempo", "andando"]:
+    target_validation_filter(
+        target,
+        listening_results_basedir=listening_results_basedir,
+        experiment_basedir=experiment_basedir,
+        dryrun=False,
+    )
+
 # %%
