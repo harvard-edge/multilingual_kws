@@ -19,7 +19,7 @@ Our full dataset is available at https://mlcommons.org/words
 
 [![](images/interspeech21_multilingual_kws.png)](https://www.youtube.com/watch?v=1JRlJoEhYxE)
 
-[[`Multilingual Spoken Words Corpus: youtube video overview`](https://www.youtube.com/watch?v=1JRlJoEhYxE)]
+[[`Multilingual Spoken Words Corpus: youtube video overview`](https://www.youtube.com/watch?v=eGPCwnRtRng)]
 
 [![](images/neurips21_mswc.png)](https://www.youtube.com/watch?v=eGPCwnRtRng)
 
