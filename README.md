@@ -1,5 +1,5 @@
 This is the repository for the following papers:
-* [Few-Shot Keyword Spotting in Any Language](https://www.isca-speech.org/archive/pdfs/interspeech_2021/mazumder21_interspeech.pdf), Interspeech 2021
+* [Few-Shot Keyword Spotting in Any Language](https://www.isca-archive.org/interspeech_2021/mazumder21_interspeech.pdf), Interspeech 2021
 * [Multilingual Spoken Words Corpus](https://openreview.net/pdf?id=c20jiJ5K2H), NeurIPS 2021 Datasets and Benchmarks Track
 
 
@@ -24,4 +24,4 @@ Our full dataset is available at https://mlcommons.org/words
 [![](images/neurips21_mswc.png)](https://www.youtube.com/watch?v=eGPCwnRtRng)
 
 ---
-Additional documentation coming soon!
+
